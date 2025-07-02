@@ -51,3 +51,5 @@ private:
 };
 
 REGISTER_EQUATION_CLASS(HJBLQ)
+
+extern "C" void force_link_HJBLQ() {}

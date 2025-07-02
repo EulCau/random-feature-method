@@ -4,7 +4,8 @@ add_library(model STATIC
 target_include_directories(model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(
-	model PRIVATE
+	model
+	PUBLIC
 	config
 	equations
 	mlp

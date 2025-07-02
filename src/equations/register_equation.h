@@ -8,7 +8,7 @@
 	struct class_name##Registrar											\
 	{																		\
 		class_name##Registrar()												\
-	{																		\
+		{																	\
 			EquationFactory::instance().register_class(						\
 				#class_name,												\
 				[](const EqnConfig& config) -> std::shared_ptr<Equation>	\

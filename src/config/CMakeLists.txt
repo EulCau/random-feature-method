@@ -1,8 +1,10 @@
 add_library(
-	config STATIC
+	config
+	STATIC
 	config.cpp)
 
 target_include_directories(
-	config PUBLIC
+	config
+	PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}
 	${JSON_INCLUDE_DIRS})

@@ -51,3 +51,5 @@ private:
 };
 
 REGISTER_EQUATION_CLASS(AllenCahn)
+
+extern "C" void force_link_AllenCahn() {}
