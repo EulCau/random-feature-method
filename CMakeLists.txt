@@ -16,26 +16,3 @@ endif()
 find_package(Torch REQUIRED)
 
 add_subdirectory(src)
-
-set_target_properties(
-	bsde_solver PROPERTIES
-	RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
-
-set(TORCH_DLL_DIR "$ENV{TORCH_DIR}/lib")
-file(GLOB TORCH_DLLS "${TORCH_DLL_DIR}/*.dll")
-foreach(dll ${TORCH_DLLS})
-	add_custom_command(
-		TARGET bsde_solver POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-		"${dll}"
-		$<TARGET_FILE_DIR:bsde_solver>)
-endforeach()
-
-file(GLOB CONFIG_FILES "${CMAKE_SOURCE_DIR}/configs/*.json")
-foreach(cfg ${CONFIG_FILES})
-	add_custom_command(
-		TARGET bsde_solver POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-		"${cfg}"
-		$<TARGET_FILE_DIR:bsde_solver>)
-endforeach()

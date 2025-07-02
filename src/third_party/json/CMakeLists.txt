@@ -1,1 +1,3 @@
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+set(JSON_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+
+set(JSON_INCLUDE_DIRS ${JSON_DIR} CACHE STRING "Third-party JSON include directory")

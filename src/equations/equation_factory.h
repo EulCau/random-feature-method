@@ -1,4 +1,3 @@
-// equation_factory.h
 #pragma once
 
 #include "equation.h"
