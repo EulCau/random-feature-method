@@ -9,4 +9,5 @@ target_link_libraries(
 	config
 	equations
 	mlp
+	rff
 	${TORCH_LIBRARIES})

@@ -3,7 +3,6 @@
 NonSharedModelImpl::NonSharedModelImpl(const Config& config, const std::shared_ptr<Equation>& bsde)
 	: eqn_config_(config.eqn_config), net_config_(config.net_config), bsde_(bsde)
 {
-
 	int64_t dim = eqn_config_.dim;
 
 	// Init y_init & z_init parameters

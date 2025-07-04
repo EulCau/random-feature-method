@@ -1,17 +1,15 @@
 add_library(
-	solver
+	rff
 	STATIC
-	bsde_solver.cpp)
+	rff.cpp)
 
 target_include_directories(
-	solver
+	rff
 	PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(
-	solver
+	rff
 	PUBLIC
-	model
 	config
-	equations
 	${TORCH_LIBRARIES})
