@@ -62,5 +62,5 @@ private:
 	torch::optim::Optimizer& optimizer_;
 	std::function<float(int64_t)> lr_lambda_;
 	int64_t step_count_;
-	std::vector<float> base_lrs_;  // ¹Ø¼ü²¹³ä
+	std::vector<float> base_lrs_;
 };

@@ -1,14 +1,18 @@
 #include "bsde_solver.h"
+#include <chrono>
+#include <iomanip>
+#include <iostream>
+#include <vector>
 
 constexpr float DELTA_CLIP = 50.0f;
 
-BSDESolver::BSDESolver(const Config& config, std::shared_ptr<Equation> bsde)
+BSDESolver::BSDESolver(const Config& config, const std::shared_ptr<Equation>& bsde)
 	: eqn_config_(config.eqn_config),
 	net_config_(config.net_config),
 	bsde_(bsde),
 	model_(std::make_shared<NonSharedModelImpl>(config, bsde))
 {
-	std::vector<torch::optim::OptimizerParamGroup> param_groups =
+	std::vector param_groups =
 	{
 		torch::optim::OptimizerParamGroup(model_->parameters_flattened())
 	};
@@ -17,21 +21,23 @@ BSDESolver::BSDESolver(const Config& config, std::shared_ptr<Equation> bsde)
 
 	optimizer_ = std::make_unique<torch::optim::AdamW>(param_groups, options);
 
-	int64_t warmup_steps = net_config_.warmup_steps;
-	int64_t total_steps = net_config_.num_iterations;
+	const int64_t warmup_steps = net_config_.warmup_steps;
+	const int64_t total_steps = net_config_.num_iterations;
 
 	auto lr_lambda = create_lr_lambda(warmup_steps, total_steps);
 
 	lr_scheduler_ = std::make_unique<LambdaLRScheduler>(*optimizer_, lr_lambda);
 }
 
-torch::Tensor BSDESolver::loss_fn(const std::pair<torch::Tensor, torch::Tensor>& inputs, bool training)
+torch::Tensor BSDESolver::loss_fn(const std::pair<torch::Tensor, torch::Tensor>& inputs, const bool training)
 {
-	auto y_pred = model_->forward(inputs, training);  // shape: [batch_size, 1]
-	auto y_true = bsde_->g(torch::tensor(eqn_config_.total_time), inputs.second.select(2, eqn_config_.num_time_interval));  // x[:, :, -1]
+	const auto y_pred = model_->forward(inputs, training);  // shape: [batch_size, 1]
+	const auto y_true = bsde_->g(
+		torch::tensor(eqn_config_.total_time),
+		inputs.second.select(2, eqn_config_.num_time_interval));  // x[:, :, -1]
 
-	auto delta = y_pred - y_true;
-	auto abs_delta = delta.abs();
+	const auto delta = y_pred - y_true;
+	const auto abs_delta = delta.abs();
 
 	auto loss = torch::mean(
 		torch::where(abs_delta < DELTA_CLIP,
@@ -42,17 +48,17 @@ torch::Tensor BSDESolver::loss_fn(const std::pair<torch::Tensor, torch::Tensor>&
 
 void BSDESolver::train()
 {
-	auto start_time = std::chrono::steady_clock::now();
-	auto valid_data = bsde_->sample(net_config_.valid_size);
+	const auto start_time = std::chrono::steady_clock::now();
+	const auto valid_data = bsde_->sample(net_config_.valid_size);
 
 	for (int64_t step = 0; step < net_config_.num_iterations; ++step)
 	{
 		if ((step + 1) % net_config_.logging_frequency == 0)
 		{
-			auto loss = loss_fn(valid_data, false).item<float>();
-			auto y0 = model_->y_init().item<float>();
+			const auto loss = loss_fn(valid_data, false).item<float>();
+			const auto y0 = model_->y_init().item<float>();
 			auto now = std::chrono::steady_clock::now();
-			auto elapsed_sec = std::chrono::duration<double>(now - start_time).count();
+			const auto elapsed_sec = std::chrono::duration<double>(now - start_time).count();
 
 			std::cout << std::fixed << std::setprecision(6)
 				<< "step: " << std::setw(5) << step + 1
@@ -71,7 +77,7 @@ void BSDESolver::train_step(const std::pair<torch::Tensor, torch::Tensor>& batch
 {
 	model_->train();
 
-	auto loss = loss_fn(batch, true);
+	const auto loss = loss_fn(batch, true);
 	optimizer_->zero_grad();
 	loss.backward();
 	torch::nn::utils::clip_grad_norm_(model_->parameters_flattened(), 1.0);

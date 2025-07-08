@@ -7,7 +7,8 @@
 #include <torch/torch.h>
 #include <vector>
 
-class NonSharedModelImpl : public torch::nn::Module {
+class NonSharedModelImpl final : public torch::nn::Module
+{
 public:
 	NonSharedModelImpl(const Config& config, const std::shared_ptr<Equation>& bsde);
 

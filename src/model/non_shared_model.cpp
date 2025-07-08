@@ -1,14 +1,16 @@
 #include "non_shared_model.h"
 
-NonSharedModelImpl::NonSharedModelImpl(const Config& config, const std::shared_ptr<Equation>& bsde)
+NonSharedModelImpl::NonSharedModelImpl(
+	const Config& config, const std::shared_ptr<Equation>& bsde)
 	: eqn_config_(config.eqn_config), net_config_(config.net_config), bsde_(bsde)
 {
 	int64_t dim = eqn_config_.dim;
 
 	// Init y_init & z_init parameters
+	const std::vector<float> y_init = net_config_.y_init_range;
 	y_init_ = register_parameter(
 		"y_init",
-		torch::empty({ 1 }).uniform_(net_config_.y_init_range[0], net_config_.y_init_range[1]));
+		torch::empty({ 1 }).uniform_(y_init[0], y_init[1]));
 
 	z_init_ = register_parameter(
 		"z_init",
@@ -17,27 +19,29 @@ NonSharedModelImpl::NonSharedModelImpl(const Config& config, const std::shared_p
 	// Initialize subnets
 	for (int64_t i = 0; i < eqn_config_.num_time_interval - 1; ++i)
 	{
-		auto subnet = MLP(std::make_shared<MLPImpl>(config));
-		subnets_.push_back(register_module("subnet_" + std::to_string(i), subnet));
+		const auto subnet = MLP(std::make_shared<MLPImpl>(config));
+		subnets_.emplace_back(register_module("subnet_" + std::to_string(i), subnet));
 	}
 }
 
-torch::Tensor NonSharedModelImpl::forward(const std::pair<torch::Tensor, torch::Tensor>& inputs, bool training)
+torch::Tensor NonSharedModelImpl::forward(
+	const std::pair<torch::Tensor, torch::Tensor>& inputs,
+	[[maybe_unused]]const bool training)
 {
-	torch::Tensor dw = inputs.first;					// shape: [batch_size, dim, N]
-	torch::Tensor x = inputs.second;					// shape: [batch_size, dim, N+1]
+	const torch::Tensor dw = inputs.first;					// shape: [batch_size, dim, N]
+	const torch::Tensor x = inputs.second;					// shape: [batch_size, dim, N+1]
 
 	int64_t batch_size = dw.size(0);
-	int64_t dim = eqn_config_.dim;
-	int64_t N = eqn_config_.num_time_interval;
+	const int64_t dim = eqn_config_.dim;
+	const int64_t N = eqn_config_.num_time_interval;
 
-	torch::Tensor all_one = torch::ones({ batch_size, 1 });
+	const torch::Tensor all_one = torch::ones({ batch_size, 1 });
 	torch::Tensor y = all_one * y_init_;				// shape: [batch_size, 1]
 	torch::Tensor z = all_one.matmul(z_init_);			// shape: [batch_size, dim]
 
 	for (int64_t t = 0; t < N - 1; ++t)
 	{
-		float time = t * bsde_->delta_t();
+		const auto time = static_cast<float>(static_cast<double>(t) * bsde_->delta_t());
 
 		auto x_t = x.select(2, t);						// x[:,:,t]
 		auto dw_t = dw.select(2, t);					// dw[:,:,t]
@@ -49,9 +53,9 @@ torch::Tensor NonSharedModelImpl::forward(const std::pair<torch::Tensor, torch::
 	}
 
 	// Last step
-	float final_time = (N - 1) * bsde_->delta_t();
-	auto x_last = x.select(2, N - 2);					// x[:,:,N-2]
-	auto dw_last = dw.select(2, N - 1);					// dw[:,:,N-1]
+	const auto final_time = static_cast<float>(static_cast<double>(N - 1) * bsde_->delta_t());
+	const auto x_last = x.select(2, N - 2);						// x[:,:,N-2]
+	const auto dw_last = dw.select(2, N - 1);					// dw[:,:,N-1]
 
 	y = y - bsde_->delta_t() * bsde_->f(torch::tensor(final_time), x_last, y, z)
 		+ torch::sum(z * dw_last, 1, true);

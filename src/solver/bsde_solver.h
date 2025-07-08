@@ -3,18 +3,14 @@
 #include "config.h"
 #include "equation.h"
 #include "non_shared_model.h"
-#include <chrono>
-#include <iomanip>
-#include <iostream>
 #include <memory>
 #include <torch/torch.h>
-#include <vector>
 #include "lr_scheduler_utils.h"
 
 class BSDESolver
 {
 public:
-	BSDESolver(const Config& config, std::shared_ptr<Equation> bsde);
+	BSDESolver(const Config& config, const std::shared_ptr<Equation>& bsde);
 
 	void train();
 
