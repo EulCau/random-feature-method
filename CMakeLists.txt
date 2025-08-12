@@ -1,17 +1,12 @@
-cmake_minimum_required(VERSION 3.10)
-project(bsde_solver)
+cmake_minimum_required(VERSION 3.18)
+project(bsde_solver LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_ARCHITECTURES 89)
 
-find_package(CUDA REQUIRED)
-if (CUDA_FOUND)
-	add_library(CUDA::nvToolsExt INTERFACE IMPORTED)
-	set_target_properties(
-		CUDA::nvToolsExt PROPERTIES
-		INTERFACE_LINK_LIBRARIES "${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/nvToolsExt.lib"
-		INTERFACE_INCLUDE_DIRECTORIES "${CUDA_TOOLKIT_ROOT_DIR}/include")
-endif()
+find_package(CUDAToolkit REQUIRED)
+add_library(CUDA::nvToolsExt INTERFACE IMPORTED)
 
 find_package(Torch REQUIRED)
 
