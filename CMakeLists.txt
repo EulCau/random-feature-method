@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_ARCHITECTURES 89)
 
 find_package(CUDAToolkit REQUIRED)
-add_library(CUDA::nvToolsExt INTERFACE IMPORTED)
 
 find_package(Torch REQUIRED)
 
