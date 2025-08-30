@@ -13,7 +13,7 @@ public:
 	}
 
 	// Sample function, Generate path of dW & X
-	[[nodiscard("Reture Need to be Used")]]
+	[[nodiscard("Return Need to be Used")]]
 	std::pair<torch::Tensor, torch::Tensor> sample(int64_t num_sample) const override
 	{
 		// dW ~ N(0, delta_t)
@@ -40,7 +40,7 @@ public:
 	}
 
 	// f(t, x, y, z) = -lambda * 0.5 * ||z||^2
-	[[nodiscard("Reture Need to be Used")]]
+	[[nodiscard("Return Need to be Used")]]
 	torch::Tensor f(
 		const torch::Tensor& t, const torch::Tensor& x,
 		const torch::Tensor& y, const torch::Tensor& z) const override
@@ -49,7 +49,7 @@ public:
 	}
 
 	// g(x) = log((1 + ||x||^2) / 2)
-	[[nodiscard("Reture Need to be Used")]]
+	[[nodiscard("Return Need to be Used")]]
 	torch::Tensor g(const torch::Tensor& t, const torch::Tensor& x) const override
 	{
 		return torch::log((1 + torch::sum(x * x, /*dim=*/1, /*keepdim=*/true)) / 2.0);
