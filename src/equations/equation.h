@@ -6,6 +6,12 @@
 #include <torch/torch.h>
 #include <vector>
 
+struct Coefficient {
+    torch::Tensor a; // (K,N)
+    torch::Tensor b; // (K,N,d)
+    torch::Tensor c; // (K,N)
+};
+
 class Equation
 {
 public:
@@ -29,6 +35,7 @@ public:
 	int64_t num_time_interval() const { return num_time_interval_; }
 	float delta_t() const { return delta_t_; }
 	float sqrt_delta_t() const { return sqrt_delta_t_; }
+    Coefficient load_coef() { return coefficient_; }
 
 protected:
 	int64_t dim_;
@@ -36,4 +43,6 @@ protected:
 	int64_t num_time_interval_;
 	float delta_t_;
 	float sqrt_delta_t_;
+    bool linear_ = false;
+    Coefficient coefficient_;
 };
