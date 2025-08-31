@@ -1,7 +1,8 @@
 add_library(
 	solver
 	STATIC
-	bsde_solver.cpp)
+	bsde_solver.cpp
+	rfm_solver.cpp)
 
 target_include_directories(
 	solver
