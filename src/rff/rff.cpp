@@ -18,8 +18,8 @@ void RandomFeatureFunction::resample_params(uint64_t seed) {
     auto gen_c = torch::make_generator<torch::CPUGeneratorImpl>(seed ^ 0xb7e151628aed2a6bULL);
 
     A_ = torch::randn({H_, dim_}, torch::TensorOptions().dtype(torch::kFloat32), gen_A);
-    b_ = torch::randn({H_},      torch::TensorOptions().dtype(torch::kFloat32), gen_b);
-    c_ = torch::randn({H_},      torch::TensorOptions().dtype(torch::kFloat32), gen_c);
+    b_ = torch::randn({H_},       torch::TensorOptions().dtype(torch::kFloat32), gen_b);
+    c_ = torch::randn({H_},       torch::TensorOptions().dtype(torch::kFloat32), gen_c);
 }
 
 torch::Tensor RandomFeatureFunction::phi(const torch::Tensor& x, float t) const {

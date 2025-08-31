@@ -13,15 +13,15 @@ public:
 
     // 计算 phi(x, t)，返回形状 (H) 的 1D Tensor（float）
     // x: (d) 1D Tensor；t: 标量 float
-    torch::Tensor phi(const torch::Tensor& x, float t) const;
+    [[nodiscard]] torch::Tensor phi(const torch::Tensor& x, float t) const;
 
-    int64_t dim() const { return dim_; }
-    int64_t hidden_dim() const { return H_; }
+    [[nodiscard]] int64_t dim() const { return dim_; }
+    [[nodiscard]] int64_t hidden_dim() const { return H_; }
 
     // 直接获取参数（如需调试）
-    const torch::Tensor& A() const { return A_; }
-    const torch::Tensor& b() const { return b_; }
-    const torch::Tensor& c() const { return c_; }
+    [[nodiscard]] const torch::Tensor& A() const { return A_; }
+    [[nodiscard]] const torch::Tensor& b() const { return b_; }
+    [[nodiscard]] const torch::Tensor& c() const { return c_; }
 
 private:
     int64_t dim_;
