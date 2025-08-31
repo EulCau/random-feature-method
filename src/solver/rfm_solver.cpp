@@ -1,25 +1,12 @@
-#include <torch/torch.h>
-#include <iostream>
-#include <tuple>
-#include <vector>
-#include <random>
-#include "equation.h"
-#include "rff.h"
+#include "rfm_solver.h"
 
 // =====================
 // 工具：设置随机种子
 // =====================
-void set_random_seed(uint64_t seed) {
+[[maybe_unused]] void set_random_seed(uint64_t seed) {
     torch::manual_seed(seed);
     std::srand(static_cast<unsigned>(seed));
 }
-
-struct SolveResult {
-    torch::Tensor alpha;        // (H*d)
-    torch::Tensor terminal_err; // 标量，L2误差
-    torch::Tensor M;            // (K,H*d) 可选，便于调试
-    torch::Tensor beta;         // (K)     可选
-};
 
 // =====================
 // 构造线性系统 (M, beta)
@@ -31,10 +18,12 @@ struct SolveResult {
 // 其中 bDz = [b1*phi, b2*phi, ..., bd*phi], dWDz 类似
 // =====================
 std::pair<torch::Tensor, torch::Tensor>
-build_linear_system_from_paths(const Equation& eq,
-                               RandomFeatureMap& rff,
-                               int64_t K,
-                               float y0 /* 初值，可扩展为张量 */) {
+build_linear_system_from_paths(
+        const Equation& eq,
+        RandomFeatureFunction& rff,
+        int64_t K,
+        float y0 /* 初值，可扩展为张量 */)
+{
     const int64_t d  = eq.dim();
     const int64_t N  = eq.num_time_interval();
     const float   dt = eq.delta_t();
@@ -47,7 +36,7 @@ build_linear_system_from_paths(const Equation& eq,
     x  = x.contiguous();
 
     // 载入/构造 a,b,c
-    Coefficient coefficient = eq.load_coef()
+    Coefficient coefficient = eq.load_coef();
     auto a = coefficient.a.contiguous();       // (K,N)
     auto b = coefficient.b.contiguous();       // (K,N,d)
     auto c = coefficient.c.contiguous();       // (K,N)
@@ -56,12 +45,14 @@ build_linear_system_from_paths(const Equation& eq,
     torch::Tensor M     = torch::zeros({K, H * d}, torch::kFloat32);
     torch::Tensor beta  = torch::zeros({K},        torch::kFloat32);
 
-    for (int64_t k = 0; k < K; ++k) {
+    for (int64_t k = 0; k < K; ++k)
+    {
         // beta_k 与 D_k 的初始化
         float beta_k = y0;
         torch::Tensor D_k = torch::zeros({H * d}, torch::kFloat32); // (H*d)
 
-        for (int64_t n = 0; n < N; ++n) {
+        for (int64_t n = 0; n < N; ++n)
+        {
             float t_n = static_cast<float>(n) * dt;
 
             // 取 x_n^k : 形状 (d)
@@ -71,8 +62,8 @@ build_linear_system_from_paths(const Equation& eq,
             torch::Tensor phi = rff.phi(x_kn, t_n); // (H)
 
             // 取 a,b,c, dW
-            float a_kn = a.index({k, n}).item<float>();
-            float c_kn = c.index({k, n}).item<float>();
+            auto a_kn = a.index({k, n}).item<float>();
+            auto c_kn = c.index({k, n}).item<float>();
             torch::Tensor b_kn  = b.index({k, n});            // (d)
             torch::Tensor dW_kn = dw.index({k, torch::indexing::Slice(), n}); // (d)
 
@@ -81,9 +72,10 @@ build_linear_system_from_paths(const Equation& eq,
             // dWDz = [dW1*phi, ..., dWd*phi]       -> (H*d)
             torch::Tensor bDz  = torch::empty({H * d}, torch::kFloat32);
             torch::Tensor dWDz = torch::empty({H * d}, torch::kFloat32);
-            for (int64_t j = 0; j < d; ++j) {
-                float bj  = b_kn.index({j}).item<float>();
-                float dWj = dW_kn.index({j}).item<float>();
+            for (int64_t j = 0; j < d; ++j)
+            {
+                auto bj  = b_kn.index({j}).item<float>();
+                auto dWj = dW_kn.index({j}).item<float>();
                 // 拷贝到各自的块
                 bDz.index_put_({ torch::indexing::Slice(j*H, (j+1)*H) }, bj  * phi);
                 dWDz.index_put_({ torch::indexing::Slice(j*H, (j+1)*H) }, dWj * phi);
@@ -105,23 +97,24 @@ build_linear_system_from_paths(const Equation& eq,
     return {M, beta};
 }
 
-SolveResult solve(const Config& config, std::shared_ptr<Equation> eq) {
+SolveResult solve(const Config& config, const std::shared_ptr<Equation>& eq)
+{
     int64_t K = config.net_config.batch_size;   // 用 batch_size 作为采样路径数
     int64_t H = config.net_config.num_hiddens[0]; // 假设 num_hiddens[0] 就是 hidden_dim
     int64_t d = eq->dim();
     int64_t N = eq->num_time_interval();
 
-    torch::Device device(torch::cuda::is_available() ? torch::kCUDA : torch::kCPU)
+    torch::Device device(torch::cuda::is_available() ? torch::kCUDA : torch::kCPU);
 
     // 随机特征
-    RandomFeatureMap rff(d, H, /*seed=*/1234);
+    RandomFeatureFunction rff(d, H, /*seed=*/1234);
 
     // 初始化 y0
     torch::Tensor y_init = torch::empty({1})
             .uniform_(config.net_config.y_init_range[0],
                       config.net_config.y_init_range[1]);
 
-    float y0 = y_init.item<float>();
+    auto y0 = y_init.item<float>();
 
     // 构造线性系统
     auto [M_cpu, beta_cpu] = build_linear_system_from_paths(*eq, rff, K, y0);
