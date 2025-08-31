@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 class EquationFactory
 {
@@ -19,9 +20,10 @@ public:
 
 	void register_class(const std::string& name, Creator creator)
 	{
-		registry_[name] = creator;
+		registry_[name] = std::move(creator);
 	}
 
+    [[nodiscard("Return Need to be Used")]]
 	std::shared_ptr<Equation> create(const std::string& name, const EqnConfig& config) const
 	{
 		auto it = registry_.find(name);
