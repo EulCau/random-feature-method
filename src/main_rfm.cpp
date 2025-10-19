@@ -10,9 +10,9 @@ int main()
     const Config cfg = load_config("hjb_lq_d100.json");
 
     const auto pde = EquationFactory::instance().create(cfg.eqn_config.eqn_name, cfg.eqn_config);
-    SolveResult solve(cfg, pde);
-    std::cout << solve.alpha << std::endl;
-    std::cout << solve.terminal_err << std::endl;
+    auto result = solve(cfg, pde);
+    std::cout << result.alpha << std::endl;
+    std::cout << result.terminal_err << std::endl;
 
     return 0;
 }
