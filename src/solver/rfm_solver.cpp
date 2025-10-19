@@ -36,7 +36,7 @@ build_linear_system_from_paths(
     x  = x.contiguous();
 
     // 载入/构造 a,b,c
-    Coefficient coefficient = eq.load_coef();
+    Coefficient coefficient = eq.load_coef();  // TODO: linear equation
     auto a = coefficient.a.contiguous();       // (K,N)
     auto b = coefficient.b.contiguous();       // (K,N,d)
     auto c = coefficient.c.contiguous();       // (K,N)

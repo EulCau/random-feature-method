@@ -7,7 +7,7 @@
 int main()
 {
     force_link_all_equations();
-    const Config cfg = load_config("hjb_lq_d100.json");
+    const Config cfg = load_config("***"); // TODO: linear equation
 
     const auto pde = EquationFactory::instance().create(cfg.eqn_config.eqn_name, cfg.eqn_config);
     auto result = solve(cfg, pde);

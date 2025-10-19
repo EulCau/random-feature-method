@@ -71,7 +71,7 @@ foreach(dll ${TORCH_DLLS})
 			TARGET rfm_solver POST_BUILD
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different
 			"${dll}"
-			$<TARGET_FILE_DIR:bsde_solver>)
+			$<TARGET_FILE_DIR:rfm_solver>)
 endforeach()
 
 foreach(cfg ${CONFIG_FILES})
@@ -79,5 +79,5 @@ foreach(cfg ${CONFIG_FILES})
 			TARGET rfm_solver POST_BUILD
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different
 			"${cfg}"
-			$<TARGET_FILE_DIR:bsde_solver>)
+			$<TARGET_FILE_DIR:rfm_solver>)
 endforeach()
