@@ -134,7 +134,7 @@ SolveResult solve(const Config& config, const std::shared_ptr<Equation>& eq)
     // A = M, b = gT - beta
     torch::Tensor rhs = gT - beta; // (K)
     auto lstsq_result = torch::linalg_lstsq(M, rhs.unsqueeze(1)); // b 必须是 (K,1)
-    torch::Tensor alpha = lstsq_result.solution.squeeze(1);        // (H*d)
+    torch::Tensor alpha = std::get<0>(lstsq_result).squeeze(1);        // (H*d)
 
     // 预测终点
     torch::Tensor y_pred = torch::matmul(M, alpha) + beta; // (K)
