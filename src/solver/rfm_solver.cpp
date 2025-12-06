@@ -144,3 +144,63 @@ SolveResult solve(const Config& config, const std::shared_ptr<Equation>& eq)
     SolveResult result{alpha.cpu(), terminal_err.cpu()};
     return result;
 }
+
+
+// TODO: check
+torch::Tensor compute_A_and_b_for_least_squares(
+    const std::vector<std::pair<torch::Tensor, torch::Tensor>>& samples,  // 样本路径
+    const RandomFeatureFunction& rf_func,                               // 随机特征
+    const Equation& eqn,                                                // 方程
+    float delta_t,                                                      // 时间步长
+    int64_t N                                                           // 总时间步数
+) {
+    int64_t K = samples.size();  // 样本数
+    int64_t m = rf_func.hidden_dim();  // 特征维度
+    int64_t dim = eqn.dim();    // 状态空间维度
+
+    // 初始化矩阵 A 和向量 b
+    torch::Tensor A = torch::zeros({K * N, m}, torch::kFloat);  // (K * N) x m
+    torch::Tensor b = torch::zeros({K * N}, torch::kFloat);     // (K * N)
+
+    int64_t row_offset = 0;  // 行偏移量
+
+    // 遍历每个样本路径
+    for (int64_t k = 0; k < K; ++k) {
+        auto [x, w] = samples[k];  // x 是样本路径，w 是相应的随机过程增量
+        torch::Tensor y = torch::zeros({x.size(1)});  // 初始化 y_n^k (与路径相同维度)
+        torch::Tensor z = torch::zeros_like(y);      // 初始化 z_n^k (与 y 一样)
+
+        // 递推过程：从 n = 0 到 n = N-1
+        for (int64_t n = 0; n < N; ++n) {
+            float t_n = n * delta_t;  // 计算当前时间点
+            torch::Tensor x_n = x.select(1, n);  // 获取路径在当前时间点的状态 x_n^k
+
+            // 计算特征值 z_n^k = φ(x_n^k, t_n)
+            torch::Tensor z_n = rf_func.phi(x_n, t_n);
+
+            // 计算 f(t_n, x_n^k, y_n^k, z_n^k)
+            torch::Tensor f_vals = eqn.f(t_n, x_n, y, z_n);
+
+            // 更新 y_{n+1}^k: 递推步骤
+            y = y - delta_t * f_vals + (w.select(1, n).dot(z_n)); // 用随机过程增量和内积更新
+
+            // 填充矩阵 A 和向量 b
+            A.slice(0, row_offset, row_offset + 1) = z_n.view({1, -1});  // 将 φ(x_n^k, t_n) 填充到 A 中
+            b.slice(0, row_offset, row_offset + 1) = f_vals.view({1});    // 对应的目标 b 填充
+
+            row_offset += 1;  // 更新行偏移量
+        }
+    }
+
+    return std::make_pair(A, b);  // 返回大矩阵 A 和右端向量 b
+}
+
+torch::Tensor solve_least_squares(const torch::Tensor& A, const torch::Tensor& b) {
+    // 使用正规方程来求解：theta = (A^T A)^-1 A^T b
+    torch::Tensor AtA = A.transpose(0, 1).matmul(A);  // 计算 A^T * A
+    torch::Tensor Atb = A.transpose(0, 1).matmul(b);  // 计算 A^T * b
+    torch::Tensor theta = torch::linalg::solve(AtA, Atb);  // 解正规方程
+
+    return theta;  // 返回系数向量
+}
+m
