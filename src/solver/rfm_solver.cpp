@@ -203,4 +203,3 @@ torch::Tensor solve_least_squares(const torch::Tensor& A, const torch::Tensor& b
 
     return theta;  // 返回系数向量
 }
-m
