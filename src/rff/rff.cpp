@@ -12,7 +12,7 @@ RandomFeatureFunction::RandomFeatureFunction(int64_t dim, int64_t hidden_dim, ui
 }
 
 void RandomFeatureFunction::resample_params(uint64_t seed) {
-    // 你也可以换成均匀分布、缩放等；此处简单用 N(0,1)
+    // 可试验其他分布，此处暂用 N(0,1)
     auto gen_A = torch::make_generator<torch::CPUGeneratorImpl>(seed ^ 0x9e3779b97f4a7c15ULL);
     auto gen_b = torch::make_generator<torch::CPUGeneratorImpl>(seed ^ 0x243f6a8885a308d3ULL);
     auto gen_c = torch::make_generator<torch::CPUGeneratorImpl>(seed ^ 0xb7e151628aed2a6bULL);
