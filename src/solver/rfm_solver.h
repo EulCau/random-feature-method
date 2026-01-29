@@ -1,28 +1,24 @@
 #pragma once
 
 #include <torch/torch.h>
-#include <iostream>
-#include <tuple>
-#include <vector>
 #include <random>
 #include "equation.h"
-#include "rff.h"
 
 class RFMSolver
 {
 public:
-    RFMSolver(const Config& config, const std::shared_ptr<Equation>& eq, const uint64_t seed);
+    RFMSolver(const Config& config, const std::shared_ptr<Equation>& eq, uint64_t seed);
 
-    const uint64_t seed() const { return seed_; }
+    [[nodiscard]] uint64_t seed() const { return seed_; }
 
     void compute_L(const torch::Tensor& t, const torch::Tensor& x);
-    const torch::Tensor& L() const { return L_; }
+    [[nodiscard]] const torch::Tensor& L() const { return L_; }
     void compute_M(const torch::Tensor& t, const torch::Tensor& x);
-    const torch::Tensor& M() const { return M_; }
+    [[nodiscard]] const torch::Tensor& M() const { return M_; }
     void compute_N(const torch::Tensor& t, const torch::Tensor& x);
-    const torch::Tensor& N() const { return N_; }
+    [[nodiscard]] const torch::Tensor& N() const { return N_; }
     void compute_H(const torch::Tensor& t, const torch::Tensor& x);
-    const torch::Tensor& H() const { return H_; }
+    [[nodiscard]] const torch::Tensor& H() const { return H_; }
 
 private:
     Config config_;

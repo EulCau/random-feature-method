@@ -16,11 +16,11 @@ public:
     // x: (d) 1D Tensor；t: 标量 float
     [[nodiscard]] torch::Tensor phi(const torch::Tensor& x, const torch::Tensor& t) const;
 
-    [[nodiscard]] const int64_t dim() const { return dim_; }
-    [[nodiscard]] const int64_t hidden_dim() const { return H_; }
+    [[nodiscard]] int64_t dim() const { return dim_; }
+    [[nodiscard]] int64_t hidden_dim() const { return H_; }
 
     // 直接获取参数（如需调试）
-    [[nodiscard]] const uint64_t seed() const { return seed_; }
+    [[nodiscard]] uint64_t seed() const { return seed_; }
     [[nodiscard]] const torch::Tensor& A() const { return A_; }
     [[nodiscard]] const torch::Tensor& b() const { return b_; }
     [[nodiscard]] const torch::Tensor& c() const { return c_; }
