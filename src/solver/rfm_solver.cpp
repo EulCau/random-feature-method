@@ -1,13 +1,49 @@
 #include "rfm_solver.h"
 
-// =====================
-// 工具：设置随机种子
-// =====================
-[[maybe_unused]] void set_random_seed(uint64_t seed) {
-    torch::manual_seed(seed);
-    std::srand(static_cast<unsigned>(seed));
+RFMSolver::RFMSolver(const Config &config, const std::shared_ptr<Equation> &eq, const uint64_t seed)
+        : config_(config), equation_(eq), seed_(seed)
+{
+    torch::manual_seed(seed_);
+    std::srand(static_cast<unsigned>(seed_));
+    auto rff = RandomFeatureFunction(config.eqn_config.dim, config.net_config.num_hiddens[0], seed_);
+
+    L_ = torch::zeros({1, 1}, torch::kFloat32);
+    M_ = torch::zeros({1, config.eqn_config.dim}, torch::kFloat32);
+    N_ = torch::zeros({1, 1}, torch::kFloat32);
+    H_ = torch::zeros({1, config.eqn_config.dim}, torch::kFloat32);
 }
 
+// L, M, N are known, these functions are designed to compute results on all the t_k & x_k
+
+void RFMSolver::compute_L(const torch::Tensor &t, const torch::Tensor &x)
+{
+    torch::Tensor result = torch::zeros({1, 1}, torch::kFloat32);
+    // TODO: compute L
+    L_ = result;
+}
+
+void RFMSolver::compute_M(const torch::Tensor& t, const torch::Tensor& x)
+{
+    torch::Tensor result = torch::zeros(x.sizes(), torch::kFloat32);
+    // TODO: compute M
+    M_ = result;
+}
+
+void RFMSolver::compute_N(const torch::Tensor& t, const torch::Tensor& x)
+{
+    torch::Tensor result = torch::zeros({1, 1}, torch::kFloat32);
+    // TODO: compute N
+    N_ = result;
+}
+
+void RFMSolver::compute_H(const torch::Tensor& t, const torch::Tensor& x)
+{
+    torch::Tensor result = torch::zeros(x.sizes(), torch::kFloat32);
+    // TODO: compute H by rff
+    H_ = result;
+}
+
+/* ai 的胡诌
 // =====================
 // 构造线性系统 (M, beta)
 // M: (K, H*d), beta: (K)
@@ -22,7 +58,7 @@ build_linear_system_from_paths(
         const Equation& eq,
         RandomFeatureFunction& rff,
         int64_t K,
-        float y0 /* 初值，可扩展为张量 */)
+        float y0)
 {
     const int64_t d  = eq.dim();
     const int64_t N  = eq.num_time_interval();
@@ -107,7 +143,7 @@ SolveResult solve(const Config& config, const std::shared_ptr<Equation>& eq)
     torch::Device device(torch::cuda::is_available() ? torch::kCUDA : torch::kCPU);
 
     // 随机特征
-    RandomFeatureFunction rff(d, H, /*seed=*/1234);
+    RandomFeatureFunction rff(d, H, 1234);
 
     // 初始化 y0
     torch::Tensor y_init = torch::empty({1})
@@ -203,3 +239,4 @@ torch::Tensor solve_least_squares(const torch::Tensor& A, const torch::Tensor& b
 
     return theta;  // 返回系数向量
 }
+*/
