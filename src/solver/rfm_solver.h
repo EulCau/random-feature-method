@@ -28,4 +28,7 @@ private:
     torch::Tensor M_;
     torch::Tensor N_;
     torch::Tensor H_;
+
+    void check_tx_shape(const torch::Tensor& t, const torch::Tensor& x) const;
+
 };

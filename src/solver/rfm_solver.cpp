@@ -18,22 +18,58 @@ RFMSolver::RFMSolver(const Config &config, const std::shared_ptr<Equation> &eq, 
 
 void RFMSolver::compute_L(const torch::Tensor &t, const torch::Tensor &x)
 {
-    torch::Tensor result = torch::zeros({1, 1}, torch::kFloat32);
-    // TODO: compute L
+    check_tx_shape(t, x);
+
+    const auto result = equation_->coef().L(t, x);
+
+    TORCH_CHECK(
+        result.dim() == 4 &&
+        result.size(0) == config_.net_config.valid_size &&
+        result.size(1) == config_.eqn_config.num_time_interval &&
+        result.size(2) == 1 &&
+        result.size(3) == 1,
+        "Invalid shape for L(t, x). Expected (",
+        config_.net_config.valid_size, ", ",
+        config_.eqn_config.num_time_interval, ", 1, 1), but got ",
+        result.sizes()
+    );
+
     L_ = result;
 }
 
 void RFMSolver::compute_M(const torch::Tensor& t, const torch::Tensor& x)
 {
-    torch::Tensor result = torch::zeros(x.sizes(), torch::kFloat32);
-    // TODO: compute M
+    check_tx_shape(t, x);
+
+    const torch::Tensor result = equation_->coef().M(t, x);
+
+    TORCH_CHECK(
+        result.sizes() == x.sizes(),
+        "Invalid shape for M(t, x). Expected ",
+        x.sizes(), ", but got ", result.sizes()
+    );
+
     M_ = result;
 }
 
 void RFMSolver::compute_N(const torch::Tensor& t, const torch::Tensor& x)
 {
-    torch::Tensor result = torch::zeros({1, 1}, torch::kFloat32);
-    // TODO: compute N
+    check_tx_shape(t, x);
+
+    const torch::Tensor result = equation_->coef().N(t, x);
+
+    TORCH_CHECK(
+        result.dim() == 4 &&
+        result.size(0) == config_.net_config.valid_size &&
+        result.size(1) == config_.eqn_config.num_time_interval &&
+        result.size(2) == 1 &&
+        result.size(3) == 1,
+        "Invalid shape for N(t, x). Expected (",
+        x.size(0), ", ",
+        x.size(1), ", 1, 1), but got ",
+        result.sizes()
+    );
+
     N_ = result;
 }
 
@@ -42,6 +78,46 @@ void RFMSolver::compute_H(const torch::Tensor& t, const torch::Tensor& x)
     torch::Tensor result = torch::zeros(x.sizes(), torch::kFloat32);
     // TODO: compute H by rff
     H_ = result;
+}
+
+void RFMSolver::check_tx_shape(
+    const torch::Tensor& t,
+    const torch::Tensor& x
+) const
+{
+    // ---- check t ----
+    TORCH_CHECK(
+        t.dim() == 4,
+        "t must be a 4D tensor, got dim = ", t.dim()
+    );
+
+    TORCH_CHECK(
+        t.size(0) == 1 &&
+        t.size(1) == config_.eqn_config.num_time_interval &&
+        t.size(2) == 1 &&
+        t.size(3) == 1,
+        "Invalid shape for t. Expected (1, ",
+        config_.eqn_config.num_time_interval,
+        ", 1, 1), but got ", t.sizes()
+    );
+
+    // ---- check x ----
+    TORCH_CHECK(
+        x.dim() == 4,
+        "x must be a 4D tensor, got dim = ", x.dim()
+    );
+
+    TORCH_CHECK(
+        x.size(0) == config_.net_config.valid_size &&
+        x.size(1) == config_.eqn_config.num_time_interval &&
+        x.size(2) == 1 &&
+        x.size(3) == config_.eqn_config.dim,
+        "Invalid shape for x. Expected (",
+        config_.net_config.valid_size, ", ",
+        config_.eqn_config.num_time_interval,
+        ", 1, ", config_.eqn_config.dim,
+        "), but got ", x.sizes()
+    );
 }
 
 /* ai 的胡诌

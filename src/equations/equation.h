@@ -7,9 +7,11 @@
 #include <vector>
 
 struct Coefficient {
-    torch::Tensor a; // (K,N)
-    torch::Tensor b; // (K,N,d)
-    torch::Tensor c; // (K,N)
+	virtual ~Coefficient() = default;
+
+	[[nodiscard]] virtual torch::Tensor L(const torch::Tensor& t, const torch::Tensor& x) const = 0;
+	[[nodiscard]] virtual torch::Tensor M(const torch::Tensor& t, const torch::Tensor& x) const = 0;
+	[[nodiscard]] virtual torch::Tensor N(const torch::Tensor& t, const torch::Tensor& x) const = 0;
 };
 
 class Equation
@@ -35,7 +37,7 @@ public:
 	[[nodiscard]] int64_t num_time_interval() const { return num_time_interval_; }
 	[[nodiscard]] float delta_t() const { return delta_t_; }
 	[[nodiscard]] float sqrt_delta_t() const { return sqrt_delta_t_; }
-    [[nodiscard]] Coefficient load_coef() const { return coefficient_; }
+    [[nodiscard]] const Coefficient& coef() const { return *coefficient_; }
 
 protected:
 	int64_t dim_;
@@ -44,5 +46,5 @@ protected:
 	float delta_t_;
 	float sqrt_delta_t_;
     bool linear_ = false;
-    Coefficient coefficient_;
+	std::shared_ptr<Coefficient> coefficient_;
 };
