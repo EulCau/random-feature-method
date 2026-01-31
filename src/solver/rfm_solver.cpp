@@ -2,17 +2,99 @@
 #include "rff.h"
 
 RFMSolver::RFMSolver(const Config &config, const std::shared_ptr<Equation> &eq, const uint64_t seed)
-        : config_(config), equation_(eq), seed_(seed)
+        : config_(config),
+          equation_(eq),
+          seed_(seed),
+          rff_(RandomFeatureFunction(config.eqn_config.dim, config.net_config.num_hiddens[0], seed_))
 {
     torch::manual_seed(seed_);
     std::srand(static_cast<unsigned>(seed_));
-    auto rff = RandomFeatureFunction(config.eqn_config.dim, config.net_config.num_hiddens[0], seed_);
 
-    L_ = torch::zeros({1, 1}, torch::kFloat32);
-    M_ = torch::zeros({1, config.eqn_config.dim}, torch::kFloat32);
-    N_ = torch::zeros({1, 1}, torch::kFloat32);
-    H_ = torch::zeros({1, config.eqn_config.dim}, torch::kFloat32);
+    compute_txw();
+    compute_L(t_, x_);
+    compute_M(t_, x_);
+    compute_N(t_, x_);
+    compute_H(t_, x_);
 }
+
+void RFMSolver::compute_txw()
+{
+    const double total_time = config_.eqn_config.total_time;
+    int64_t num_time_interval = config_.eqn_config.num_time_interval;
+    const torch::Tensor t_full = torch::linspace(
+        0, total_time, num_time_interval + 1, torch::TensorOptions()
+    );
+    t_ = t_full.slice(0, 0, num_time_interval).reshape({1, num_time_interval, 1, 1});
+    t_end_ = t_full.slice(0, num_time_interval, num_time_interval + 1).reshape({1, 1, 1, 1});
+
+    const auto [fst, snd] = equation_->sample(config_.net_config.valid_size);
+    dw_ = fst;
+    const auto x_all = snd.permute({0, 2, 1});
+    x_ = x_all.index({
+        at::indexing::Slice(),
+        at::indexing::Slice(0, -1),
+        at::indexing::Slice()
+    }).unsqueeze(2).contiguous();
+    x_end_ = x_all.index({
+        at::indexing::Slice(),
+        at::indexing::Slice(-1, at::indexing::None),
+        at::indexing::Slice()
+    }).unsqueeze(2).contiguous();
+
+    check_tx_shape(t_, x_);
+}
+
+void RFMSolver::check_tx_shape(
+    const torch::Tensor& t,
+    const torch::Tensor& x
+) const
+{
+    // ---- check t ----
+    TORCH_CHECK(
+        t.dim() == 4,
+        "t must be a 4D tensor, got dim = ", t.dim()
+        );
+
+    TORCH_CHECK(
+        t.dtype() == torch::kFloat32,
+        "t must be float32, but got ", t.dtype()
+        );
+
+    TORCH_CHECK(
+        t.size(0) == 1 &&
+        t.size(1) == config_.eqn_config.num_time_interval &&
+        t.size(2) == 1 &&
+        t.size(3) == 1,
+        "Invalid shape for t. Expected (1, ",
+        config_.eqn_config.num_time_interval,
+        ", 1, 1), but got ", t.sizes()
+    );
+
+    // ---- check x ----
+    TORCH_CHECK(
+        x.dim() == 4,
+        "x must be a 4D tensor, got dim = ", x.dim()
+    );
+
+    TORCH_CHECK(
+        x.dtype() == torch::kFloat32,
+        "x must be float32, but got", x.dtype()
+        );
+
+    TORCH_CHECK(
+        x.size(0) == config_.net_config.valid_size &&
+        x.size(1) == config_.eqn_config.num_time_interval &&
+        x.size(2) == 1 &&
+        x.size(3) == config_.eqn_config.dim,
+        "Invalid shape for x. Expected (",
+        config_.net_config.valid_size, ", ",
+        config_.eqn_config.num_time_interval,
+        ", 1, ", config_.eqn_config.dim,
+        "), but got ", x.sizes()
+    );
+}
+
+
 
 // L, M, N are known, these functions are designed to compute results on all the t_k & x_k
 
@@ -75,243 +157,92 @@ void RFMSolver::compute_N(const torch::Tensor& t, const torch::Tensor& x)
 
 void RFMSolver::compute_H(const torch::Tensor& t, const torch::Tensor& x)
 {
-    torch::Tensor result = torch::zeros(x.sizes(), torch::kFloat32);
-    // TODO: compute H by rff
+    check_tx_shape(t, x);
+
+    const torch::Tensor result = rff_.phi(t, x);
+
+    TORCH_CHECK(
+        result.size(0) == x.size(0) &&
+        result.size(1) == x.size(1) &&
+        result.size(2) == config_.net_config.num_hiddens[0] &&
+        result.size(3) == 1,
+        "Invalid shape for H(t, x). Expected ",
+        x.sizes(), ", but got ", result.sizes()
+    );
+
     H_ = result;
 }
 
-void RFMSolver::check_tx_shape(
-    const torch::Tensor& t,
-    const torch::Tensor& x
-) const
-{
-    // ---- check t ----
-    TORCH_CHECK(
-        t.dim() == 4,
-        "t must be a 4D tensor, got dim = ", t.dim()
-    );
+std::pair<torch::Tensor, torch::Tensor> RFMSolver::Solve() const {
+    int64_t S = config_.net_config.valid_size;
+    int64_t T = config_.eqn_config.num_time_interval;
+    int64_t D = equation_->dim();
+    int64_t H_dim = config_.net_config.num_hiddens[0];
+    const double dt = equation_->delta_t();
+    auto device = L_.device();
 
-    TORCH_CHECK(
-        t.size(0) == 1 &&
-        t.size(1) == config_.eqn_config.num_time_interval &&
-        t.size(2) == 1 &&
-        t.size(3) == 1,
-        "Invalid shape for t. Expected (1, ",
-        config_.eqn_config.num_time_interval,
-        ", 1, 1), but got ", t.sizes()
-    );
+    const torch::Tensor dW = dw_.to(device).reshape({S, T, 1, D});
 
-    // ---- check x ----
-    TORCH_CHECK(
-        x.dim() == 4,
-        "x must be a 4D tensor, got dim = ", x.dim()
-    );
+    const auto a_k = 1.0 - L_ * dt;
+    const auto b_k = dW - M_ * dt;
+    const auto c_k = N_ * dt;
 
-    TORCH_CHECK(
-        x.size(0) == config_.net_config.valid_size &&
-        x.size(1) == config_.eqn_config.num_time_interval &&
-        x.size(2) == 1 &&
-        x.size(3) == config_.eqn_config.dim,
-        "Invalid shape for x. Expected (",
-        config_.net_config.valid_size, ", ",
-        config_.eqn_config.num_time_interval,
-        ", 1, ", config_.eqn_config.dim,
-        "), but got ", x.sizes()
-    );
-}
+    // 计算累计乘积权重 W_k = \prod_{j=k+1}^{N-1} a_j
+    // 我们使用 flip -> cumprod -> flip 的技巧来实现反向累计乘
+    const auto a_flipped = torch::flip(a_k.squeeze(-1).squeeze(-1), {1}); // (S, T)
+    const auto cum_a_flipped = torch::cumprod(a_flipped, 1);
 
-/* ai 的胡诌
-// =====================
-// 构造线性系统 (M, beta)
-// M: (K, H*d), beta: (K)
-// 递推：
-// y_{n+1} = y_n - dt*(a_n y_n + b_n^T z_n + c_n) + <dW_n, z_n>
-// z_n = Phi(x_n, t_n)^T alpha  (alpha_flat 拼成 H*d 向量)
-// D 更新：D <- D - dt*(a_n D + bDz) + dWDz
-// 其中 bDz = [b1*phi, b2*phi, ..., bd*phi], dWDz 类似
-// =====================
-std::pair<torch::Tensor, torch::Tensor>
-build_linear_system_from_paths(
-        const Equation& eq,
-        RandomFeatureFunction& rff,
-        int64_t K,
-        float y0)
-{
-    const int64_t d  = eq.dim();
-    const int64_t N  = eq.num_time_interval();
-    const float   dt = eq.delta_t();
-    const int64_t H  = rff.hidden_dim();
-
-    // 采样路径
-    auto [dw, x] = eq.sample(K); // dw:(K,d,N), x:(K,d,N+1)  —— 注意你提供的sample是 (num_sample, dim, num_time_interval) 排列
-    // 为了便于索引，我们将用 contiguous 并明确索引顺序
-    dw = dw.contiguous();
-    x  = x.contiguous();
-
-    // 载入/构造 a,b,c
-    Coefficient coefficient = eq.load_coef();
-    auto a = coefficient.a.contiguous();       // (K,N)
-    auto b = coefficient.b.contiguous();       // (K,N,d)
-    auto c = coefficient.c.contiguous();       // (K,N)
-
-    // 输出：M (K, H*d), beta (K)
-    torch::Tensor M     = torch::zeros({K, H * d}, torch::kFloat32);
-    torch::Tensor beta  = torch::zeros({K},        torch::kFloat32);
-
-    for (int64_t k = 0; k < K; ++k)
-    {
-        // beta_k 与 D_k 的初始化
-        float beta_k = y0;
-        torch::Tensor D_k = torch::zeros({H * d}, torch::kFloat32); // (H*d)
-
-        for (int64_t n = 0; n < N; ++n)
-        {
-            float t_n = static_cast<float>(n) * dt;
-
-            // 取 x_n^k : 形状 (d)
-            torch::Tensor x_kn = x.index({k, torch::indexing::Slice(), n}).clone(); // (d)
-
-            // 计算 phi(x_n, t_n) : (H)
-            torch::Tensor phi = rff.phi(x_kn, t_n); // (H)
-
-            // 取 a,b,c, dW
-            auto a_kn = a.index({k, n}).item<float>();
-            auto c_kn = c.index({k, n}).item<float>();
-            torch::Tensor b_kn  = b.index({k, n});            // (d)
-            torch::Tensor dW_kn = dw.index({k, torch::indexing::Slice(), n}); // (d)
-
-            // 计算 bDz 与 dWDz （避免构造庞大 Dz，直接用块拼接思想）
-            // bDz = [b1*phi, b2*phi, ..., bd*phi]  -> (H*d)
-            // dWDz = [dW1*phi, ..., dWd*phi]       -> (H*d)
-            torch::Tensor bDz  = torch::empty({H * d}, torch::kFloat32);
-            torch::Tensor dWDz = torch::empty({H * d}, torch::kFloat32);
-            for (int64_t j = 0; j < d; ++j)
-            {
-                auto bj  = b_kn.index({j}).item<float>();
-                auto dWj = dW_kn.index({j}).item<float>();
-                // 拷贝到各自的块
-                bDz.index_put_({ torch::indexing::Slice(j*H, (j+1)*H) }, bj  * phi);
-                dWDz.index_put_({ torch::indexing::Slice(j*H, (j+1)*H) }, dWj * phi);
-            }
-
-            // 递推更新：
-            // 常数项 beta:  beta <- beta - dt*(a*beta + c)
-            beta_k = beta_k - dt * (a_kn * beta_k + c_kn);
-
-            // 线性系数 D:  D <- D - dt*(a*D + bDz) + dWDz
-            D_k = D_k - dt * (a_kn * D_k + bDz) + dWDz;
-        }
-
-        // 写入输出
-        M.index_put_({k, torch::indexing::Slice()}, D_k);
-        beta.index_put_({k}, beta_k);
+    // weights 对应于每个时刻 k 的系数。
+    // 对于 y_N = ... + W_k * (b_k * alpha * H_k) + ...
+    // W_{T-1} 始终为 1, W_{T-2} = a_{T-1}, 依此类推
+    auto weights = torch::ones({S, T}, torch::TensorOptions().device(device));
+    if (T > 1) {
+        weights.index_put_(
+            {torch::indexing::Slice(), torch::indexing::Slice(0, -1)},
+            torch::flip(cum_a_flipped.index(
+                {torch::indexing::Slice(), torch::indexing::Slice(0, -1)}), {1})
+        );
     }
+    weights = weights.reshape({S, T, 1, 1});
 
-    return {M, beta};
+    // 构建线性方程组 A * theta = B
+
+    // (A) y0 的系数: \prod_{j=0}^{N-1} a_j
+    torch::Tensor coef_y0 = torch::prod(a_k.squeeze(-1).squeeze(-1), 1).reshape({S, 1});
+
+    // (B) alpha 的系数:
+    // 对于每一时刻，我们需要 b_k^T * H_k^T (外积) 得到 (dim, hiddens) 的矩阵
+    // b_k 是 (S, T, 1, D) -> 转置为 (S, T, D, 1)
+    // H_k 是 (S, T, H, 1) -> 转置为 (S, T, 1, H)
+    const auto b_vec = b_k.transpose(2, 3); // (S, T, D, 1)
+    const auto h_vec = H_.transpose(2, 3); // (S, T, 1, H)
+
+    // 使用 einsum 或者 bmm 计算外积并乘以权重后求和
+    // (S, T, D, 1) * (S, T, 1, H) -> (S, T, D, H)
+    const auto alpha_terms = torch::matmul(b_vec, h_vec);
+    auto coef_alpha = (weights.unsqueeze(-1) * alpha_terms).sum(1); // (S, D, H)
+    coef_alpha = coef_alpha.reshape({S, D * H_dim}); // 展平 alpha 为向量
+
+    // 合并得到大矩阵 A: (S, 1 + D*H)
+    const auto A = torch::cat({coef_y0, coef_alpha}, 1);
+
+    // (C) 目标向量 B: g(X_N) - sum(weights * c_k)
+    const torch::Tensor g_XN = equation_->g(t_end_, x_end_).to(device); // (S, 1), TODO: 可能需要重写 g 使其支持批量 x
+    const torch::Tensor constant_part = (weights * c_k).sum(1).reshape({S, 1});
+    const auto B = g_XN - constant_part;
+
+    // 求解线性最小二乘
+    // 使用 gelsy (Complete Orthogonal Factorization) 比较稳健
+    // 如果存在正则化需求，可以使用 Ridge 回归替代
+    const auto solve_result = torch::linalg_lstsq(A, B);
+    const torch::Tensor theta = std::get<0>(solve_result); // (1 + D*H, 1)
+
+    // 拆分结果
+    torch::Tensor y0 = theta.index({0, 0});
+    torch::Tensor alpha = theta.index({
+        torch::indexing::Slice(1, torch::indexing::None),
+        0
+    }).reshape({D, H_dim});
+
+    return {y0, alpha};
 }
-
-SolveResult solve(const Config& config, const std::shared_ptr<Equation>& eq)
-{
-    int64_t K = config.net_config.batch_size;   // 用 batch_size 作为采样路径数
-    int64_t H = config.net_config.num_hiddens[0]; // 假设 num_hiddens[0] 就是 hidden_dim
-    int64_t d = eq->dim();
-    int64_t N = eq->num_time_interval();
-
-    torch::Device device(torch::cuda::is_available() ? torch::kCUDA : torch::kCPU);
-
-    // 随机特征
-    RandomFeatureFunction rff(d, H, 1234);
-
-    // 初始化 y0
-    torch::Tensor y_init = torch::empty({1})
-            .uniform_(config.net_config.y_init_range[0],
-                      config.net_config.y_init_range[1]);
-
-    auto y0 = y_init.item<float>();
-
-    // 构造线性系统
-    auto [M_cpu, beta_cpu] = build_linear_system_from_paths(*eq, rff, K, y0);
-    torch::Tensor M    = M_cpu.to(device);    // (K, H*d)
-    torch::Tensor beta = beta_cpu.to(device); // (K)
-
-    // 终端目标 g(X_T)
-    auto [dw, x] = eq->sample(K);             // x:(K,d,N+1)
-    dw = dw.to(device);
-    x  = x.to(device);
-
-    torch::Tensor xT = x.index({torch::indexing::Slice(), torch::indexing::Slice(), N}); // (K,d)
-    torch::Tensor tT = torch::full({K}, eq->total_time(), torch::TensorOptions().device(device).dtype(torch::kFloat32));
-    torch::Tensor gT = eq->g(tT, xT).to(device); // (K)
-
-    // 最小二乘解: 直接调用 torch::linalg_lstsq
-    // A = M, b = gT - beta
-    torch::Tensor rhs = gT - beta; // (K)
-    auto lstsq_result = torch::linalg_lstsq(M, rhs.unsqueeze(1)); // b 必须是 (K,1)
-    torch::Tensor alpha = std::get<0>(lstsq_result).squeeze(1);        // (H*d)
-
-    // 预测终点
-    torch::Tensor y_pred = torch::matmul(M, alpha) + beta; // (K)
-    // 末端 L2 误差
-    torch::Tensor terminal_err = torch::norm(y_pred - gT) / std::sqrt((double)K);
-
-    SolveResult result{alpha.cpu(), terminal_err.cpu()};
-    return result;
-}
-
-torch::Tensor compute_A_and_b_for_least_squares(
-    const std::vector<std::pair<torch::Tensor, torch::Tensor>>& samples,  // 样本路径
-    const RandomFeatureFunction& rf_func,                               // 随机特征
-    const Equation& eqn,                                                // 方程
-    float delta_t,                                                      // 时间步长
-    int64_t N                                                           // 总时间步数
-) {
-    int64_t K = samples.size();  // 样本数
-    int64_t m = rf_func.hidden_dim();  // 特征维度
-    int64_t dim = eqn.dim();    // 状态空间维度
-
-    // 初始化矩阵 A 和向量 b
-    torch::Tensor A = torch::zeros({K * N, m}, torch::kFloat);  // (K * N) x m
-    torch::Tensor b = torch::zeros({K * N}, torch::kFloat);     // (K * N)
-
-    int64_t row_offset = 0;  // 行偏移量
-
-    // 遍历每个样本路径
-    for (int64_t k = 0; k < K; ++k) {
-        auto [x, w] = samples[k];  // x 是样本路径，w 是相应的随机过程增量
-        torch::Tensor y = torch::zeros({x.size(1)});  // 初始化 y_n^k (与路径相同维度)
-        torch::Tensor z = torch::zeros_like(y);      // 初始化 z_n^k (与 y 一样)
-
-        // 递推过程：从 n = 0 到 n = N-1
-        for (int64_t n = 0; n < N; ++n) {
-            float t_n = n * delta_t;  // 计算当前时间点
-            torch::Tensor x_n = x.select(1, n);  // 获取路径在当前时间点的状态 x_n^k
-
-            // 计算特征值 z_n^k = φ(x_n^k, t_n)
-            torch::Tensor z_n = rf_func.phi(x_n, t_n);
-
-            // 计算 f(t_n, x_n^k, y_n^k, z_n^k)
-            torch::Tensor f_vals = eqn.f(t_n, x_n, y, z_n);
-
-            // 更新 y_{n+1}^k: 递推步骤
-            y = y - delta_t * f_vals + (w.select(1, n).dot(z_n)); // 用随机过程增量和内积更新
-
-            // 填充矩阵 A 和向量 b
-            A.slice(0, row_offset, row_offset + 1) = z_n.view({1, -1});  // 将 φ(x_n^k, t_n) 填充到 A 中
-            b.slice(0, row_offset, row_offset + 1) = f_vals.view({1});    // 对应的目标 b 填充
-
-            row_offset += 1;  // 更新行偏移量
-        }
-    }
-
-    return std::make_pair(A, b);  // 返回大矩阵 A 和右端向量 b
-}
-
-torch::Tensor solve_least_squares(const torch::Tensor& A, const torch::Tensor& b) {
-    // 使用正规方程来求解：theta = (A^T A)^-1 A^T b
-    torch::Tensor AtA = A.transpose(0, 1).matmul(A);  // 计算 A^T * A
-    torch::Tensor Atb = A.transpose(0, 1).matmul(b);  // 计算 A^T * b
-    torch::Tensor theta = torch::linalg::solve(AtA, Atb);  // 解正规方程
-
-    return theta;  // 返回系数向量
-}
-*/

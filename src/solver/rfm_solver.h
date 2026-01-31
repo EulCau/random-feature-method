@@ -3,13 +3,24 @@
 #include <torch/torch.h>
 #include <random>
 #include "equation.h"
+#include "rff.h"
 
 class RFMSolver
 {
+protected:
+    void check_tx_shape(const torch::Tensor& t, const torch::Tensor& x) const;
+
 public:
     RFMSolver(const Config& config, const std::shared_ptr<Equation>& eq, uint64_t seed);
 
     [[nodiscard]] uint64_t seed() const { return seed_; }
+
+    void compute_txw();
+    [[nodiscard]] const torch::Tensor& t() const { return t_; }
+    [[nodiscard]] const torch::Tensor& t_end() const { return t_end_; }
+    [[nodiscard]] const torch::Tensor& dw() const { return dw_; }
+    [[nodiscard]] const torch::Tensor& x() const { return x_; }
+    [[nodiscard]] const torch::Tensor& x_end() const { return x_end_; }
 
     void compute_L(const torch::Tensor& t, const torch::Tensor& x);
     [[nodiscard]] const torch::Tensor& L() const { return L_; }
@@ -20,15 +31,20 @@ public:
     void compute_H(const torch::Tensor& t, const torch::Tensor& x);
     [[nodiscard]] const torch::Tensor& H() const { return H_; }
 
-private:
+    std::pair<torch::Tensor, torch::Tensor> Solve() const;
+
+protected:
     Config config_;
     std::shared_ptr<Equation> equation_;
     uint64_t seed_;
+    RandomFeatureFunction rff_;
+    torch::Tensor t_end_;
+    torch::Tensor dw_;
+    torch::Tensor x_;
+    torch::Tensor x_end_;
     torch::Tensor L_;
     torch::Tensor M_;
     torch::Tensor N_;
     torch::Tensor H_;
-
-    void check_tx_shape(const torch::Tensor& t, const torch::Tensor& x) const;
-
+    torch::Tensor t_;
 };
