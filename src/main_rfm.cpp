@@ -6,15 +6,16 @@
 
 int main()
 {
-    uint64_t seed = 42;
+    constexpr uint64_t seed = 42;
     force_link_all_equations();
-    const Config cfg = load_config("***"); // TODO: linear equation
+    const Config cfg = load_config("bsm_d100.json");
     const auto pde = EquationFactory::instance().create(cfg.eqn_config.eqn_name, cfg.eqn_config);
 
-    auto rfm_solver = RFMSolver(cfg, pde, seed);
+    const auto rfm_solver = RFMSolver(cfg, pde, seed);
 
-    float result = 0.0f;
-    std::cout << result << std::endl;
+    const auto [y0, alpha] = rfm_solver.Solve();
+
+    std::cout << y0 << std::endl;
 
     return 0;
 }
