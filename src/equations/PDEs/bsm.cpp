@@ -39,8 +39,7 @@ public:
     explicit BSM(const EqnConfig& eqn_config)
         : Equation(eqn_config),
           x_init_(torch::ones({dim_})),
-          sigma_(static_cast<float>(0.2)),
-          r_(static_cast<float>(0.05))
+          sigma_(0.2f), r_(0.05f), K_(1.0f)
     {
         linear_ = true;
         coefficient_ = std::make_shared<BSMCoefficient>(r_);
@@ -94,15 +93,16 @@ public:
     {
         TORCH_CHECK(x.dim() >= 4, "x must have at least 4 dimensions");
 
-        auto y = torch::mean(x, -1, true);
+        auto mean_x = torch::mean(x, /*dim=*/-1, /*keepdim=*/true);
 
-        return y;
+        return torch::relu(mean_x - K_);
     }
 
 private:
     torch::Tensor x_init_;
     float sigma_;
     float r_;
+    float K_;
 };
 
 REGISTER_EQUATION_CLASS(BSM)
