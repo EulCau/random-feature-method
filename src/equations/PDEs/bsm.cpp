@@ -87,13 +87,13 @@ public:
         return x * r_;
     }
 
-    // g(x) = 0.5 * ||x||^2
+    // g(x) = max(mean(x) − K, 0)
     [[nodiscard("Return Need to be Used")]]
     torch::Tensor g(const torch::Tensor& t, const torch::Tensor& x) const override
     {
         TORCH_CHECK(x.dim() >= 4, "x must have at least 4 dimensions");
 
-        auto mean_x = torch::mean(x, /*dim=*/-1, /*keepdim=*/true);
+        const auto mean_x = torch::mean(x, -1, true);
 
         return torch::relu(mean_x - K_);
     }
