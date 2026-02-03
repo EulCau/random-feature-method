@@ -1,8 +1,9 @@
 add_library(
     equations
 	STATIC
-    allencahn.cpp
-    hjblq.cpp)  # TODO: linear equation
+	allencahn.cpp
+	hjblq.cpp
+	bsm.cpp)  # TODO: linear equation
 
 target_include_directories(
 	equations

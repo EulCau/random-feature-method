@@ -1,0 +1,110 @@
+#include "equation.h"
+#include "register_equation.h"
+
+struct BSMCoefficient final : Coefficient {
+    explicit BSMCoefficient(const float r) : r_{r} {}
+    float r_;
+    torch::Tensor L(const torch::Tensor& t,
+                    const torch::Tensor& x) const override {
+        const auto sizes = x.sizes();
+        TORCH_CHECK(sizes.size() >= 2, "x must have at least 2 dimensions");
+
+        return torch::full(
+            {sizes[0], sizes[1], 1, 1},
+            -r_,
+            x.options()
+        );
+    }
+
+    torch::Tensor M(const torch::Tensor& t,
+                    const torch::Tensor& x) const override {
+        return torch::zeros_like(x);
+    }
+
+    torch::Tensor N(const torch::Tensor& t,
+                    const torch::Tensor& x) const override {
+        const auto sizes = x.sizes();
+        TORCH_CHECK(sizes.size() >= 2, "x must have at least 2 dimensions");
+
+        return torch::zeros(
+            {sizes[0], sizes[1], 1, 1},
+            x.options()
+        );
+    }
+};
+
+class BSM final : public Equation
+{
+public:
+    explicit BSM(const EqnConfig& eqn_config)
+        : Equation(eqn_config),
+          x_init_(torch::ones({dim_})),
+          sigma_(static_cast<float>(0.2)),
+          r_(static_cast<float>(0.05))
+    {
+        linear_ = true;
+        coefficient_ = std::make_shared<BSMCoefficient>(r_);
+    }
+
+    // Sample function, Generate path of dW & X
+    [[nodiscard("Return Need to be Used")]]
+    std::pair<torch::Tensor, torch::Tensor> sample(int64_t num_sample) const override
+    {
+        // dW ~ N(0, delta_t)
+        torch::Tensor dw = torch::randn(
+            {num_sample, dim_, num_time_interval_}, torch::kFloat) * sqrt_delta_t_;
+
+        // Init X: x_0 = x_init
+        torch::Tensor x = torch::zeros(
+            {num_sample, dim_, num_time_interval_ + 1}, torch::kFloat);
+        x.index_put_(
+            {torch::indexing::Slice(), torch::indexing::Slice(), 0},
+            x_init_.expand({num_sample, dim_}));
+
+        for (int64_t i = 0; i < num_time_interval_; ++i)
+        {
+            using namespace at::indexing;
+            auto xi = x.index({Slice(), Slice(), i});
+            auto dwi = dw.index({Slice(), Slice(), i});
+
+            x.index_put_(
+                {Slice(), Slice(), i + 1},
+                xi * torch::exp(
+                    (r_ - 0.5 * sigma_ * sigma_) * delta_t_
+                    + sigma_ * dwi
+                )
+            );
+        }
+
+        return {dw, x};
+    }
+
+    // f(t, x, y, z) = -r * y
+    [[nodiscard("Return Need to be Used")]]
+    torch::Tensor f(
+        const torch::Tensor& t, const torch::Tensor& x,
+        const torch::Tensor& y, const torch::Tensor& z) const override
+    {
+        return x * r_;
+    }
+
+    // g(x) = 0.5 * ||x||^2
+    [[nodiscard("Return Need to be Used")]]
+    torch::Tensor g(const torch::Tensor& t, const torch::Tensor& x) const override
+    {
+        TORCH_CHECK(x.dim() >= 4, "x must have at least 4 dimensions");
+
+        auto y = torch::mean(x, -1, true);
+
+        return y;
+    }
+
+private:
+    torch::Tensor x_init_;
+    float sigma_;
+    float r_;
+};
+
+REGISTER_EQUATION_CLASS(BSM)
+
+extern "C" void force_link_BSM() {}

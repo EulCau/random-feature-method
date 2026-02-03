@@ -1,7 +1,11 @@
+#pragma once
 extern "C" void force_link_AllenCahn();
-extern "C" void force_link_HJBLQ();  // TODO: linear equation
+extern "C" void force_link_HJBLQ();
+extern "C" void force_link_BSM();
+// TODO: linear equation
 
-void force_link_all_equations() {
+inline void force_link_all_equations() {
 	force_link_AllenCahn();
 	force_link_HJBLQ();
+	force_link_BSM();
 }
