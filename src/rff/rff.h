@@ -1,7 +1,6 @@
 #pragma once
 
 #include <torch/torch.h>
-#include <random>
 
 // phi(x, t) = tanh(A x + b t + c)
 // A: (H, d), b: (H,), c: (H,)

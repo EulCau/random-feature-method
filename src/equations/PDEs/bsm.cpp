@@ -4,7 +4,7 @@
 struct BSMCoefficient final : Coefficient {
     explicit BSMCoefficient(const float r) : r_{r} {}
     float r_;
-    torch::Tensor L(const torch::Tensor& t,
+    [[nodiscard]] torch::Tensor L(const torch::Tensor& t,
                     const torch::Tensor& x) const override {
         const auto sizes = x.sizes();
         TORCH_CHECK(sizes.size() >= 2, "x must have at least 2 dimensions");
@@ -16,12 +16,12 @@ struct BSMCoefficient final : Coefficient {
         );
     }
 
-    torch::Tensor M(const torch::Tensor& t,
+    [[nodiscard]] torch::Tensor M(const torch::Tensor& t,
                     const torch::Tensor& x) const override {
         return torch::zeros_like(x);
     }
 
-    torch::Tensor N(const torch::Tensor& t,
+    [[nodiscard]] torch::Tensor N(const torch::Tensor& t,
                     const torch::Tensor& x) const override {
         const auto sizes = x.sizes();
         TORCH_CHECK(sizes.size() >= 2, "x must have at least 2 dimensions");
