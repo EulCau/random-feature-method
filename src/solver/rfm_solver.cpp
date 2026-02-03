@@ -1,6 +1,7 @@
 #include "rfm_solver.h"
 #include "rff.h"
 
+// TODO: to GPU
 RFMSolver::RFMSolver(const Config &config, const std::shared_ptr<Equation> &eq, const uint64_t seed)
         : config_(config),
           equation_(eq),
@@ -43,58 +44,6 @@ void RFMSolver::compute_txw()
 
     check_tx_shape(t_, x_);
 }
-
-void RFMSolver::check_tx_shape(
-    const torch::Tensor& t,
-    const torch::Tensor& x
-) const
-{
-    // ---- check t ----
-    TORCH_CHECK(
-        t.dim() == 4,
-        "t must be a 4D tensor, got dim = ", t.dim()
-        );
-
-    TORCH_CHECK(
-        t.dtype() == torch::kFloat32,
-        "t must be float32, but got ", t.dtype()
-        );
-
-    TORCH_CHECK(
-        t.size(0) == 1 &&
-        t.size(1) == config_.eqn_config.num_time_interval &&
-        t.size(2) == 1 &&
-        t.size(3) == 1,
-        "Invalid shape for t. Expected (1, ",
-        config_.eqn_config.num_time_interval,
-        ", 1, 1), but got ", t.sizes()
-    );
-
-    // ---- check x ----
-    TORCH_CHECK(
-        x.dim() == 4,
-        "x must be a 4D tensor, got dim = ", x.dim()
-    );
-
-    TORCH_CHECK(
-        x.dtype() == torch::kFloat32,
-        "x must be float32, but got", x.dtype()
-        );
-
-    TORCH_CHECK(
-        x.size(0) == config_.net_config.valid_size &&
-        x.size(1) == config_.eqn_config.num_time_interval &&
-        x.size(2) == 1 &&
-        x.size(3) == config_.eqn_config.dim,
-        "Invalid shape for x. Expected (",
-        config_.net_config.valid_size, ", ",
-        config_.eqn_config.num_time_interval,
-        ", 1, ", config_.eqn_config.dim,
-        "), but got ", x.sizes()
-    );
-}
-
-
 
 // L, M, N are known, these functions are designed to compute results on all the t_k & x_k
 
@@ -173,7 +122,8 @@ void RFMSolver::compute_H(const torch::Tensor& t, const torch::Tensor& x)
     H_ = result;
 }
 
-std::pair<torch::Tensor, torch::Tensor> RFMSolver::Solve() const {
+std::pair<torch::Tensor, torch::Tensor> RFMSolver::Solve() const
+{
     int64_t S = config_.net_config.valid_size;
     int64_t T = config_.eqn_config.num_time_interval;
     int64_t D = equation_->dim();
@@ -245,4 +195,54 @@ std::pair<torch::Tensor, torch::Tensor> RFMSolver::Solve() const {
     }).reshape({D, H_dim});
 
     return {y0, alpha};
+}
+
+void RFMSolver::check_tx_shape(
+    const torch::Tensor& t,
+    const torch::Tensor& x
+) const
+{
+    // ---- check t ----
+    TORCH_CHECK(
+        t.dim() == 4,
+        "t must be a 4D tensor, got dim = ", t.dim()
+        );
+
+    TORCH_CHECK(
+        t.dtype() == torch::kFloat32,
+        "t must be float32, but got ", t.dtype()
+        );
+
+    TORCH_CHECK(
+        t.size(0) == 1 &&
+        t.size(1) == config_.eqn_config.num_time_interval &&
+        t.size(2) == 1 &&
+        t.size(3) == 1,
+        "Invalid shape for t. Expected (1, ",
+        config_.eqn_config.num_time_interval,
+        ", 1, 1), but got ", t.sizes()
+    );
+
+    // ---- check x ----
+    TORCH_CHECK(
+        x.dim() == 4,
+        "x must be a 4D tensor, got dim = ", x.dim()
+    );
+
+    TORCH_CHECK(
+        x.dtype() == torch::kFloat32,
+        "x must be float32, but got", x.dtype()
+        );
+
+    TORCH_CHECK(
+        x.size(0) == config_.net_config.valid_size &&
+        x.size(1) == config_.eqn_config.num_time_interval &&
+        x.size(2) == 1 &&
+        x.size(3) == config_.eqn_config.dim,
+        "Invalid shape for x. Expected (",
+        config_.net_config.valid_size, ", ",
+        config_.eqn_config.num_time_interval,
+        ", 1, ", config_.eqn_config.dim,
+        "), but got ", x.sizes()
+    );
 }

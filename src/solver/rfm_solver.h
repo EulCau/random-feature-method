@@ -7,9 +7,6 @@
 
 class RFMSolver
 {
-protected:
-    void check_tx_shape(const torch::Tensor& t, const torch::Tensor& x) const;
-
 public:
     RFMSolver(const Config& config, const std::shared_ptr<Equation>& eq, uint64_t seed);
 
@@ -31,7 +28,10 @@ public:
     void compute_H(const torch::Tensor& t, const torch::Tensor& x);
     [[nodiscard]] const torch::Tensor& H() const { return H_; }
 
-    std::pair<torch::Tensor, torch::Tensor> Solve() const;
+    [[nodiscard]] std::pair<torch::Tensor, torch::Tensor> Solve() const;
+
+protected:
+    void check_tx_shape(const torch::Tensor& t, const torch::Tensor& x) const;
 
 protected:
     Config config_;
