@@ -38,3 +38,8 @@ $$y_{k+1} = \left(1 - \Delta t \mathcal{L}\left(t_{k}, \vec{x_{k}}\right)\right)
 $$\text{argmin}_{y_{0}, \alpha} \sum_{i=1}^{n} \left\lVert \tilde{g}\left(x_{N}^{(i)}\right) - g\left(x_{N}^{(i)}\right) \right\rVert^{2}$$
 
 而这步可以使用最小二乘法或者岭回归完成.
+
+
+## 接口文档
+
+- 代码接口说明见 `API说明.md`。
