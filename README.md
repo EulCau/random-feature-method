@@ -42,4 +42,4 @@ $$\text{argmin}_{y_{0}, \alpha} \sum_{i=1}^{n} \left\lVert \tilde{g}\left(x_{N}^
 
 ## 接口文档
 
-- 代码接口说明见 `API说明.md`。
+- 代码接口说明见 `api-reference.md.md`。
