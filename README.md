@@ -52,21 +52,21 @@ $$
 
 - 参数向量:
 
-  $$
-  \theta = \begin{bmatrix} y_{0} \\ \mathrm{vec}\left(\alpha\right) \end{bmatrix}
-  $$
+$$
+\theta = \begin{bmatrix} y_{0} \\ \mathrm{vec}\left(\alpha\right) \end{bmatrix}
+$$
 
 - 残差向量 (对每条路径 $i$):
 
-  $$
-  r_{i}\left(\theta\right) = y_{N}^{\left(i\right)}\left(\theta\right) - g\left(x_{N}^{\left(i\right)}\right)
-  $$
+$$
+r_{i}\left(\theta\right) = y_{N}^{\left(i\right)}\left(\theta\right) - g\left(x_{N}^{\left(i\right)}\right)
+$$
 
 - 目标函数:
 
-  $$
-  F\left(\theta\right) = \frac{1}{2} \left\lVert r\left(\theta\right)\right\rVert_{2}^{2}
-  $$
+$$
+F\left(\theta\right) = \frac{1}{2} \left\lVert r\left(\theta\right)\right\rVert_{2}^{2}
+$$
 
 并使用 Levenberg–Marquardt (LM) / Gauss–Newton (GN) 作为最终求解器.
 
@@ -84,23 +84,23 @@ $$
 
    - Gauss–Newton:
 
-     $$
-     \left(J^{\top} J\right) \delta^{\left(m\right)} = -J^{\top} r
-     $$
+$$
+\left(J^{\top} J\right) \delta^{\left(m\right)} = -J^{\top} r
+$$
 
    - Levenberg–Marquardt:
 
-     $$
-     \left(J^{\top} J + \lambda I\right) \delta^{\left(m\right)} = -J^{\top} r
-     $$
+$$
+\left(J^{\top} J + \lambda I\right) \delta^{\left(m\right)} = -J^{\top} r
+$$
 
      其中 $\lambda > 0$ 为阻尼 (信赖域) 参数.
 
 3. **更新与阻尼调节**
 
-   $$
-   \theta^{(m+1)} = \theta^{(m)} + \delta^{(m)}
-   $$
+$$
+\theta^{(m+1)} = \theta^{(m)} + \delta^{(m)}
+$$
 
    对于 LM，若新 loss 明显下降，则减小 $\lambda$；若不降或上升，则拒绝该步骤并增大 $\lambda$ (使更新更接近梯度下降, 避免发散).
 
@@ -153,9 +153,9 @@ $$
 
 - 然后对标量 $g\left(\theta\right) \cdot v$ 再做一次 autograd 求导, 得到:
 
-  $$
-  \nabla_{\theta}\left(g\left(\theta\right) \cdot v\right) \approx J^{\top} J v
-  $$
+$$
+\nabla_{\theta}\left(g\left(\theta\right) \cdot v\right) \approx J^{\top} J v
+$$
 
   在 LM 阻尼的保护下, 它可作为 GN 子问题的有效 matvec.
 
