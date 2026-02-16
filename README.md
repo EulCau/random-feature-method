@@ -108,7 +108,7 @@ $$
 
 > 说明: 这里的关键是**线性子问题只需要算子 $v\mapsto J^{\top} J v$ 与向量 $J^{\top} r$**, 因此计算上无需显式形成 $J$ 或 $J^{\top}J$.
 
-本项目基于 LibTorch 的 autograd. 核心思想:
+这部分计算基于 LibTorch 的 autograd. 核心思想如下:
 
 - 只实现 **残差前向函数** `r = residual(theta)` (它内部调用 `Equation::f/g` 与随机特征 `phi/H` 完成 $y$ 的离散递推).
 
@@ -116,7 +116,7 @@ $$
    - $J^{\top} r$ (一阶反向传播)
    - $J^{\top} J v$ 的矩阵-向量乘 (用于 CG / LSMR 等迭代线性求解器)
 
-#### (1) 计算 $J^Tr$：把它当作 loss 的梯度
+#### (1) 计算 $J^Tr, 把它当作 loss 的梯度
 
 定义
 
@@ -132,12 +132,12 @@ $$
 
 3. 对 `theta` 做一次 autograd 求导, 得到 `grad_theta`, 这就是 $J^{\top} r$
 
-所需接口 / 要点:
-- `Equation::f(t,x,y,z)`, `Equation::g(t_end,x_end)` 参与构图, 不能在该阶段 `detach` 或 `NoGradGuard`.
+需注意:
+- `Equation::f(t,x,y,z)`, `Equation::g(t_end,x_end)` 参与构图, 因此不能在该阶段 `detach` 或 `NoGradGuard`.
 
-- `theta` 中的 `y0` 与 `alpha` 必须是 `requires_grad=true` 的张量 (实现上可将两者打包为一个向量参数).
+- `theta` 中的 `y0` 与 `alpha` 必须是 `requires_grad=true` 的张量 (实现上将两者打包为一个向量参数).
 
-#### (2) 计算 $J^{\top} J v$: 用算子形式传递给 CG （不显式构造 $J$)
+#### (2) 计算 $J^{\top} J v$, 并用算子形式传递给 CG （不显式构造 $J$)
 
 LM / GN 的线性子问题可以用迭代法求解 (例如 CG), 它只需要一个线性算子:
 
