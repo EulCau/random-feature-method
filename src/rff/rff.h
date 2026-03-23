@@ -8,17 +8,17 @@ class RandomFeatureFunction {
 public:
     RandomFeatureFunction(int64_t dim, int64_t hidden_dim, uint64_t seed = 42);
 
-    // 重新随机采样内层参数（A,b,c）
+    // 重新随机采样内层参数 (A,b,c)
     void resample_params(uint64_t seed);
 
-    // 计算 phi(x, t)，返回形状 (H) 的 1D Tensor（float）
-    // x: (d) 1D Tensor；t: 标量 float
+    // 计算 phi(x, t), 返回形状 (H) 的 1D Tensor (float)
+    // x: (d) 1D Tensor; t: 标量 float
     [[nodiscard]] torch::Tensor phi(const torch::Tensor& t, const torch::Tensor& x) const;
 
     [[nodiscard]] int64_t dim() const { return dim_; }
     [[nodiscard]] int64_t hidden_dim() const { return hidden_; }
 
-    // 直接获取参数（如需调试）
+    // 直接获取参数 (如需调试)
     [[nodiscard]] uint64_t seed() const { return seed_; }
     [[nodiscard]] const torch::Tensor& A() const { return A_; }
     [[nodiscard]] const torch::Tensor& b() const { return b_; }
