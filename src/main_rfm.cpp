@@ -48,10 +48,11 @@ int main()
 
     const auto rfm_solver = RFMSolver(cfg, pde, seed);
 
-    const auto [y0, alpha] = rfm_solver.Solve();
+    const auto [y0, alpha, rmse] = rfm_solver.Solve();
 
-    std::cout << "y0 = \n" << y0.data() << std::endl;
-    // std::cout << "alpha = \n" << alpha.data() << std::endl;
+    std::cout << "y0 = " << y0.item<float>() << std::endl;
+    std::cout << "rmse = " << rmse << std::endl;
+    std::cout << "alpha : " << alpha.dtype() << " (" << alpha.sizes() << ") " << std::endl;
 
     return 0;
 }
