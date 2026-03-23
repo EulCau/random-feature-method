@@ -28,7 +28,7 @@ public:
     void compute_H(const torch::Tensor& t, const torch::Tensor& x);
     [[nodiscard]] const torch::Tensor& H() const { return H_; }
 
-    [[nodiscard]] std::pair<torch::Tensor, torch::Tensor> Solve() const;
+    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> Solve() const;
 
 protected:
     void check_tx_shape(const torch::Tensor& t, const torch::Tensor& x) const;

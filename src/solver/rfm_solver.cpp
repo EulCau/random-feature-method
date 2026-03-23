@@ -130,7 +130,7 @@ void RFMSolver::compute_H(const torch::Tensor& t, const torch::Tensor& x)
     H_ = result;
 }
 
-std::pair<torch::Tensor, torch::Tensor> RFMSolver::Solve() const
+std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::Solve() const
 {
     const int64_t S = config_.net_config.valid_size;
     const int64_t T = config_.eqn_config.num_time_interval;
@@ -204,7 +204,10 @@ std::pair<torch::Tensor, torch::Tensor> RFMSolver::Solve() const
         0
     }).reshape({D, Hdim});
 
-    return {y0, alpha};
+    auto r = torch::matmul(A, theta) - B;
+    float rmse = std::sqrt(r.pow(2).mean().item<float>());
+
+    return std::make_tuple(y0, alpha, rmse);
 }
 
 void RFMSolver::check_tx_shape(
