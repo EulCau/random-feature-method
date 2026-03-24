@@ -3,6 +3,7 @@
 #include "equation_factory.h"
 #include "register_all_eqn.h"
 #include <iostream>
+#include <chrono>
 
 uint64_t splitmix64(uint64_t x)
 {
@@ -42,6 +43,9 @@ uint64_t get_seed()
 int main()
 {
     const uint64_t seed = get_seed();
+
+    const auto t_start = std::chrono::high_resolution_clock::now();
+
     force_link_all_equations();
     const Config cfg = load_config("bsm_d100.json");
     const auto pde = EquationFactory::instance().create(cfg.eqn_config.eqn_name, cfg.eqn_config);
@@ -50,9 +54,20 @@ int main()
 
     const auto [y0, alpha, rmse] = rfm_solver.Solve();
 
+    if (torch::cuda::is_available()) {
+        torch::cuda::synchronize();
+    }
+
+    const auto t_end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = t_end - t_start;
+
     std::cout << "y0 = " << y0.item<float>() << std::endl;
     std::cout << "rmse = " << rmse << std::endl;
-    std::cout << "alpha : " << alpha.dtype() << " (" << alpha.sizes() << ") " << std::endl;
+    std::cout << "dtype: " << alpha.dtype() << std::endl;
+    std::cout << "eqn dim: " << cfg.eqn_config.dim << std::endl;
+    std::cout <<"hidden dim: " << cfg.net_config.num_hiddens[0] << std::endl;
+    std::cout << "samples num: " << cfg.net_config.valid_size << std::endl;
+    std::cout << "total time: " << elapsed.count() * 1000 << " ms" << std::endl;
 
     return 0;
 }
