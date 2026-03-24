@@ -54,22 +54,22 @@ torch::Tensor RandomFeatureFunction::phi(
     );
 
     // 若 t 是 (1, T, 1, 1), 则扩展成 (B, T, 1, 1)
-    torch::Tensor t_batched = (t.size(0) == B) ? t : t.expand({B, T, 1, 1});
+    const auto t_batched = t.size(0) == B ? t : t.expand({B, T, 1, 1});
 
     // x_flat: (B*T, dim)
-    torch::Tensor x_flat = x.squeeze(2).contiguous().view({N, dim_});
+    const auto x_flat = x.squeeze(2).contiguous().view({N, dim_});
 
     // t_flat: (B*T, 1)
-    torch::Tensor t_flat = t_batched.reshape({N, 1});
+    const auto t_flat = t_batched.reshape({N, 1});
 
-    torch::Tensor xA = torch::mm(x_flat, A_);                 // (N, hidden)
-    torch::Tensor tb = torch::mm(t_flat, b_);                 // (N, hidden)
-    torch::Tensor c_flat = c_.expand({N, c_.size(1)});      // (N, hidden)
+    const auto xA = torch::mm(x_flat, A_);                 // (N, hidden)
+    const auto tb = torch::mm(t_flat, b_);                 // (N, hidden)
+    const auto c_flat = c_.expand({N, c_.size(1)});      // (N, hidden)
 
     // h: (B*T, hidden)
-    torch::Tensor h = xA + tb + c_flat;
+    const auto h = xA + tb + c_flat;
 
-    torch::Tensor out = torch::tanh(h).view({B, T, hidden_, 1});
+    const auto out = torch::tanh(h).view({B, T, hidden_, 1});
 
     TORCH_CHECK(
         out.size(0) == B &&

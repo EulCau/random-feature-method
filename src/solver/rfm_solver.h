@@ -33,7 +33,6 @@ public:
 protected:
     void check_tx_shape(const torch::Tensor& t, const torch::Tensor& x) const;
 
-protected:
     Config config_;
     std::shared_ptr<Equation> equation_;
     uint64_t seed_;

@@ -24,20 +24,20 @@ void RFMSolver::compute_txw()
     const int64_t T = config_.eqn_config.num_time_interval;
     const int64_t S = config_.net_config.valid_size;
 
-    auto opts = torch::TensorOptions().dtype(torch::kFloat32);
+    const auto opts = torch::TensorOptions().dtype(torch::kFloat32);
     const auto t_full = torch::linspace(0, total_time, T + 1, opts);
 
-    auto t_base = t_full.slice(0, 0, T).reshape({1, T, 1, 1});
+    const auto t_base = t_full.slice(0, 0, T).reshape({1, T, 1, 1});
     t_ = t_base.expand({S, T, 1, 1}).contiguous();
 
-    auto t_end_base = t_full.slice(0, T, T + 1).reshape({1, 1, 1, 1});
+    const auto t_end_base = t_full.slice(0, T, T + 1).reshape({1, 1, 1, 1});
     t_end_ = t_end_base.expand({S, 1, 1, 1}).contiguous();
 
     const auto [fst, snd] = equation_->sample(S);
 
     dw_ = fst.contiguous();
 
-    auto x_all = snd.permute({0, 2, 1}).contiguous(); // (S, T+1, D)
+    const auto x_all = snd.permute({0, 2, 1}).contiguous(); // (S, T+1, D)
     x_ = x_all.index({
         at::indexing::Slice(),
         at::indexing::Slice(0, -1),
@@ -141,19 +141,19 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::Solve() const
     auto device = L_.device();
 
     // 压缩到紧凑形状
-    auto L = L_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
-    auto M = M_.squeeze(2).contiguous();                // (S, T, D)
-    auto N = N_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
-    auto H = H_.squeeze(-1).contiguous();               // (S, T, H)
-    auto dW = dw_.reshape({S, T, D}).contiguous();      // (S, T, D)
+    const auto L = L_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
+    const auto M = M_.squeeze(2).contiguous();                // (S, T, D)
+    const auto N = N_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
+    const auto H = H_.squeeze(-1).contiguous();               // (S, T, H)
+    const auto dW = dw_.reshape({S, T, D}).contiguous();      // (S, T, D)
 
     // 线性递推中的三块
-    auto a  = 1.0f - dt * L;      // (S, T)
-    auto xi = dW - dt * M;        // (S, T, D)
-    auto c  = dt * N;             // (S, T)
+    const auto a  = 1.0f - dt * L;      // (S, T)
+    const auto xi = dW - dt * M;        // (S, T, D)
+    const auto c  = dt * N;             // (S, T)
 
     // weights[k] = prod_{j=k+1}^{T-1} a_j
-    auto suffix_inclusive = torch::flip(
+    const auto suffix_inclusive = torch::flip(
         torch::cumprod(torch::flip(a, {1}), 1),
         {1}
     ); // (S, T), suffix_inclusive[:, k] = prod_{j=k}^{T-1} a_j
@@ -175,7 +175,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::Solve() const
 
     // 矩阵第二块: alpha 系数
     // weighted_xi: (S, T, D)
-    auto weighted_xi = xi * weights.unsqueeze(-1);
+    const auto weighted_xi = xi * weights.unsqueeze(-1);
 
     // coef_alpha[s] = weighted_xi[s]^T @ H[s] -> (D, H)
     auto coef_alpha = torch::bmm(
@@ -186,17 +186,17 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::Solve() const
     coef_alpha = coef_alpha.reshape({S, D * Hdim}); // (S, D*H)
 
     // 拼接设计矩阵
-    auto A = torch::cat({coef_y0, coef_alpha}, 1).contiguous(); // (S, 1 + D*H)
+    const auto A = torch::cat({coef_y0, coef_alpha}, 1).contiguous(); // (S, 1 + D*H)
 
     // 右端项
-    auto constant_part = (weights * c).sum(1, true); // (S, 1)
-    auto g_XN = equation_->g(t_end_, x_end_).reshape({S, 1}).to(device);
+    const auto constant_part = (weights * c).sum(1, true); // (S, 1)
+    const auto g_XN = equation_->g(t_end_, x_end_).reshape({S, 1}).to(device);
 
-    auto B = g_XN - constant_part; // (S, 1)
+    const auto B = g_XN - constant_part; // (S, 1)
 
     // 最小二乘
-    auto solve_result = torch::linalg_lstsq(A, B);
-    auto theta = std::get<0>(solve_result).contiguous(); // (1 + D*H, 1)
+    const auto solve_result = torch::linalg_lstsq(A, B);
+    const auto theta = std::get<0>(solve_result).contiguous(); // (1 + D*H, 1)
 
     auto y0 = theta.index({0, 0});
     auto alpha = theta.index({
@@ -204,7 +204,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::Solve() const
         0
     }).reshape({D, Hdim});
 
-    auto r = torch::matmul(A, theta) - B;
+    const auto r = torch::matmul(A, theta) - B;
     float rmse = std::sqrt(r.pow(2).mean().item<float>());
 
     return std::make_tuple(y0, alpha, rmse);
