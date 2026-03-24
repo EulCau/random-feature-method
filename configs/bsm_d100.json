@@ -13,7 +13,7 @@
     "lr_boundaries": [1000],
     "num_iterations": 2000,
     "batch_size": 64,
-    "valid_size": 256,
+    "valid_size": 8192,
     "logging_frequency": 100,
     "dtype": "float32",
     "verbose": true,
