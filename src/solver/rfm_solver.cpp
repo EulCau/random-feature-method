@@ -1,5 +1,6 @@
 #include "rfm_solver.h"
 #include "rff.h"
+#include "linear_solve_result.h"
 
 // TODO: to GPU
 RFMSolver::RFMSolver(const Config &config, const std::shared_ptr<Equation> &eq, const uint64_t seed)
@@ -195,19 +196,28 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::Solve() const
     const auto B = g_XN - constant_part; // (S, 1)
 
     // 最小二乘
-    const auto solve_result = torch::linalg_lstsq(A, B);
-    const auto theta = std::get<0>(solve_result).contiguous(); // (1 + D*H, 1)
+    // const auto solve_result = torch::linalg_lstsq(A, B);
+    // const auto theta = std::get<0>(solve_result).contiguous(); // (1 + D*H, 1)
+    //
+    // auto y0 = theta.index({0, 0});
+    // auto alpha = theta.index({
+    //     torch::indexing::Slice(1, torch::indexing::None),
+    //     0
+    // }).reshape({D, Hdim});
+    //
+    // const auto r = torch::matmul(A, theta) - B;
+    // float rmse = std::sqrt(r.pow(2).mean().item<float>());
+    //
+    // return {y0, alpha, rmse};
 
-    auto y0 = theta.index({0, 0});
-    auto alpha = theta.index({
-        torch::indexing::Slice(1, torch::indexing::None),
-        0
-    }).reshape({D, Hdim});
+    const auto result = solve_y0_alpha_ridge_dual(
+        A, B,
+        config_.eqn_config.dim,
+        config_.net_config.num_hiddens[0],
+        1e-6
+    );
 
-    const auto r = torch::matmul(A, theta) - B;
-    float rmse = std::sqrt(r.pow(2).mean().item<float>());
-
-    return std::make_tuple(y0, alpha, rmse);
+    return result;
 }
 
 void RFMSolver::check_tx_shape(
