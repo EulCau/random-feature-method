@@ -3,7 +3,7 @@ add_library(
 	STATIC
 	allencahn.cpp
 	hjblq.cpp
-	bsm.cpp)  # TODO: linear equation
+	bsm.cpp)
 
 target_include_directories(
 	equations

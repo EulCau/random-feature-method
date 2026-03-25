@@ -55,9 +55,7 @@ int main()
 
     const auto [y0, alpha, rmse] = rfm_solver.Solve();
 
-    if (torch::cuda::is_available()) {
-        torch::cuda::synchronize();
-    }
+    if (torch::cuda::is_available()) torch::cuda::synchronize();
 
     const auto t_end = std::chrono::high_resolution_clock::now();
     const float elapsed =

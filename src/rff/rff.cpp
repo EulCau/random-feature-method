@@ -2,7 +2,6 @@
 #include <cmath>
 #include <ATen/cuda/CUDAGeneratorImpl.h>
 
-// TODO: to GPU
 [[maybe_unused]] static torch::Tensor randn_like_shape(
     const std::vector<int64_t>& shape, const torch::Device& device, const uint64_t seed)
 {
@@ -24,8 +23,9 @@ RandomFeatureFunction::RandomFeatureFunction(
 
 void RandomFeatureFunction::resample_params(const uint64_t seed)
 {
-    // 可试验其他分布, 此处暂用 N(0,1)
-    A_ = randn_like_shape({dim_, hidden_}, device_, seed ^ 0x9e3779b97f4a7c15ULL);
+    // TODO: 可试验其他分布
+    const auto std_A = 1.0f / std::sqrt(static_cast<float>(dim_));
+    A_ = randn_like_shape({dim_, hidden_}, device_, seed ^ 0x9e3779b97f4a7c15ULL).mul(std_A);
     b_ = randn_like_shape({   1, hidden_}, device_, seed ^ 0x243f6a8885a308d3ULL);
     c_ = randn_like_shape({   1, hidden_}, device_, seed ^ 0xb7e151628aed2a6bULL);
     seed_ = seed;
