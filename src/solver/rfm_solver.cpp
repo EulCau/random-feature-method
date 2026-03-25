@@ -76,8 +76,8 @@ void RFMSolver::compute_L(const torch::Tensor &t, const torch::Tensor &x)
     );
 
     TORCH_CHECK(
-        result.device() == device_,
-        "result_L must be on ", device_, ", but got ", result.device()
+        result.device().type() == device_.type(),
+        "result_L must be on ", device_.type(), ", but got ", result.device().type()
     );
 
     L_ = result;
@@ -96,8 +96,8 @@ void RFMSolver::compute_M(const torch::Tensor& t, const torch::Tensor& x)
     );
 
     TORCH_CHECK(
-        result.device() == device_,
-        "result_M must be on ", device_, ", but got ", result.device()
+        result.device().type() == device_.type(),
+        "result_M must be on ", device_.type(), ", but got ", result.device().type()
     );
 
     M_ = result;
@@ -122,8 +122,8 @@ void RFMSolver::compute_N(const torch::Tensor& t, const torch::Tensor& x)
     );
 
     TORCH_CHECK(
-        result.device() == device_,
-        "result_N must be on ", device_, ", but got ", result.device()
+        result.device().type() == device_.type(),
+        "result_N must be on ", device_.type(), ", but got ", result.device().type()
     );
 
     N_ = result;
@@ -145,8 +145,8 @@ void RFMSolver::compute_H(const torch::Tensor& t, const torch::Tensor& x)
     );
 
     TORCH_CHECK(
-        result.device() == device_,
-        "result_H must be on ", device_, ", but got ", result.device()
+        result.device().type() == device_.type(),
+        "result_H must be on ", device_.type(), ", but got ", result.device().type()
     );
 
     H_ = result;
@@ -232,9 +232,9 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::Solve() const
     // return {y0, alpha, rmse};
 
     TORCH_CHECK(
-        A.device() == device &&
-        B.device() == device,
-        "A, B must be on ", device_, ", but got ", A.device(), " & ", B.device())
+        A.device().type() == device.type() &&
+        B.device().type() == device.type(),
+        "A, B must be on ", device_.type(), ", but got ", A.device().type(), " & ", B.device().type())
 
     const auto result = solve_y0_alpha_ridge_dual(
         A, B,
@@ -297,8 +297,8 @@ void RFMSolver::check_tx_shape(
     );
 
     TORCH_CHECK(
-        x.device() == device_ &&
-        t.device() == device_,
-        "x, t must be on ", device_, ", but got ", x.device(), " & ", t.device()
-        );
+        x.device().type() == device_.type() &&
+        t.device().type() == device_.type(),
+        "x, t must be on ", device_.type(), ", but got ", x.device().type(), " & ", t.device().type()
+    );
 }
