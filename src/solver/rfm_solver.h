@@ -8,11 +8,12 @@
 class RFMSolver
 {
 public:
-    RFMSolver(const Config& config, const std::shared_ptr<Equation>& eq, uint64_t seed);
+    RFMSolver(const Config& config, const std::shared_ptr<Equation>& eq, torch::Device device, uint64_t seed);
 
     [[nodiscard]] uint64_t seed() const { return seed_; }
 
     void compute_txw();
+    [[nodiscard]] torch::Device device() const { return device_; }
     [[nodiscard]] const torch::Tensor& t() const { return t_; }
     [[nodiscard]] const torch::Tensor& t_end() const { return t_end_; }
     [[nodiscard]] const torch::Tensor& dw() const { return dw_; }
@@ -37,6 +38,7 @@ protected:
     std::shared_ptr<Equation> equation_;
     uint64_t seed_;
     RandomFeatureFunction rff_;
+    torch::Device device_;
     torch::Tensor t_end_;
     torch::Tensor dw_;
     torch::Tensor x_;

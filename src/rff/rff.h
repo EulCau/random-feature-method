@@ -6,7 +6,7 @@
 // A: (H, d), b: (H,), c: (H,)
 class RandomFeatureFunction {
 public:
-    RandomFeatureFunction(int64_t dim, int64_t hidden_dim, uint64_t seed = 42);
+    RandomFeatureFunction(int64_t dim, int64_t hidden_dim, torch::Device device, uint64_t seed = 42);
 
     // 重新随机采样内层参数 (A,b,c)
     void resample_params(uint64_t seed);
@@ -28,6 +28,7 @@ private:
     int64_t dim_;
     int64_t hidden_;
     uint64_t seed_;
+    torch::Device device_;
     torch::Tensor A_; // (H, d)
     torch::Tensor b_; // (H)
     torch::Tensor c_; // (H)

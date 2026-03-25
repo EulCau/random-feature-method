@@ -2,12 +2,6 @@
 
 #include <torch/torch.h>
 
-struct LinearSolveResult {
-    torch::Tensor y0;        // scalar tensor
-    torch::Tensor alpha;     // (dim, hidden_dim)
-    torch::Tensor mse_loss;  // scalar tensor
-};
-
 inline std::tuple<torch::Tensor, torch::Tensor, float> solve_y0_alpha_ridge_dual(
     const torch::Tensor& A,          // (n, 1 + dim * hidden_dim)
     const torch::Tensor& B,          // (n, 1)
@@ -48,7 +42,7 @@ inline std::tuple<torch::Tensor, torch::Tensor, float> solve_y0_alpha_ridge_dual
 
     // 计算 MSE loss
     const auto residual = torch::matmul(A, X) - B;         // (n, 1)
-    const auto mse_loss = residual.pow(2).mean().item<float>();   // scalar tensor
+    const auto mse_loss = std::sqrt(residual.pow(2).mean().item<float>());
 
     return {y0, alpha, mse_loss};
 }

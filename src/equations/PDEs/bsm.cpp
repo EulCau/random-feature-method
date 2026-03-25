@@ -49,13 +49,16 @@ public:
     [[nodiscard("Return Need to be Used")]]
     std::pair<torch::Tensor, torch::Tensor> sample(int64_t num_sample) const override
     {
+        const auto device = torch::cuda::is_available()?torch::kCUDA:torch::kCPU;
+        const auto opts = torch::TensorOptions().dtype(torch::kFloat32).device(device);
+
         // dW ~ N(0, delta_t)
         torch::Tensor dw = torch::randn(
-            {num_sample, dim_, num_time_interval_}, torch::kFloat) * sqrt_delta_t_;
+            {num_sample, dim_, num_time_interval_}, opts) * sqrt_delta_t_;
 
         // Init X: x_0 = x_init
         torch::Tensor x = torch::zeros(
-            {num_sample, dim_, num_time_interval_ + 1}, torch::kFloat);
+            {num_sample, dim_, num_time_interval_ + 1}, opts);
         x.index_put_(
             {torch::indexing::Slice(), torch::indexing::Slice(), 0},
             x_init_.expand({num_sample, dim_}));
@@ -84,7 +87,7 @@ public:
         const torch::Tensor& t, const torch::Tensor& x,
         const torch::Tensor& y, const torch::Tensor& z) const override
     {
-        return x * r_;
+        return -r_ * y;
     }
 
     // g(x) = max(mean(x) − K, 0)

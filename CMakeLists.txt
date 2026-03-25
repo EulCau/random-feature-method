@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
-project(bsde_solver LANGUAGES CXX CUDA)
+project(rfm_solver LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

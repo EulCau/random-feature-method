@@ -48,9 +48,10 @@ int main()
 
     force_link_all_equations();
     const Config cfg = load_config("bsm_d100.json");
+    const auto device = torch::cuda::is_available()?torch::kCUDA:torch::kCPU;
     const auto pde = EquationFactory::instance().create(cfg.eqn_config.eqn_name, cfg.eqn_config);
 
-    const auto rfm_solver = RFMSolver(cfg, pde, seed);
+    const auto rfm_solver = RFMSolver(cfg, pde, device, seed);
 
     const auto [y0, alpha, rmse] = rfm_solver.Solve();
 
@@ -59,7 +60,7 @@ int main()
     }
 
     const auto t_end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed = t_end - t_start;
+    const auto elapsed = t_end - t_start;
 
     std::cout << "y0 = " << y0.item<float>() << std::endl;
     std::cout << "rmse = " << rmse << std::endl;

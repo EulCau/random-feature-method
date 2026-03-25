@@ -3,11 +3,13 @@
 #include "linear_solve_result.h"
 
 // TODO: to GPU
-RFMSolver::RFMSolver(const Config &config, const std::shared_ptr<Equation> &eq, const uint64_t seed)
+RFMSolver::RFMSolver(
+    const Config &config, const std::shared_ptr<Equation> &eq, const torch::Device device, const uint64_t seed)
         : config_(config),
           equation_(eq),
           seed_(seed),
-          rff_(RandomFeatureFunction(config.eqn_config.dim, config.net_config.num_hiddens[0], seed_))
+          device_(device),
+          rff_(RandomFeatureFunction(config.eqn_config.dim, config.net_config.num_hiddens[0], device_, seed_))
 {
     torch::manual_seed(seed_);
     std::srand(static_cast<unsigned>(seed_));
@@ -25,7 +27,7 @@ void RFMSolver::compute_txw()
     const int64_t T = config_.eqn_config.num_time_interval;
     const int64_t S = config_.net_config.valid_size;
 
-    const auto opts = torch::TensorOptions().dtype(torch::kFloat32);
+    const auto opts = torch::TensorOptions().dtype(torch::kFloat32).device(device_);
     const auto t_full = torch::linspace(0, total_time, T + 1, opts);
 
     const auto t_base = t_full.slice(0, 0, T).reshape({1, T, 1, 1});
@@ -36,9 +38,9 @@ void RFMSolver::compute_txw()
 
     const auto [fst, snd] = equation_->sample(S);
 
-    dw_ = fst.contiguous();
+    dw_ = fst.to(device_).contiguous();
 
-    const auto x_all = snd.permute({0, 2, 1}).contiguous(); // (S, T+1, D)
+    const auto x_all = snd.to(device_).permute({0, 2, 1}).contiguous(); // (S, T+1, D)
     x_ = x_all.index({
         at::indexing::Slice(),
         at::indexing::Slice(0, -1),
@@ -74,6 +76,11 @@ void RFMSolver::compute_L(const torch::Tensor &t, const torch::Tensor &x)
         result.sizes()
     );
 
+    TORCH_CHECK(
+        result.device() == device_,
+        "result_L must be on ", device_, ", but got ", result.device()
+    );
+
     L_ = result;
 }
 
@@ -87,6 +94,11 @@ void RFMSolver::compute_M(const torch::Tensor& t, const torch::Tensor& x)
         result.sizes() == x.sizes(),
         "Invalid shape for M(t, x). Expected ",
         x.sizes(), ", but got ", result.sizes()
+    );
+
+    TORCH_CHECK(
+        result.device() == device_,
+        "result_M must be on ", device_, ", but got ", result.device()
     );
 
     M_ = result;
@@ -110,6 +122,11 @@ void RFMSolver::compute_N(const torch::Tensor& t, const torch::Tensor& x)
         result.sizes()
     );
 
+    TORCH_CHECK(
+        result.device() == device_,
+        "result_N must be on ", device_, ", but got ", result.device()
+    );
+
     N_ = result;
 }
 
@@ -126,6 +143,11 @@ void RFMSolver::compute_H(const torch::Tensor& t, const torch::Tensor& x)
         result.size(3) == 1,
         "Invalid shape for H(t, x). Expected ",
         x.sizes(), ", but got ", result.sizes()
+    );
+
+    TORCH_CHECK(
+        result.device() == device_,
+        "result_H must be on ", device_, ", but got ", result.device()
     );
 
     H_ = result;
@@ -210,6 +232,11 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::Solve() const
     //
     // return {y0, alpha, rmse};
 
+    TORCH_CHECK(
+        A.device() == device &&
+        B.device() == device,
+        "A, B must be on ", device_, ", but got ", A.device(), " & ", B.device())
+
     const auto result = solve_y0_alpha_ridge_dual(
         A, B,
         config_.eqn_config.dim,
@@ -269,4 +296,10 @@ void RFMSolver::check_tx_shape(
         ", 1, ", config_.eqn_config.dim,
         "), but got ", x.sizes()
     );
+
+    TORCH_CHECK(
+        x.device() == device_ &&
+        t.device() == device_,
+        "x, t must be on ", device_, ", but got ", x.device(), " & ", t.device()
+        );
 }

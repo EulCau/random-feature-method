@@ -1,22 +1,33 @@
 #include "rff.h"
 #include <cmath>
+#include <ATen/cuda/CUDAGeneratorImpl.h>
 
 // TODO: to GPU
-[[maybe_unused]] static torch::Tensor randn_like_shape(const std::vector<int64_t>& shape, const uint64_t seed) {
-    auto gen = torch::make_generator<torch::CPUGeneratorImpl>(seed);
-    return torch::randn(shape, gen, torch::TensorOptions().dtype(torch::kFloat32));
+[[maybe_unused]] static torch::Tensor randn_like_shape(
+    const std::vector<int64_t>& shape, const torch::Device& device, const uint64_t seed)
+{
+
+    auto gen = device.is_cuda()?
+        torch::make_generator<torch::CUDAGeneratorImpl>(seed):
+        torch::make_generator<torch::CPUGeneratorImpl>(seed);
+
+    return torch::randn(shape, gen, torch::TensorOptions().dtype(torch::kFloat32).device(device));
 }
 
-RandomFeatureFunction::RandomFeatureFunction(const int64_t dim, const int64_t hidden_dim, const uint64_t seed)
-        : dim_(dim), hidden_(hidden_dim), seed_(seed) {
+RandomFeatureFunction::RandomFeatureFunction(
+    const int64_t dim, const int64_t hidden_dim, const torch::Device device, const uint64_t seed)
+        : dim_(dim), hidden_(hidden_dim), seed_(seed),
+          device_(device)
+{
     resample_params(seed);
 }
 
-void RandomFeatureFunction::resample_params(const uint64_t seed) {
+void RandomFeatureFunction::resample_params(const uint64_t seed)
+{
     // 可试验其他分布, 此处暂用 N(0,1)
-    A_ = randn_like_shape({dim_, hidden_}, seed ^ 0x9e3779b97f4a7c15ULL);
-    b_ = randn_like_shape({1, hidden_}, seed ^ 0x243f6a8885a308d3ULL);
-    c_ = randn_like_shape({1, hidden_}, seed ^ 0xb7e151628aed2a6bULL);
+    A_ = randn_like_shape({dim_, hidden_}, device_, seed ^ 0x9e3779b97f4a7c15ULL);
+    b_ = randn_like_shape({   1, hidden_}, device_, seed ^ 0x243f6a8885a308d3ULL);
+    c_ = randn_like_shape({   1, hidden_}, device_, seed ^ 0xb7e151628aed2a6bULL);
     seed_ = seed;
 }
 
