@@ -60,15 +60,16 @@ int main()
     }
 
     const auto t_end = std::chrono::high_resolution_clock::now();
-    const auto elapsed = t_end - t_start;
+    const float elapsed =
+        std::chrono::duration<float, std::milli>(t_end - t_start).count();
 
     std::cout << "y0 = " << y0.item<float>() << std::endl;
     std::cout << "rmse = " << rmse << std::endl;
     std::cout << "dtype: " << alpha.dtype() << std::endl;
     std::cout << "eqn dim: " << cfg.eqn_config.dim << std::endl;
-    std::cout <<"hidden dim: " << cfg.net_config.num_hiddens[0] << std::endl;
+    std::cout << "hidden dim: " << cfg.net_config.num_hiddens[0] << std::endl;
     std::cout << "samples num: " << cfg.net_config.valid_size << std::endl;
-    std::cout << "total time: " << elapsed.count() * 1000 << " ms" << std::endl;
+    std::cout << "total time: " << elapsed << " ms" << std::endl;
 
     return 0;
 }
