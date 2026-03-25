@@ -37,8 +37,8 @@ protected:
     Config config_;
     std::shared_ptr<Equation> equation_;
     uint64_t seed_;
-    RandomFeatureFunction rff_;
     torch::Device device_;
+    RandomFeatureFunction rff_;
     torch::Tensor t_end_;
     torch::Tensor dw_;
     torch::Tensor x_;

@@ -2,7 +2,6 @@
 #include "rff.h"
 #include "linear_solve_result.h"
 
-// TODO: to GPU
 RFMSolver::RFMSolver(
     const Config &config, const std::shared_ptr<Equation> &eq, const torch::Device device, const uint64_t seed)
         : config_(config),
