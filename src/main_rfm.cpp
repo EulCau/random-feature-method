@@ -53,6 +53,10 @@ int main()
 
     const auto rfm_solver = RFMSolver(cfg, pde, device, seed);
 
+    if (torch::cuda::is_available()) torch::cuda::synchronize();
+
+    const auto t_mid = std::chrono::high_resolution_clock::now();
+
     const auto [y0, alpha, rmse] = rfm_solver.Solve();
 
     if (torch::cuda::is_available()) torch::cuda::synchronize();
@@ -60,6 +64,8 @@ int main()
     const auto t_end = std::chrono::high_resolution_clock::now();
     const float elapsed =
         std::chrono::duration<float, std::milli>(t_end - t_start).count();
+    const float elapsed_repeat =
+        std::chrono::duration<float, std::milli>(t_end - t_mid).count();
 
     std::cout << "y0 = " << y0.item<float>() << std::endl;
     std::cout << "rmse = " << rmse << std::endl;
@@ -68,6 +74,7 @@ int main()
     std::cout << "hidden dim: " << cfg.net_config.num_hiddens[0] << std::endl;
     std::cout << "samples num: " << cfg.net_config.valid_size << std::endl;
     std::cout << "total time: " << elapsed << " ms" << std::endl;
+    std::cout << "time which will repeat: " << elapsed_repeat << " ms" << std::endl;
 
     return 0;
 }
