@@ -47,7 +47,7 @@ int main()
     const auto t_start = std::chrono::high_resolution_clock::now();
 
     force_link_all_equations();
-    const Config cfg = load_config("bsm_d100.json");
+    const Config cfg = load_config("config/bsm_d100.json");
     const auto device = torch::cuda::is_available()?torch::kCUDA:torch::kCPU;
     const auto pde = EquationFactory::instance().create(cfg.eqn_config.eqn_name, cfg.eqn_config);
 

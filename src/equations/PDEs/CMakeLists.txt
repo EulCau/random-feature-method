@@ -1,17 +1,17 @@
 add_library(
     equations
-	STATIC
-	allencahn.cpp
-	hjblq.cpp
-	bsm.cpp)
+    STATIC
+    allencahn.cpp
+    hjblq.cpp
+    bsm.cpp)
 
 target_include_directories(
-	equations
-	PUBLIC
-	${CMAKE_CURRENT_SOURCE_DIR})
+    equations
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(
-	equations
-	PUBLIC
-	config
-	${TORCH_LIBRARIES})
+    equations
+    PUBLIC
+    config
+    ${TORCH_LIBRARIES})
