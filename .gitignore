@@ -1,1 +1,11 @@
-make
+make/
+build/
+bin/
+libs/
+Tmp/
+
+.idea/
+.vscode/
+.vs/
+
+.venv/
