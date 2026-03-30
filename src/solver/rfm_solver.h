@@ -29,7 +29,9 @@ public:
     void compute_H(const torch::Tensor& t, const torch::Tensor& x);
     [[nodiscard]] const torch::Tensor& H() const { return H_; }
 
-    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> Solve() const;
+    [[nodiscard]] std::pair<const torch::Tensor, const torch::Tensor> compute_linear_coef() const;
+
+    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> Solve_linear() const;
 
 protected:
     void check_tx_shape(const torch::Tensor& t, const torch::Tensor& x) const;

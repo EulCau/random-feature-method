@@ -57,7 +57,7 @@ int main()
 
     const auto t_mid = std::chrono::high_resolution_clock::now();
 
-    const auto [y0, alpha, rmse] = rfm_solver.Solve();
+    const auto [y0, alpha, rmse] = rfm_solver.Solve_linear();
 
     if (torch::cuda::is_available()) torch::cuda::synchronize();
 
@@ -75,6 +75,7 @@ int main()
     std::cout << "samples num: " << cfg.net_config.valid_size << std::endl;
     std::cout << "total time: " << elapsed << " ms" << std::endl;
     std::cout << "time which will repeat: " << elapsed_repeat << " ms" << std::endl;
+    std::cout << "device: " << device << std::endl;
 
     return 0;
 }

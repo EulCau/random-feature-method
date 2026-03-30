@@ -152,7 +152,7 @@ void RFMSolver::compute_H(const torch::Tensor& t, const torch::Tensor& x)
     H_ = result;
 }
 
-std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::Solve() const
+std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_coef() const
 {
     const int64_t S = config_.net_config.valid_size;
     const int64_t T = config_.eqn_config.num_time_interval;
@@ -216,25 +216,18 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::Solve() const
 
     const auto B = g_XN - constant_part; // (S, 1)
 
-    // 最小二乘
-    // const auto solve_result = torch::linalg_lstsq(A, B);
-    // const auto theta = std::get<0>(solve_result).contiguous(); // (1 + D*H, 1)
-    //
-    // auto y0 = theta.index({0, 0});
-    // auto alpha = theta.index({
-    //     torch::indexing::Slice(1, torch::indexing::None),
-    //     0
-    // }).reshape({D, Hdim});
-    //
-    // const auto r = torch::matmul(A, theta) - B;
-    // float rmse = std::sqrt(r.pow(2).mean().item<float>());
-    //
-    // return {y0, alpha, rmse};
-
     TORCH_CHECK(
         A.device().type() == device.type() &&
         B.device().type() == device.type(),
         "A, B must be on ", device_.type(), ", but got ", A.device().type(), " & ", B.device().type())
+
+
+    return {A, B};
+}
+
+std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::Solve_linear() const
+{
+    const auto [A, B] = compute_linear_coef();
 
     const auto result = solve_y0_alpha_ridge_dual(
         A, B,
