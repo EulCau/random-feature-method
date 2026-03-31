@@ -24,7 +24,7 @@ public:
     [[nodiscard]] const torch::Tensor& b() const { return b_; }
     [[nodiscard]] const torch::Tensor& c() const { return c_; }
 
-private:
+protected:
     int64_t dim_;
     int64_t hidden_;
     uint64_t seed_;
