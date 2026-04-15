@@ -8,7 +8,7 @@
 class RFMSolver
 {
 public:
-    RFMSolver(const Config& config, const std::shared_ptr<Equation>& eq, torch::Device device, uint64_t seed);
+    RFMSolver(Config  config, const std::shared_ptr<Equation>& eq, torch::Device device, uint64_t seed);
 
     [[nodiscard]] uint64_t seed() const { return seed_; }
 

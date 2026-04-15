@@ -1,14 +1,22 @@
 #include "rfm_solver.h"
+
+#include <utility>
 #include "rff.h"
 #include "linear_solve_result.h"
 
 RFMSolver::RFMSolver(
-    const Config &config, const std::shared_ptr<Equation> &eq, const torch::Device device, const uint64_t seed)
-        : config_(config),
+
+
+    Config config, const std::shared_ptr<Equation> &eq, const torch::Device device, const uint64_t seed)
+        : config_(std::move(config)),
           equation_(eq),
           seed_(seed),
           device_(device),
-          rff_(RandomFeatureFunction(config.eqn_config.dim, config.net_config.num_hiddens[0], device_, seed_))
+          rff_(RandomFeatureFunction(
+                config_.eqn_config.dim,
+                config_.net_config.num_hiddens[0],
+                device_,
+                seed_))
 {
     torch::manual_seed(seed_);
     std::srand(static_cast<unsigned>(seed_));
