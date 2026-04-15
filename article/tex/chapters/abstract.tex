@@ -1,0 +1,55 @@
+% !TEX root = ../main.tex
+
+\ustcsetup{
+  keywords  = {高维偏微分方程, 随机特征法, 蒙特卡洛方法, 随机微分方程, 最小二乘法},
+  keywords* = {High-dimensional PDEs,
+               Random feature method,
+               Monte Carlo method,
+               Stochastic differential equations,
+               Least-squares method},
+}
+
+\begin{abstract}
+  高维偏微分方程 (Partial Differential Equations, PDEs) 在金融, 量子物理, 控制问题等领域都具有重要应用.
+  然而, 维度诅咒使得传统数值方法在高维情形下计算复杂度呈指数增长, 严重限制了其适用范围.
+  近年来, 基于机器学习的函数逼近方法为高维问题提供了新的思路.
+  随机特征法 (Random Feature Method, RFM) 是一类通过构造随机特征基函数对目标函数进行线性表示的方法,
+  其核心思想是利用随机特征映射将隐式定义的核函数转化为特征函数的数学期望, 并通过有限样本平均进行近似,
+  从而避免显式构造高维 Gram 矩阵, 将问题转化为低维线性最小二乘问题.
+  本文提出一种结合随机特征法与蒙特卡洛采样的数值方法, 用于高效求解高维线性抛物型 PDEs.
+  该方法利用随机采样处理高维空间积分, 同时借助随机特征表示降低函数逼近复杂度, 在计算效率与精度之间取得平衡.
+  首先将方程转化为随机微分方程 (Stochastic Differential Equations, SDEs), 并确定待求解的目标点.
+  然后从目标点出发进行蒙特卡洛采样, 并学习解函数在路径点上的梯度及目标点处的函数值.
+  其中梯度项采用随机特征映射进行逼近, 训练过程使用最小二乘法以提高计算效率.
+  数值实验包括 Black--Scholes 方程, 热方程, Ornstein--Uhlenbeck 方程及线性反应--扩散方程, 结果表明该方法具有较高效率.
+\end{abstract}
+
+\begin{abstract*}
+  High-dimensional partial differential equations (PDEs) arise in a wide range of applications,
+  including finance, quantum physics, and control theory.
+  However, the curse of dimensionality causes the computational complexity of traditional numerical methods
+  to grow exponentially with respect to the dimension, severely limiting their applicability.
+  In recent years, machine learning-based function approximation methods
+  have provided new perspectives for tackling high-dimensional problems.
+  The Random Feature Method (RFM) represents a class of approaches
+  that approximate target functions via linear combinations of randomly generated feature functions.
+  Its key idea is to employ random feature mappings to transform
+  implicitly defined kernel functions into expectations over feature functions,
+  which are then approximated by finite sample averages.
+  This avoids the explicit construction of high-dimensional Gram matrices
+  and reduces the problem to a low-dimensional linear least-squares formulation.
+  In this work, a numerical method combining the Random Feature Method with Monte Carlo sampling
+  is proposed for efficiently solving high-dimensional linear parabolic PDEs.
+  The method leverages random sampling to handle high-dimensional integrals,
+  while using random feature representations to reduce the complexity of function approximation,
+  achieving a balance between computational efficiency and accuracy.
+  The PDE is first reformulated as a system of stochastic differential equations (SDEs),
+  and a target point is specified for evaluation.
+  Monte Carlo sampling is then performed starting from the target point,
+  and both the gradient of the solution along sampled paths and the function value at the target point are learned.
+  The gradient term is approximated using random feature mappings,
+  and the training process employs least-squares optimization to further improve efficiency.
+  Numerical experiments on the Black--Scholes equation, the heat equation,
+  the Ornstein--Uhlenbeck equation, and a linear reaction--diffusion equation
+  demonstrate the effectiveness and efficiency of the proposed method.
+\end{abstract*}
