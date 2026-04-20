@@ -23,17 +23,18 @@
         \frac{\partial u}{\partial t}(t, x)
         &+ \frac{1}{2} \operatorname{Tr}\!\big(
         \sigma\sigma^{\operatorname{T}}(t, x)\, \nabla_x^2 u(t, x) \big) \\
-        &+ \nabla u(t, x) \cdot \mu(t, x) \\
+        &+ \langle \mu(t, x), \nabla u(t, x) \rangle \\
         &+ f\!\big( t, x, u(t,x), \sigma^{\operatorname{T}}(t, x) \nabla u(t, x) \big)
         = 0.
       \end{aligned}
       \label{eq:ppde}
     \end{equation}
 
-    我们仅考虑其中的线性方程, 即 $f$ 是 $u, \nabla u$ 的线性函数.
-    从数学结构上看, 线性抛物型方程具有良好的正则性与稳定性,
-    其解通常可以通过解析表示 (如基本解或 Green 函数) 或概率表示 (如 Feynman-Kac 公式) 来刻画.
-    特别地, Feynman-Kac 表示将偏微分方程的求解转化为随机过程上的期望计算, 为基于随机方法的数值算法提供了理论基础.
+    首先考虑其中的线性方程, 即 $f$ 是 $u, \nabla u$ 的线性函数.
+    一方面, 从数学结构上看, 线性抛物型方程具有良好的正则性与稳定性,
+    其解通常可以通过解析表示 (如基本解或 Green 函数) 或概率表示 (如 Feynman-Kac 公式) 来刻画,
+    可以作为 baseline 用来判断方法的正确性并评估计算效率.
+    另一方面, 线性的方程也可以像非线性方程那样通过 Itô 公式变换为 BSDE, 使得此方法可以简单的推广到非线性情形.
     下面列举了常见的线性抛物型方程:
     \begin{enumerate}
       \item
