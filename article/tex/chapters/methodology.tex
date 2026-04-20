@@ -1,3 +1,84 @@
 % !TEX root = ../main.tex
 
 \chapter{数值方法}\label{ch:methodology}
+  考虑终值问题 \eqref{eq:ppde}, $u(T, x) = g(x)$, $(t, x) \in [0, T) \times \mathbb{R}^{d}$,
+  为了应用 Itô 公式, 我们假设 $u \in C^{1, 2}([0, T) \times \mathbb{R}^{d})$,
+  并要求 $\mu, \sigma, f, g$ 满足足够的正则性与增长条件.
+  令
+  \begin{equation}
+    X_{t} = \xi + \int_{0}^{t} \mu(s, X_{s}) \dif s + \int_{0}^{t} \sigma(s, X_{s}) \dif W_{s},
+    \label{eq:xt}
+  \end{equation}
+  对随机过程 $X_{t}$ 和足够光滑的函数 $u(t, x)$, Itô 公式给出:
+  \begin{equation}
+    \begin{aligned}
+      \dif u(t,X_t) &=
+      \frac{\partial u}{\partial t}(t, X_{t}) \dif t
+      +\nabla u(t, X_{t}) \cdot \dif X_{t} \\
+      &+ \frac{1}{2} \operatorname{Tr}\!\big(
+      \sigma\sigma^{\operatorname{T}}(t, X_{t})\, \nabla_{x}^{2} u(t, X_{t}) \big) \dif t.
+    \end{aligned}
+    \label{eq:ito}
+  \end{equation}
+  代入可得
+  \begin{equation}
+    \begin{aligned}
+      \dif u(t,X_{t}) &=
+      \left( \frac{\partial u}{\partial t}(t, X_{t}) + \mu(t,X_{t}) \cdot \nabla u(t,X_{t})
+      + \frac{1}{2} \operatorname{Tr}\!\big(
+      \sigma\sigma^{\operatorname{T}}(t, X_{t})\nabla_{x}^{2} u(t, X_{t}) \big) \right) \dif t \\
+      & + \nabla u(t, X_{t})^{\operatorname{T}} \sigma(t, X_{t}) \dif W_{t}.
+    \end{aligned}
+    \label{eq:xtinito}
+  \end{equation}
+
+  由于 $u$ 满足 PDE \eqref{eq:ppde}, 所以得到
+  \begin{equation}
+    \begin{aligned}
+      \dif u(t, X_{t}) &=
+      - f\!\big( t, X_{t}, u(t, X_{t}), \sigma^{\operatorname{T}}(t, X_{t}) \nabla u(t, X_{t}) \big) \dif t \\
+      &+ \nabla u(t, X_{t})^{\operatorname{T}} \sigma(t, X_{t}) \dif W_{t},
+    \end{aligned}
+    \label{eq:bsde0}
+  \end{equation}
+  对应积分形式为
+  \begin{equation}
+    \begin{aligned}
+      u(t, X_{t}) - u(0, X_{0}) &=
+      - \int_{0}^{t} f\!\big(
+      s, X_{s}, u(s, X_{s}), \sigma^{\operatorname{T}}(s, X_{s}) \nabla u(s, X_{s}) \big) \dif s \\
+      &+ \int_{0}^{t} \nabla u(s, X_{s})^{\operatorname{T}} \sigma(s, X_{s}) \dif W_{s}.
+    \end{aligned}
+    \label{eq:bsie0}
+  \end{equation}
+  记
+  \begin{equation}
+    Y_{t} \coloneqq u(t, X_{t}),
+    \qquad
+    Z_{t} \coloneqq \sigma^{\operatorname{T}}(t, X_{t}) \nabla u(t, X_{t}),
+    \label{eq:ytzt}
+  \end{equation}
+  则上式就变成
+  \begin{equation}
+    \dif Y_{t} = -f(t, X_{t},Y_{t},Z_{t}) \dif t
+    + Z_{t}^{\operatorname{T}} \dif W_{t},
+    \label{eq:bsde}
+  \end{equation}
+  积分形式为
+  \begin{equation}
+    Y_t =  Y_0 - \int_{0}^{t} f(s, X_{s},Y_{s},Z_{s}) \dif s
+    + \int_{0}^{t} Z_{s}^{\operatorname{T}} \dif W_{s}.
+    \label{eq:bsie}
+  \end{equation}
+
+  \section{线性方程的求解}\label{sec:linear}
+    假设函数 $f$ 满足线性结构:
+    \begin{equation}
+      f\!( t, \boldsymbol{x}, y, \boldsymbol{z})
+      = \mathcal{L}(t, \boldsymbol{x}) y
+      + \langle \boldsymbol{\mathcal{M}}( t, \boldsymbol{x}), \boldsymbol{z} \rangle
+      + \mathcal{N}(t, \boldsymbol{x}),
+      \label{eq:ftxyz}
+    \end{equation}
+    由于 $\langle \boldsymbol{\mathcal{M}}( t, \boldsymbol{x}), \boldsymbol{z} \rangle$ 可以与前面的梯度项合并,
+    故仅需考虑 $\mathcal{M} \equiv 0$.
