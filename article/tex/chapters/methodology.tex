@@ -58,7 +58,7 @@
     Z_{t} \coloneqq \sigma^{\operatorname{T}}(t, X_{t}) \nabla u(t, X_{t}),
     \label{eq:ytzt}
   \end{equation}
-  则上式就变成
+  则 \eqref{eq:bsde0} 就变成
   \begin{equation}
     \dif Y_{t} = -f(t, X_{t},Y_{t},Z_{t}) \dif t
     + Z_{t}^{\operatorname{T}} \dif W_{t},
@@ -71,14 +71,33 @@
     \label{eq:bsie}
   \end{equation}
 
+  对于时间步, 采用前向欧拉进行离散, 得到最终的离散迭代式
+  \begin{equation}
+    Y_{k + 1} = Y_{k} - f\!(\frac{k}{n}, X_{k}, Y_{k}, Z_{k} + \langle Z_{k}, \Delta W_{k} \rangle).
+    \label{eq:dbsde}
+  \end{equation}
+  由此, 我们可以通过末端函数反向逼近 $Z_{k}$ 和 $Y_{0}$.
+
   \section{线性方程的求解}\label{sec:linear}
-    假设函数 $f$ 满足线性结构:
+    假设函数 $f$ 满足线性结构
     \begin{equation}
       f\!( t, \boldsymbol{x}, y, \boldsymbol{z})
       = \mathcal{L}(t, \boldsymbol{x}) y
-      + \langle \boldsymbol{\mathcal{M}}( t, \boldsymbol{x}), \boldsymbol{z} \rangle
+      + \langle \mathcal{M}( t, \boldsymbol{x}), \boldsymbol{z} \rangle
       + \mathcal{N}(t, \boldsymbol{x}),
-      \label{eq:ftxyz}
+      \label{eq:linearf}
     \end{equation}
     由于 $\langle \boldsymbol{\mathcal{M}}( t, \boldsymbol{x}), \boldsymbol{z} \rangle$ 可以与前面的梯度项合并,
     故仅需考虑 $\mathcal{M} \equiv 0$.
+    由于需要逼近 $Z$, 我们用随机特征映射 $\alpha H_{k}$ 代替 $Z_{k}$.
+    其中 $\alpha$ 为需要训练的参数, $H_{k} = \tanh(A x_{k} + b t_{k} + c)$ 为随机采样内层参数的随机特征基矩阵.
+    将线性的 $f$ 与含参的 $Z$ 代入 \eqref{eq:dbsde} 得到线性方程的迭代式:
+    \begin{equation}
+      y_{k+1}
+      = \big( 1 - \Delta t \mathcal{L}(t_{k}, x_{k}) \big) y_{k}
+      + (\dif w_{k})^{\operatorname{T}} \alpha H_{k}
+      + \mathcal{N}(t_{k}, x_{k}) \Delta t.
+      \label{eq:ldbsde}
+    \end{equation}
+    这个式子中 $y_{0}$ 与 $\alpha$ 未知, 但它们每一步都只进行了线性变换.
+    因此 $y_{N}$ 关于 $y_{0}$ 与 $\alpha$ 也是线性的.
