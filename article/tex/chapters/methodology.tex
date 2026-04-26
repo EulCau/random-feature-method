@@ -73,7 +73,7 @@
 
   对于时间步, 采用前向欧拉进行离散, 得到最终的离散迭代式
   \begin{equation}
-    Y_{k + 1} = Y_{k} - f\!(\frac{k}{n}, X_{k}, Y_{k}, Z_{k} + \langle Z_{k}, \Delta W_{k} \rangle).
+    Y_{k + 1} = Y_{k} - f\!(\frac{k}{n}, X_{k}, Y_{k}, Z_{k}) + \langle Z_{k}, \Delta W_{k} \rangle.
     \label{eq:dbsde}
   \end{equation}
   由此, 我们可以通过末端函数反向逼近 $Z_{k}$ 和 $Y_{0}$.
@@ -89,15 +89,187 @@
     \end{equation}
     由于 $\langle \boldsymbol{\mathcal{M}}( t, \boldsymbol{x}), \boldsymbol{z} \rangle$ 可以与前面的梯度项合并,
     故仅需考虑 $\mathcal{M} \equiv 0$.
-    由于需要逼近 $Z$, 我们用随机特征映射 $\alpha H_{k}$ 代替 $Z_{k}$.
-    其中 $\alpha$ 为需要训练的参数, $H_{k} = \tanh(A x_{k} + b t_{k} + c)$ 为随机采样内层参数的随机特征基矩阵.
+    由于需要逼近 $Z$, 我们用随机特征映射 $\alpha H_{k}^{(i)}$ 代替 $Z_{k}^{(i)}$.
+    其中 $\alpha$ 为需要训练的参数, $i$ 为采样路径编号,
+    $H_{k}^{(i)} = \tanh(A x_{k}^{(i)} + b t_{k} + c)$ 为随机采样内层参数的随机特征基矩阵.
     将线性的 $f$ 与含参的 $Z$ 代入 \eqref{eq:dbsde} 得到线性方程的迭代式:
     \begin{equation}
-      y_{k+1}
-      = \big( 1 - \Delta t \mathcal{L}(t_{k}, x_{k}) \big) y_{k}
-      + (\dif w_{k})^{\operatorname{T}} \alpha H_{k}
-      + \mathcal{N}(t_{k}, x_{k}) \Delta t.
+      \begin{aligned}
+        y_{k+1}^{(i)}
+        & = \big( 1 - \Delta t \mathcal{L}(t_{k}, x_{k}^{(i)}) \big) y_{k}^{(i)}
+        + (\Delta W_{k}^{(i)})^{\operatorname{T}} \alpha H_{k}^{(i)}
+        + \mathcal{N}(t_{k}, x_{k}^{(i)}) \Delta t \\
+        & \coloneqq a_{k}^{(i)} y_{k}^{(i)} + (\xi_{k}^{(i)})^{\operatorname{T}} \alpha H_{k}^{(i)} + c_{k}^{(i)}.
+      \end{aligned}
       \label{eq:ldbsde}
     \end{equation}
-    这个式子中 $y_{0}$ 与 $\alpha$ 未知, 但它们每一步都只进行了线性变换.
-    因此 $y_{N}$ 关于 $y_{0}$ 与 $\alpha$ 也是线性的.
+    这个式子中 $y_{0}^{(i)} = y_{0}$ 与 $\alpha$ 未知, 但它们每一步都只进行了线性变换.
+    因此 $y_{N}^{(i)}$ 关于 $y_{0}$ 与 $\alpha$ 也是线性的.
+
+    为了减少不必要的运算, 我们手动推导了系数矩阵和观测向量.
+    得到的结果是, 对每条路径 $i$,
+    \begin{equation}
+      y_{N}^{(i)} = \left( \prod_{j = 0}^{N - 1} a_{j}^{(i)} \right)
+      + \left\langle \sum_{k = 0}^{N - 1} \left(
+        \prod_{j = k + 1}^{N - 1} a_{j}^{(i)} \right) \xi_{k}^{(i)} (H_{k}^{(i)})^{\operatorname{T}},
+        \alpha \right\rangle
+      + \sum_{k = 0}^{N - 1} \left( \prod_{j = k + 1}^{N - 1} a_{j}^{(i)} \right) c_{k}^{(i)},
+      \label{eq:yN4i}
+    \end{equation}
+    其中 $\langle \cdot, \cdot \rangle$ 为 Frobenius 内积.
+
+    之后拼接所有路径, 并最小化 $\lVert y_{N} - g(x_{N}) \rVert_{2}$ 即可.
+
+  \section{非线性方程的求解}\label{sec:nonlinear}
+    考虑一般的非线性生成元 $f\!( t, \boldsymbol{x}, y, \boldsymbol{z})$, 我们同样用随机特征映射
+    $\alpha H_{k}^{(i)}$ 代替 $Z_{k}^{(i)}$.
+    此时离散迭代式变为
+    \begin{equation}
+      y_{k + 1}^{(i)} = y_{k}^{(i)}
+      - f\!(t_{k}, x_{k}^{(i)}, y_{k}^{(i)}, \alpha H_{k}^{(i)}) \Delta t
+      + (\Delta W_{k}^{(i)})^{\operatorname{T}} \alpha H_{k}^{(i)}.
+      \label{eq:nldbsde}
+    \end{equation}
+    由于 $f$ 关于 $y$ 或 $z$ 可能是非线性的, $y_{N}^{(i)}$ 不再是关于 $y_{0}$ 与 $\alpha$ 的线性函数.
+    因此需要将末端匹配问题写成非线性最小二乘问题.
+
+    令待求参数为
+    \begin{equation}
+      \theta =
+      \begin{bmatrix}
+        y_{0} \\
+        \operatorname{vec}(\alpha)
+      \end{bmatrix},
+      \label{eq:theta}
+    \end{equation}
+    并定义每条路径的末端残差为
+    \begin{equation}
+      r_{i}(\theta) = y_{N}^{(i)}(\theta) - g(x_{N}^{(i)}).
+      \label{eq:residual4i}
+    \end{equation}
+    将所有采样路径的残差拼接, 得到
+    \begin{equation}
+      r(\theta) =
+      \begin{bmatrix}
+        r_{1}(\theta) \\
+        \vdots \\
+        r_{n}(\theta)
+      \end{bmatrix}.
+      \label{eq:residual}
+    \end{equation}
+    于是非线性方程的最终求解转化为
+    \begin{equation}
+      \min_{\theta}
+      \frac{1}{2} \lVert r(\theta)\rVert_{2}^{2}.
+      \label{eq:nlls}
+    \end{equation}
+
+    为求解 \eqref{eq:nlls}, 我们采用 Gauss--Newton 或 Levenberg--Marquardt 方法.
+    在第 $m$ 次迭代中, 当前参数 $\theta^{(m)}$ 已知.
+    首先由 \eqref{eq:nldbsde} 前向计算所有路径上的 $y_{N}^{(i)}$, 由此得到当前残差 $r(\theta^{(m)})$.
+    记残差关于参数的雅可比矩阵为
+    \begin{equation}
+      J(\theta^{(m)}) = \frac{\partial r}{\partial \theta}(\theta^{(m)}).
+      \label{eq:jacobian}
+    \end{equation}
+    对残差做一阶线性化:
+    \begin{equation}
+      r(\theta^{(m)}+\delta) \approx r(\theta^{(m)}) + J(\theta^{(m)})\delta.
+      \label{eq:residual_linearization}
+    \end{equation}
+    因此每一步需要求解线性最小二乘子问题
+    \begin{equation}
+      \delta^{(m)} = \arg\min_{\delta}
+        \left\lVert J(\theta^{(m)})\delta + r(\theta^{(m)}) \right\rVert_2^2.
+      \label{eq:delta4m}
+    \end{equation}
+    实际计算中可采用阻尼形式
+    \begin{equation}
+      (J^{\operatorname{T}}J + \lambda I)\delta^{(m)} = - J^{\operatorname{T}}r, \qquad \lambda > 0,
+      \label{eq:lm}
+    \end{equation}
+    即 Levenberg--Marquardt 方法.
+    若更新后目标函数下降, 则接受该步并减小 $\lambda$; 否则拒绝该步并增大 $\lambda$.
+
+    最后按照
+    \begin{equation}
+      \theta^{(m + 1)} = \theta^{(m)} + \delta^{(m)}
+      \label{eq:theta+}
+    \end{equation}
+    更新参数, 直到末端残差或参数增量满足停止准则.
+
+    下面给出雅可比矩阵的计算方式.
+    对第 $i$ 条路径, 记
+    \begin{equation}
+      S_k^{(i)} = \frac{\partial y_k^{(i)}}{\partial \theta}.
+      \label{eq:Sk}
+    \end{equation}
+    由于 $y_{0}$ 是参数向量的第一项, 有
+    \begin{equation}
+      S_{0}^{(i)} =
+      \begin{bmatrix}
+        1 & 0 & \cdots & 0
+      \end{bmatrix}.
+      \label{eq:S0}
+    \end{equation}
+    对 \eqref{eq:nldbsde} 关于 $\theta$ 求导, 记
+    \begin{equation}
+      f_{y,k}^{(i)} =
+      \frac{\partial f}{\partial y}
+      \left(t_{k}, x_{k}^{(i)}, y_{k}^{(i)}, \alpha H_{k}^{(i)}\right),
+      \qquad
+      f_{z,k}^{(i)}
+      =
+      \frac{\partial f}{\partial z}
+      \left(t_{k}, x_{k}^{(i)}, y_{k}^{(i)}, \alpha H_{k}^{(i)}\right).
+      \label{eq:fyfz}
+    \end{equation}
+    又因为 $z_{k}^{(i)}=\alpha H_k^{(i)}$, 所以
+    \begin{equation}
+      \frac{\partial z_k^{(i)}}{\partial \theta} =
+      \begin{bmatrix}
+        0_{d \times 1} & I_{d} \otimes (H_{k}^{(i)})^{\operatorname{T}}
+      \end{bmatrix}.
+      \label{eq:dzdtheta}
+    \end{equation}
+    于是得到灵敏度递推式
+    \begin{equation}
+      S_{k+1}^{(i)}
+      =
+      \left(1-\Delta t\, f_{y,k}^{(i)}\right)S_k^{(i)}
+      +
+      \left((\Delta W_k^{(i)})^{\operatorname{T}}
+        -\Delta t\, f_{z,k}^{(i)}\right)
+      \begin{bmatrix}
+        0_{d\times 1} & I_d \otimes (H_k^{(i)})^{\operatorname{T}}
+      \end{bmatrix}.
+      \label{eq:srecurrence}
+    \end{equation}
+    记
+    \begin{equation}
+      A_{k}^{(i)} = 1 - \Delta t\, f_{y,k}^{(i)},
+      \label{eq:ak}
+    \end{equation}
+    \begin{equation}
+      B_{k}^{(i)} =
+      \big( (\Delta W_{k}^{(i)})^{\operatorname{T}} - \Delta t\, f_{z,k}^{(i)} \big)
+      \begin{bmatrix}
+        0_{d \times 1} & I_{d} \otimes (H_{k}^{(i)})^{\operatorname{T}}
+      \end{bmatrix}.
+      \label{eq:bk}
+    \end{equation}
+    则
+    \begin{equation}
+      S_{k+1}^{(i)} = A_{k}^{(i)} S_{k}^{(i)} + B_{k}^{(i)}.
+      \label{eq:sab}
+    \end{equation}
+    展开可得
+    \begin{equation}
+      J_{i,:} = S_{N}^{(i)} = (\prod_{j = 0}^{N - 1} A_{j}^{(i)}) S_{0}^{(i)} +
+      \sum_{k=0}^{N-1} ( \prod_{j =k + 1}^{N - 1} A_j^{(i)}) B_{k}^{(i)}.
+      \label{eq:eq:jrow}
+    \end{equation}
+
+    这与线性方程中系数矩阵的推导形式类似,
+    区别在于此处 $A_{k}^{(i)}$ 和 $B_{k}^{(i)}$ 依赖当前迭代步中的 $y_{k}^{(i)}$ 和 $\alpha$,
+    因而需要在每一次非线性最小二乘迭代中重新计算.
