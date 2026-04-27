@@ -5,8 +5,10 @@
 #include "linear_solve_result.h"
 
 RFMSolver::RFMSolver(
-    Config config, const std::shared_ptr<Equation> &eq, const torch::Device device, const uint64_t seed)
-        : config_(std::move(config)),
+    Config config, const std::shared_ptr<Equation> &eq,
+    const torch::Device device, const uint64_t seed, const bool is_linear)
+        : is_linear_(is_linear),
+          config_(std::move(config)),
           equation_(eq),
           seed_(seed),
           device_(device),
@@ -20,10 +22,169 @@ RFMSolver::RFMSolver(
     std::srand(static_cast<unsigned>(seed_));
 
     compute_txw();
-    compute_L(t_, x_);
-    compute_M(t_, x_);
-    compute_N(t_, x_);
-    compute_H(t_, x_);
+
+    if (is_linear_)
+    {
+        compute_L(t_, x_);
+        compute_M(t_, x_);
+        compute_N(t_, x_);
+        compute_H(t_, x_);
+    }
+}
+
+/* Options
+ * set the initial $y_0$, $alpha$, and $lambda$. */
+
+RFMSolver& RFMSolver::options(
+    const std::optional<torch::Tensor>& y0,
+    const std::optional<torch::Tensor>& alpha,
+    const std::optional<float> lambda
+)
+{
+    const auto D = equation_->dim();
+    const auto H = rff_.hidden_dim();
+
+    y0_ = torch::randn({1}, torch::TensorOptions()
+        .dtype(torch::kFloat32)
+        .device(device_));
+
+    alpha_ = torch::randn({D, H}, torch::TensorOptions()
+        .dtype(torch::kFloat32)
+        .device(device_)) * 0.01;
+
+    lambda_ = 1e-3;
+    if (y0.has_value())
+    {
+        y0_ = y0.value().to(device_).clone().detach();
+    }
+
+    if (alpha.has_value())
+    {
+        alpha_ = alpha.value().to(device_).clone().detach();
+    }
+
+    if (lambda.has_value())
+    {
+        TORCH_CHECK(lambda.value() > 0.0, "lambda must be positive");
+        lambda_ = lambda.value();
+    }
+
+    return *this;
+}
+
+/* Solver
+ * `Solver` directs linear and nonlinear problems to different main solver functions. */
+
+std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve(const bool output_log) const
+{
+    if (is_linear_) return solve_linear();
+    return solve_nonlinear(output_log);
+}
+
+std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear() const
+{
+    const auto [A, B] = compute_linear_coef();
+
+    const auto result = solve_y0_alpha_ridge_dual(
+        A, B,
+        config_.eqn_config.dim,
+        config_.net_config.num_hiddens[0],
+        1e-6
+    );
+
+    return result;
+}
+
+std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear(const bool output_log) const
+{
+    TORCH_CHECK(y0_.defined(), "y0_ is not initialized");
+    TORCH_CHECK(alpha_.defined(), "alpha_ is not initialized");
+    TORCH_CHECK(lambda_ > 0.0, "lambda_ must be positive");
+
+    return solve_nonlinear_levenberg_marquardt(y0_, alpha_, lambda_, output_log);
+}
+
+/* Utils
+ * including calculating intermediate quantities, building the solver, checking tensor status, etc. */
+
+std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_coef() const
+{
+    const int64_t S = config_.net_config.valid_size;
+    const int64_t T = config_.eqn_config.num_time_interval;
+    const int64_t D = equation_->dim();
+    const int64_t Hdim = config_.net_config.num_hiddens[0];
+    const float dt = equation_->delta_t();
+
+    auto device = L_.device();
+
+    // 压缩到紧凑形状
+    const auto L = L_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
+    const auto M = M_.squeeze(2).contiguous();                // (S, T, D)
+    const auto N = N_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
+    const auto H = H_.squeeze(-1).contiguous();               // (S, T, H)
+    const auto dW = dw_.reshape({S, T, D}).contiguous();      // (S, T, D)
+
+    // 线性递推中的三块
+    const auto a  = 1.0f - dt * L;      // (S, T)
+    const auto xi = dW - dt * M;        // (S, T, D)
+    const auto c  = dt * N;             // (S, T)
+
+    // weights[k] = prod_{j=k+1}^{T-1} a_j
+    const auto suffix_inclusive = torch::flip(
+        torch::cumprod(torch::flip(a, {1}), 1),
+        {1}
+    ); // (S, T), suffix_inclusive[:, k] = prod_{j=k}^{T-1} a_j
+
+    auto weights = torch::ones_like(a); // (S, T)
+    if (T > 1)
+    {
+        weights.index_put_(
+            {torch::indexing::Slice(), torch::indexing::Slice(0, T - 1)},
+            suffix_inclusive.index({
+                torch::indexing::Slice(),
+                torch::indexing::Slice(1, torch::indexing::None)
+            })
+        );
+    }
+
+    // 矩阵第一块: y0 系数
+    auto coef_y0 = a.prod(1, true); // (S, 1)
+
+    // 矩阵第二块: alpha 系数
+    // weighted_xi: (S, T, D)
+    const auto weighted_xi = xi * weights.unsqueeze(-1);
+
+    // coef_alpha[s] = weighted_xi[s]^T @ H[s] -> (D, H)
+    auto coef_alpha = torch::bmm(
+        weighted_xi.transpose(1, 2).contiguous(), // (S, D, T)
+        H                                          // (S, T, H)
+    );                                             // (S, D, H)
+
+    coef_alpha = coef_alpha.reshape({S, D * Hdim}); // (S, D*H)
+
+    // 拼接设计矩阵
+    const auto A = torch::cat({coef_y0, coef_alpha}, 1).contiguous(); // (S, 1 + D*H)
+
+    // 右端项
+    const auto constant_part = (weights * c).sum(1, true); // (S, 1)
+    const auto g_XN = equation_->g(t_end_, x_end_).reshape({S, 1}).to(device);
+
+    const auto B = g_XN - constant_part; // (S, 1)
+
+    TORCH_CHECK(
+        A.device().type() == device.type() &&
+        B.device().type() == device.type(),
+        "A, B must be on ", device_.type(), ", but got ", A.device().type(), " & ", B.device().type())
+
+
+    return {A, B};
+}
+
+std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_levenberg_marquardt(
+    const torch::Tensor &y0, const torch::Tensor &alpha, const float lambda, const bool output_log) const
+{
+    // TODO: finish nonlinear solver
+
 }
 
 void RFMSolver::compute_txw()
@@ -60,8 +221,6 @@ void RFMSolver::compute_txw()
 
     check_tx_shape(t_, x_);
 }
-
-// L, M, N are known, these functions are designed to compute results on all the t_k & x_k
 
 void RFMSolver::compute_L(const torch::Tensor &t, const torch::Tensor &x)
 {
@@ -156,93 +315,6 @@ void RFMSolver::compute_H(const torch::Tensor& t, const torch::Tensor& x)
     );
 
     H_ = result;
-}
-
-std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_coef() const
-{
-    const int64_t S = config_.net_config.valid_size;
-    const int64_t T = config_.eqn_config.num_time_interval;
-    const int64_t D = equation_->dim();
-    const int64_t Hdim = config_.net_config.num_hiddens[0];
-    const float dt = equation_->delta_t();
-
-    auto device = L_.device();
-
-    // 压缩到紧凑形状
-    const auto L = L_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
-    const auto M = M_.squeeze(2).contiguous();                // (S, T, D)
-    const auto N = N_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
-    const auto H = H_.squeeze(-1).contiguous();               // (S, T, H)
-    const auto dW = dw_.reshape({S, T, D}).contiguous();      // (S, T, D)
-
-    // 线性递推中的三块
-    const auto a  = 1.0f - dt * L;      // (S, T)
-    const auto xi = dW - dt * M;        // (S, T, D)
-    const auto c  = dt * N;             // (S, T)
-
-    // weights[k] = prod_{j=k+1}^{T-1} a_j
-    const auto suffix_inclusive = torch::flip(
-        torch::cumprod(torch::flip(a, {1}), 1),
-        {1}
-    ); // (S, T), suffix_inclusive[:, k] = prod_{j=k}^{T-1} a_j
-
-    auto weights = torch::ones_like(a); // (S, T)
-    if (T > 1)
-    {
-        weights.index_put_(
-            {torch::indexing::Slice(), torch::indexing::Slice(0, T - 1)},
-            suffix_inclusive.index({
-                torch::indexing::Slice(),
-                torch::indexing::Slice(1, torch::indexing::None)
-            })
-        );
-    }
-
-    // 矩阵第一块: y0 系数
-    auto coef_y0 = a.prod(1, true); // (S, 1)
-
-    // 矩阵第二块: alpha 系数
-    // weighted_xi: (S, T, D)
-    const auto weighted_xi = xi * weights.unsqueeze(-1);
-
-    // coef_alpha[s] = weighted_xi[s]^T @ H[s] -> (D, H)
-    auto coef_alpha = torch::bmm(
-        weighted_xi.transpose(1, 2).contiguous(), // (S, D, T)
-        H                                          // (S, T, H)
-    );                                             // (S, D, H)
-
-    coef_alpha = coef_alpha.reshape({S, D * Hdim}); // (S, D*H)
-
-    // 拼接设计矩阵
-    const auto A = torch::cat({coef_y0, coef_alpha}, 1).contiguous(); // (S, 1 + D*H)
-
-    // 右端项
-    const auto constant_part = (weights * c).sum(1, true); // (S, 1)
-    const auto g_XN = equation_->g(t_end_, x_end_).reshape({S, 1}).to(device);
-
-    const auto B = g_XN - constant_part; // (S, 1)
-
-    TORCH_CHECK(
-        A.device().type() == device.type() &&
-        B.device().type() == device.type(),
-        "A, B must be on ", device_.type(), ", but got ", A.device().type(), " & ", B.device().type())
-
-
-    return {A, B};
-}
-
-std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::Solve_linear() const
-{
-    const auto [A, B] = compute_linear_coef();
-
-    const auto result = solve_y0_alpha_ridge_dual(
-        A, B,
-        config_.eqn_config.dim,
-        config_.net_config.num_hiddens[0],
-        1e-6
-    );
-
-    return result;
 }
 
 void RFMSolver::check_tx_shape(

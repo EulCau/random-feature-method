@@ -51,13 +51,13 @@ int main()
     const auto device = torch::cuda::is_available()?torch::kCUDA:torch::kCPU;
     const auto pde = EquationFactory::instance().create(cfg.eqn_config.eqn_name, cfg.eqn_config);
 
-    const auto rfm_solver = RFMSolver(cfg, pde, device, seed);
+    const auto rfm_solver = RFMSolver(cfg, pde, device, seed, true);
 
     if (torch::cuda::is_available()) torch::cuda::synchronize();
 
     const auto t_mid = std::chrono::high_resolution_clock::now();
 
-    const auto [y0, alpha, rmse] = rfm_solver.Solve_linear();
+    const auto [y0, alpha, rmse] = rfm_solver.solve();
 
     if (torch::cuda::is_available()) torch::cuda::synchronize();
 
