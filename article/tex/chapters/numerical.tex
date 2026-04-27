@@ -1,3 +1,186 @@
 % !TEX root = ../main.tex
 
 \chapter{数值结果}\label{ch:numerical}
+  本章给出本文方法的数值实验模板.
+  目前实验方程, 参数配置与最终结果仍在整理中,
+  因此本章先给出一个可直接替换占位符的展示框架.
+  该框架区分线性方程与非线性方程两类结果, 并尽量只展示当前程序已经实现或可以直接由程序日志整理得到的指标,
+  如终端残差, 运行时间, 随机特征维数, 样本规模以及 Levenberg--Marquardt 迭代中的残差下降过程等.
+
+  \section{实验设置}\label{sec:numerical_setup}
+    所有实验均在统一的软件框架下完成.
+    对于每个测试方程, 首先由方程类生成样本路径 $\{X_k^{(i)}, \Delta W_k^{(i)}\}$,
+    再由随机特征映射构造对 $Z_k$ 的近似, 最后分别调用线性求解器与非线性求解器得到参数 $y_0$ 与 $\alpha$.
+    当前程序已经能够直接输出如下信息:
+    初值近似 $y_0$, 终端残差的均方根误差, 方程维度, 隐藏层宽度, 样本数以及总耗时.
+    对于非线性求解器, 若开启日志输出, 还可进一步记录每一步迭代中的 loss, error, 阻尼参数 $\lambda$ 与步长范数.
+
+    后续实验中建议统一报告表~\ref{tab:exp-config-template} 中的配置项.
+    其中带有 ``待填'' 标记的条目应在具体实验完成后替换为实际数值.
+
+    \begin{table}
+      \centering
+      \caption{实验配置模板}
+      \label{tab:exp-config-template}
+      \begin{tabular}{lll}
+        \toprule
+        类别 & 配置项 & 取值 \\
+        \midrule
+        方程信息 & 线性测试方程 & \textbf{待填: 例如方程 A / 方程 B} \\
+        方程信息 & 非线性测试方程 & \textbf{待填: 例如方程 C / 方程 D} \\
+        离散参数 & 总时间 $T$ & 0.00 \\
+        离散参数 & 时间剖分步数 $N$ & 0 \\
+        空间参数 & 维度 $d$ & 0 \\
+        随机特征 & 隐藏层宽度 $H$ & 0 \\
+        采样参数 & 训练/验证样本数 & 0 / 0 \\
+        求解参数 & 初始阻尼 $\lambda_0$ & 0.00 \\
+        求解参数 & 最大迭代步数 & 0 \\
+        硬件环境 & 计算设备 & \textbf{待填: CPU / GPU 型号} \\
+        \bottomrule
+      \end{tabular}
+    \end{table}
+
+    图~\ref{fig:linear-process-placeholder} 用已有流程图先占住整体方法展示位置.
+    若后续需要, 可替换为更贴近本文实现的算法流程图或实验流程图.
+
+    \begin{figure}[ht]
+      \centering
+      \includegraphics[width=0.72\textwidth]{linear-rfm-process}
+      \caption{线性随机特征求解流程占位图}
+      \label{fig:linear-process-placeholder}
+      \figurenote{该图目前复用了项目中的已有资源, 用于说明本章图形版式. 后续可替换为更准确的实验流程图.}
+    \end{figure}
+
+  \section{线性方程结果模板}\label{sec:numerical_linear}
+    本节用于展示线性生成元情形下的实验结果.
+    由于线性问题中终端值关于 $y_0$ 与 $\alpha$ 保持线性关系, 当前实现可直接构造系数矩阵并调用最小二乘求解.
+    因而线性部分除了解的精度外, 还适合作为计算效率与稳定性的 baseline.
+
+    在具体实验中, 建议至少报告以下几类指标:
+    终端残差均方根误差, 求得的 $y_0$ 数值, 单次求解总耗时, 去除初始化后可重复部分耗时, 以及不同维度或不同随机特征宽度下的变化趋势.
+    其中终端残差与运行时间均可以直接由当前程序输出.
+
+    \begin{table}
+      \centering
+      \caption{线性方程数值结果模板}
+      \label{tab:linear-result-template}
+      \begin{tabular}{ccccccc}
+        \toprule
+        方程 & 维度 $d$ & 特征宽度 $H$ & 样本数 $S$ & $y_0$ & 终端残差 RMSE & 总耗时 / ms \\
+        \midrule
+        \textbf{待填方程 L1} & 0 & 0 & 0 & 0.00 & 0.00 & 0.00 \\
+        \textbf{待填方程 L2} & 0 & 0 & 0 & 0.00 & 0.00 & 0.00 \\
+        \textbf{待填方程 L3} & 0 & 0 & 0 & 0.00 & 0.00 & 0.00 \\
+        \bottomrule
+      \end{tabular}
+    \end{table}
+
+    若需要进一步比较不同规模下的效率, 可继续使用表~\ref{tab:linear-scaling-template} 展示维度或特征宽度变化时的耗时与残差趋势.
+    这部分数据同样能够从当前实现中直接获得.
+
+    \begin{table}
+      \centering
+      \caption{线性方程规模扩展结果模板}
+      \label{tab:linear-scaling-template}
+      \begin{tabular}{cccccc}
+        \toprule
+        方程 & 维度 $d$ & 特征宽度 $H$ & 样本数 $S$ & 终端残差 RMSE & 可重复耗时 / ms \\
+        \midrule
+        \textbf{待填方程} & 0 & 0 & 0 & 0.00 & 0.00 \\
+        \textbf{待填方程} & 0 & 0 & 0 & 0.00 & 0.00 \\
+        \textbf{待填方程} & 0 & 0 & 0 & 0.00 & 0.00 \\
+        \bottomrule
+      \end{tabular}
+    \end{table}
+
+    从展示逻辑上看, 线性实验结果可围绕以下几点展开分析:
+    第一, 终端残差是否随随机特征宽度增加而下降;
+    第二, 在固定误差水平下, 当前方法相比其他基线方法的时间复杂度是否具有优势;
+    第三, 在高维情形下, 残差与耗时是否保持可接受的增长趋势.
+    以上分析文字目前可暂写为占位说明, 待实验完成后替换为具体结论.
+
+  \section{非线性方程结果模板}\label{sec:numerical_nonlinear}
+    本节用于展示非线性生成元情形下的实验结果.
+    与线性部分不同, 非线性问题中需要对终端残差构成的非线性最小二乘问题进行迭代求解.
+    当前实现采用 Levenberg--Marquardt 方法, 可以直接输出每次迭代中的 loss, error, 阻尼参数 $\lambda$ 以及步长范数.
+    因此, 除了最终误差与总耗时外, 还应展示迭代收敛过程.
+
+    \begin{table}
+      \centering
+      \caption{非线性方程最终结果模板}
+      \label{tab:nonlinear-result-template}
+      \begin{tabular}{cccccccc}
+        \toprule
+        方程 & 维度 $d$ & 特征宽度 $H$ & 样本数 $S$ & 迭代步数 & 最终 $\lambda$ & 最终残差 RMSE & 总耗时 / ms \\
+        \midrule
+        \textbf{待填方程 N1} & 0 & 0 & 0 & 0 & 0.00 & 0.00 & 0.00 \\
+        \textbf{待填方程 N2} & 0 & 0 & 0 & 0 & 0.00 & 0.00 & 0.00 \\
+        \textbf{待填方程 N3} & 0 & 0 & 0 & 0 & 0.00 & 0.00 & 0.00 \\
+        \bottomrule
+      \end{tabular}
+    \end{table}
+
+    为了展示迭代行为, 建议绘制残差下降曲线.
+    这部分数据可以通过开启 `output\_log=true` 从求解器日志中整理得到.
+    图~\ref{fig:nonlinear-residual-template} 先用占位图保留版面位置,
+    后续可替换为 ``迭代次数 -- 残差'' 的折线图, 或进一步叠加阻尼参数与步长范数的变化.
+
+    \begin{figure}[ht]
+      \centering
+      \includegraphics[width=0.75\textwidth]{nonlinear-residual-placeholder}
+      \caption{非线性求解器残差下降曲线模板}
+      \label{fig:nonlinear-residual-template}
+      \figurenote{后续建议将横轴设为 LM 迭代次数, 纵轴设为终端残差 RMSE 或目标函数值, 并在图注中说明是否采用对数坐标.}
+    \end{figure}
+
+    若需要更细致地分析 LM 方法的行为, 还可以补充一张表来记录迭代初末状态, 例如初始残差, 最终残差, 接受步比例以及阻尼参数的变化范围.
+    这些量虽然当前程序未全部直接汇总输出, 但均可由现有迭代日志进一步整理得到.
+
+    \begin{table}
+      \centering
+      \caption{非线性求解器迭代统计模板}
+      \label{tab:nonlinear-iter-template}
+      \begin{tabular}{cccccc}
+        \toprule
+        方程 & 初始残差 RMSE & 最终残差 RMSE & 接受步比例 & $\lambda$ 变化区间 & 备注 \\
+        \midrule
+        \textbf{待填方程} & 0.00 & 0.00 & 0.00 & [0.00, 0.00] & \textbf{待填} \\
+        \textbf{待填方程} & 0.00 & 0.00 & 0.00 & [0.00, 0.00] & \textbf{待填} \\
+        \bottomrule
+      \end{tabular}
+    \end{table}
+
+  \section{与理论解的对比模板}\label{sec:numerical_theory}
+    对于具有显式理论解或高精度参考解的测试方程, 建议单独设置一个小节比较数值解与理论结果.
+    这部分既可以用于验证初值 $u(0, x_0)$ 的准确性, 也可以用于考察方法在整个时间区间或若干代表性空间点上的误差分布.
+
+    由于当前参与实验的具体方程尚未最终确定, 理论分析部分先保留占位说明, 如图~\ref{fig:theory-compare-template}:
+    \textbf{待填: 在此处补充选定方程的理论解表达式, 误差定义方式以及理论分析说明.}
+
+    \begin{table}
+      \centering
+      \caption{理论解与数值解对比模板}
+      \label{tab:theory-compare-template}
+      \begin{tabular}{cccccc}
+        \toprule
+        方程 & 理论值 & 数值值 & 绝对误差 & 相对误差 & 备注 \\
+        \midrule
+        \textbf{待填方程} & 0.00 & 0.00 & 0.00 & 0.00 & \textbf{待填} \\
+        \textbf{待填方程} & 0.00 & 0.00 & 0.00 & 0.00 & \textbf{待填} \\
+        \bottomrule
+      \end{tabular}
+    \end{table}
+
+    \begin{figure}[ht]
+      \centering
+      \includegraphics[width=0.75\textwidth]{theory-compare-placeholder}
+      \caption{理论解与数值解对比图模板}
+      \label{fig:theory-compare-template}
+      \figurenote{该位置可用于展示理论解曲线与数值解曲线的对比, 或展示不同时间层上的误差分布图. 当前为占位图.}\label{fig:figure}
+    \end{figure}
+
+  \section{本章小结}\label{sec:numerical_summary}
+    本章构造了一个面向后续实验填写的结果模板.
+    其中线性部分主要用于展示终端残差与效率基准, 非线性部分主要用于展示 Levenberg--Marquardt 方法的收敛行为与最终误差,
+    而理论解对比部分则用于补充方法正确性的进一步验证.
+    待后续实验方程, 参数设定与最终数据确定后, 只需将本章中的占位方程名, 数值结果与图像资源替换即可形成完整的数值实验章节.
