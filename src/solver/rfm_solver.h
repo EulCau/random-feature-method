@@ -39,8 +39,6 @@ public:
     [[nodiscard]] float lambda() const { return lambda_; }
 
 protected:
-    void check_tx_shape(const torch::Tensor& t, const torch::Tensor& x) const;
-
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_linear() const;
 
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_nonlinear(bool output_log) const;
@@ -50,11 +48,30 @@ protected:
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_nonlinear_levenberg_marquardt(
         const torch::Tensor & y0, const torch::Tensor & alpha, float lambda, bool output_log) const;
 
+    [[nodiscard]] torch::Tensor compute_nonlinear_terminal_residual(
+        const torch::Tensor& theta) const;
+
+    [[nodiscard]] static torch::Tensor compute_nonlinear_jacobian(
+        const torch::Tensor& residual, const torch::Tensor& theta);
+
+    [[nodiscard]] static torch::Tensor solve_lm_step(
+        const torch::Tensor& jacobian, const torch::Tensor& residual, float lambda);
+
+    [[nodiscard]] torch::Tensor forward_nonlinear_terminal_y(
+        const torch::Tensor& y0, const torch::Tensor& alpha) const;
+
+    [[nodiscard]] torch::Tensor compute_nonlinear_z(const torch::Tensor& alpha) const;
+
     void compute_txw();
     void compute_L(const torch::Tensor& t, const torch::Tensor& x);
     void compute_M(const torch::Tensor& t, const torch::Tensor& x);
     void compute_N(const torch::Tensor& t, const torch::Tensor& x);
     void compute_H(const torch::Tensor& t, const torch::Tensor& x);
+
+    [[nodiscard]] static torch::Tensor pack_nonlinear_parameters(
+        const torch::Tensor& y0, const torch::Tensor& alpha);
+
+    void check_tx_shape(const torch::Tensor& t, const torch::Tensor& x) const;
 
     bool is_linear_{};
     Config config_;
@@ -74,4 +91,13 @@ protected:
     torch::Tensor y0_;
     torch::Tensor alpha_;
     float lambda_ = 1e-3;
+};
+
+struct NonlinearSolveOptions {
+    float min_lambda = 1e-12f;
+    float max_lambda = 1e12f;
+    float lambda_decrease = 0.5f;
+    float lambda_increase = 2.0f;
+    float error_tol = 1e-6f;
+    float step_tol = 1e-6f;
 };
