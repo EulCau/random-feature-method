@@ -9,6 +9,10 @@ class RFMSolver
 {
 public:
     RFMSolver(
+        Config config, const std::shared_ptr<Equation>& eq,
+        torch::Device device, uint64_t seed);
+
+    RFMSolver(
         Config  config, const std::shared_ptr<Equation>& eq,
         torch::Device device, uint64_t seed, bool is_linear);
 
@@ -19,6 +23,7 @@ public:
     );
 
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve(bool output_log = false) const;
+    [[nodiscard]] float test(const torch::Tensor& y0, const torch::Tensor& alpha) const;
 
     [[nodiscard]] uint64_t seed() const { return seed_; }
     [[nodiscard]] bool is_linear() const { return is_linear_; }
@@ -49,6 +54,9 @@ protected:
         const torch::Tensor & y0, const torch::Tensor & alpha, float lambda, bool output_log) const;
 
     [[nodiscard]] torch::Tensor compute_nonlinear_terminal_residual(
+        const torch::Tensor& theta) const;
+
+    [[nodiscard]] std::pair<torch::Tensor, torch::Tensor> compute_nonlinear_terminal_residual_and_jacobian(
         const torch::Tensor& theta) const;
 
     [[nodiscard]] static torch::Tensor compute_nonlinear_jacobian(
@@ -90,14 +98,15 @@ protected:
     torch::Tensor t_;
     torch::Tensor y0_;
     torch::Tensor alpha_;
-    float lambda_ = 1e-3;
+    float lambda_ = 1e-2;
 };
 
 struct NonlinearSolveOptions {
-    float min_lambda = 1e-12f;
-    float max_lambda = 1e12f;
+    float min_lambda = 1e-8f;
+    float max_lambda = 1e4f;
     float lambda_decrease = 0.5f;
-    float lambda_increase = 2.0f;
-    float error_tol = 1e-6f;
-    float step_tol = 1e-6f;
+    float lambda_increase = 3.0f;
+    float error_tol = 1e-4f;
+    float step_tol = 1e-4f;
+    int64_t max_retries = 20;
 };

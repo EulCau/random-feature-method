@@ -4,7 +4,7 @@
 #include <cmath>
 #include <memory>
 #include <torch/torch.h>
-#include <vector>
+#include <utility>
 
 struct Coefficient {
 	virtual ~Coefficient() = default;
@@ -32,12 +32,33 @@ public:
 
 	[[nodiscard]] virtual torch::Tensor g(const torch::Tensor& t, const torch::Tensor& x) const = 0;
 
+	[[nodiscard]] virtual bool has_analytic_jacobian() const { return false; }
+
+	[[nodiscard]] virtual std::pair<torch::Tensor, torch::Tensor> terminal_residual_and_jacobian(
+		const torch::Tensor& t,
+		const torch::Tensor& t_end,
+		const torch::Tensor& x,
+		const torch::Tensor& x_end,
+		const torch::Tensor& dw,
+		const torch::Tensor& H,
+		const torch::Tensor& y0,
+		const torch::Tensor& alpha) const
+	{
+		TORCH_CHECK(false, "Analytic terminal residual/Jacobian is not implemented for this equation");
+	}
+
 	[[nodiscard]] int64_t dim() const { return dim_; }
 	[[nodiscard]] float total_time() const { return total_time_; }
 	[[nodiscard]] int64_t num_time_interval() const { return num_time_interval_; }
 	[[nodiscard]] float delta_t() const { return delta_t_; }
 	[[nodiscard]] float sqrt_delta_t() const { return sqrt_delta_t_; }
-    [[nodiscard]] const Coefficient& coef() const { return *coefficient_; }
+    [[nodiscard]] bool is_linear() const { return linear_; }
+    [[nodiscard]] bool has_coefficient() const { return coefficient_ != nullptr; }
+    [[nodiscard]] const Coefficient& coef() const
+    {
+        TORCH_CHECK(coefficient_ != nullptr, "Linear coefficient L/M/N is not defined for this equation");
+        return *coefficient_;
+    }
 
 protected:
 	int64_t dim_;
