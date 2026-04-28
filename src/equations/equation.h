@@ -18,10 +18,11 @@ class Equation
 {
 public:
 	explicit Equation(const EqnConfig& eqn_config)
-		: dim_(eqn_config.dim),
+		: dim_(eqn_config.dimension),
+		  linear_(eqn_config.is_linear),
 		  total_time_(eqn_config.total_time),
-		  num_time_interval_(eqn_config.num_time_interval),
-		  delta_t_(eqn_config.total_time / static_cast<float>(eqn_config.num_time_interval)),
+		  num_time_interval_(eqn_config.num_time_intervals),
+		  delta_t_(eqn_config.total_time / static_cast<float>(eqn_config.num_time_intervals)),
 		  sqrt_delta_t_(std::sqrt(delta_t_)) {}
 
 	virtual ~Equation() = default;
@@ -62,10 +63,10 @@ public:
 
 protected:
 	int64_t dim_;
+    bool linear_;
 	float total_time_;
 	int64_t num_time_interval_;
 	float delta_t_;
 	float sqrt_delta_t_;
-    bool linear_ = false;
 	std::shared_ptr<Coefficient> coefficient_;
 };

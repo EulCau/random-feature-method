@@ -9,11 +9,11 @@ class RFMSolver
 {
 public:
     RFMSolver(
-        Config config, const std::shared_ptr<Equation>& eq,
+        const Config& config, const std::shared_ptr<Equation>& eq,
         torch::Device device, uint64_t seed);
 
     RFMSolver(
-        Config  config, const std::shared_ptr<Equation>& eq,
+        Config config, const std::shared_ptr<Equation>& eq,
         torch::Device device, uint64_t seed, bool is_linear);
 
     RFMSolver& options(
@@ -98,15 +98,5 @@ protected:
     torch::Tensor t_;
     torch::Tensor y0_;
     torch::Tensor alpha_;
-    float lambda_ = 1e-2;
-};
-
-struct NonlinearSolveOptions {
-    float min_lambda = 1e-8f;
-    float max_lambda = 1e4f;
-    float lambda_decrease = 0.5f;
-    float lambda_increase = 3.0f;
-    float error_tol = 1e-4f;
-    float step_tol = 1e-4f;
-    int64_t max_retries = 20;
+    float lambda_{};
 };

@@ -6,9 +6,11 @@ class AllenCahn final : public Equation
 public:
 	explicit AllenCahn(const EqnConfig& eqn_config)
 		: Equation(eqn_config),
-		  x_init_(torch::zeros({dim_})),
-		  sigma_(static_cast<float>(std::sqrt(2.0))),
-		  lambda_(1.0)
+		  x_init_(torch::full({dim_}, eqn_config.params.value("x_init", 0.0f))),
+		  sigma_(eqn_config.params.value("sigma", static_cast<float>(std::sqrt(2.0)))),
+		  lambda_(eqn_config.params.value("lambda", 1.0f)),
+		  terminal_offset_(eqn_config.params.value("terminal_offset", 2.0f)),
+		  terminal_scale_(eqn_config.params.value("terminal_scale", 0.4f))
 	{
 	}
 
@@ -48,11 +50,13 @@ public:
 		return lambda_ * (y - torch::pow(y, 3));
 	}
 
-	// g(x) = 0.5 * ||x||^2
+	// g(x) = 1 / (terminal_offset + terminal_scale * ||x||^2)
 	[[nodiscard("Return Need to be Used")]]
 	torch::Tensor g(const torch::Tensor& t, const torch::Tensor& x) const override
 	{
-		return 0.5 * torch::sum(x * x, /*dim=*/-1, /*keepdim=*/true);
+		return 1.0f / (
+			terminal_offset_ + terminal_scale_ * torch::sum(x * x, /*dim=*/-1, /*keepdim=*/true)
+		);
 	}
 
 	[[nodiscard]] bool has_analytic_jacobian() const override { return true; }
@@ -113,6 +117,8 @@ private:
 	torch::Tensor x_init_;
 	float sigma_;
 	float lambda_;
+	float terminal_offset_;
+	float terminal_scale_;
 };
 
 REGISTER_EQUATION_CLASS(AllenCahn)

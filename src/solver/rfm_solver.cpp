@@ -7,9 +7,9 @@
 #include "linear_solve_result.h"
 
 RFMSolver::RFMSolver(
-    Config config, const std::shared_ptr<Equation> &eq,
+    const Config& config, const std::shared_ptr<Equation> &eq,
     const torch::Device device, const uint64_t seed)
-        : RFMSolver(std::move(config), eq, device, seed, eq != nullptr && eq->is_linear())
+        : RFMSolver(config, eq, device, seed, config.solver_config.use_linear_solver)
 {
 }
 
@@ -22,22 +22,23 @@ RFMSolver::RFMSolver(
           seed_(seed),
           device_(device),
           rff_(RandomFeatureFunction(
-                config_.eqn_config.dim,
-                config_.net_config.num_hiddens[0],
+                config_.eqn_config.dimension,
+                config_.solver_config.hidden_dim,
                 device_,
-                seed_))
+                seed_)),
+          lambda_(config_.solver_config.initial_lambda)
 {
     TORCH_CHECK(equation_ != nullptr, "equation must not be null");
     TORCH_CHECK(
         !is_linear || equation_->is_linear(),
         "Linear solver was requested, but equation '",
-        config_.eqn_config.eqn_name,
+        config_.eqn_config.equation_name,
         "' is not marked as linear"
     );
     TORCH_CHECK(
         !equation_->is_linear() || equation_->has_coefficient(),
         "Equation '",
-        config_.eqn_config.eqn_name,
+        config_.eqn_config.equation_name,
         "' is marked as linear, but L/M/N coefficients are not defined"
     );
     is_linear_ = is_linear && equation_->is_linear();
@@ -64,7 +65,7 @@ RFMSolver::RFMSolver(
 
         alpha_ = torch::randn({D, H}, torch::TensorOptions()
             .dtype(torch::kFloat32)
-            .device(device_)) * 1e-3;
+            .device(device_)) * config_.solver_config.alpha_init_scale;
     }
 
     compute_H(t_, x_);
@@ -113,8 +114,8 @@ float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& alpha) const
 
     torch::NoGradGuard no_grad;
 
-    const int64_t S = config_.net_config.valid_size;
-    const int64_t T = config_.eqn_config.num_time_interval;
+    const int64_t S = config_.solver_config.sample_size;
+    const int64_t T = config_.eqn_config.num_time_intervals;
     const int64_t D = equation_->dim();
     const int64_t Hdim = rff_.hidden_dim();
     const float dt = equation_->delta_t();
@@ -183,8 +184,8 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear() const
 
     const auto result = solve_y0_alpha_ridge_dual(
         A, B,
-        config_.eqn_config.dim,
-        config_.net_config.num_hiddens[0],
+        config_.eqn_config.dimension,
+        config_.solver_config.hidden_dim,
         1e-6
     );
 
@@ -205,10 +206,10 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear(const
 
 std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_coef() const
 {
-    const int64_t S = config_.net_config.valid_size;
-    const int64_t T = config_.eqn_config.num_time_interval;
+    const int64_t S = config_.solver_config.sample_size;
+    const int64_t T = config_.eqn_config.num_time_intervals;
     const int64_t D = equation_->dim();
-    const int64_t Hdim = config_.net_config.num_hiddens[0];
+    const int64_t Hdim = config_.solver_config.hidden_dim;
     const float dt = equation_->delta_t();
 
     auto device = L_.device();
@@ -218,7 +219,7 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
     const auto M = M_.squeeze(2).contiguous();                // (S, T, D)
     const auto N = N_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
     const auto H = H_.squeeze(-1).contiguous();               // (S, T, H)
-    const auto dW = dw_.reshape({S, T, D}).contiguous();      // (S, T, D)
+    const auto dW = dw_.permute({0, 2, 1}).contiguous();      // (S, T, D)
 
     // 线性递推中的三块
     const auto a  = 1.0f - dt * L;      // (S, T)
@@ -279,7 +280,7 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
 std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_levenberg_marquardt(
     const torch::Tensor &y0, const torch::Tensor &alpha, const float lambda, const bool output_log) const
 {
-    const int64_t max_iters = config_.net_config.num_iterations;
+    const int64_t max_iters = config_.solver_config.num_iterations;
 
     torch::Tensor theta = pack_nonlinear_parameters(y0, alpha).detach().clone().to(device_);
     float damping = lambda;
@@ -287,7 +288,15 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
 
     for (int64_t iter = 0; iter < max_iters; ++iter)
     {
-        constexpr NonlinearSolveOptions options;
+        const auto&[
+            min_lambda,
+            max_lambda,
+            lambda_decrease,
+            lambda_increase,
+            error_tol,
+            step_tol,
+            max_retries
+        ] = config_.solver_config.nonlinear;
 
         const auto [residual_raw, jacobian] =
             compute_nonlinear_terminal_residual_and_jacobian(theta);
@@ -300,7 +309,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
         float accepted_error = 0;
         float accepted_step_norm = 0.0f;
 
-        for (int64_t retry = 0; retry <= options.max_retries; ++retry)
+        for (int64_t retry = 0; retry <= max_retries; ++retry)
         {
             const auto delta = solve_lm_step(jacobian, residual, damping);
             const auto step_norm = delta.norm().item<float>();
@@ -335,9 +344,9 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
                 break;
             }
 
-            if (retry < options.max_retries)
+            if (retry < max_retries)
             {
-                damping = std::min(options.max_lambda, damping * options.lambda_increase);
+                damping = std::min(max_lambda, damping * lambda_increase);
             }
         }
 
@@ -347,7 +356,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
             {
                 std::cout
                     << "[LM] stop: no accepted step after "
-                    << options.max_retries + 1
+                    << max_retries + 1
                     << " attempts at iter=" << iter
                     << std::endl;
             }
@@ -355,10 +364,10 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
         }
 
         theta = accepted_theta;
-        damping = std::max(options.min_lambda, damping * options.lambda_decrease);
+        damping = std::max(min_lambda, damping * lambda_decrease);
         final_error = accepted_error;
 
-        if (final_error <= options.error_tol || accepted_step_norm <= options.step_tol)
+        if (final_error <= error_tol || accepted_step_norm <= step_tol)
         {
             break;
         }
@@ -385,7 +394,7 @@ torch::Tensor RFMSolver::compute_nonlinear_terminal_residual(
     const torch::Tensor& theta
 ) const
 {
-    const int64_t S = config_.net_config.valid_size;
+    const int64_t S = config_.solver_config.sample_size;
     const int64_t D = equation_->dim();
     const int64_t Hdim = rff_.hidden_dim();
     const int64_t expected_size = 1 + D * Hdim;
@@ -445,8 +454,8 @@ std::pair<torch::Tensor, torch::Tensor> RFMSolver::compute_nonlinear_terminal_re
         return {residual.contiguous(), jacobian.contiguous()};
     }
 
-    auto theta_with_grad = theta.detach().clone().requires_grad_(true);
-    auto residual = compute_nonlinear_terminal_residual(theta_with_grad).reshape({-1});
+    const auto theta_with_grad = theta.detach().clone().requires_grad_(true);
+    const auto residual = compute_nonlinear_terminal_residual(theta_with_grad).reshape({-1});
     auto jacobian = compute_nonlinear_jacobian(residual, theta_with_grad);
 
     return {residual.reshape({-1, 1}).contiguous(), jacobian};
@@ -510,8 +519,8 @@ torch::Tensor RFMSolver::forward_nonlinear_terminal_y(
 {
     using namespace torch::indexing;
 
-    const int64_t S = config_.net_config.valid_size;
-    const int64_t T = config_.eqn_config.num_time_interval;
+    const int64_t S = config_.solver_config.sample_size;
+    const int64_t T = config_.eqn_config.num_time_intervals;
     const float dt = equation_->delta_t();
 
     auto y = y0.reshape({1, 1, 1, 1}).expand({S, 1, 1, 1});
@@ -552,8 +561,8 @@ torch::Tensor RFMSolver::compute_nonlinear_z(const torch::Tensor& alpha) const
 void RFMSolver::compute_txw()
 {
     const double total_time = config_.eqn_config.total_time;
-    const int64_t T = config_.eqn_config.num_time_interval;
-    const int64_t S = config_.net_config.valid_size;
+    const int64_t T = config_.eqn_config.num_time_intervals;
+    const int64_t S = config_.solver_config.sample_size;
 
     const auto opts = torch::TensorOptions().dtype(torch::kFloat32).device(device_);
     const auto t_full = torch::linspace(0, total_time, T + 1, opts);
@@ -592,13 +601,13 @@ void RFMSolver::compute_L(const torch::Tensor &t, const torch::Tensor &x)
 
     TORCH_CHECK(
         result.dim() == 4 &&
-        result.size(0) == config_.net_config.valid_size &&
-        result.size(1) == config_.eqn_config.num_time_interval &&
+        result.size(0) == config_.solver_config.sample_size &&
+        result.size(1) == config_.eqn_config.num_time_intervals &&
         result.size(2) == 1 &&
         result.size(3) == 1,
         "Invalid shape for L(t, x). Expected (",
-        config_.net_config.valid_size, ", ",
-        config_.eqn_config.num_time_interval, ", 1, 1), but got ",
+        config_.solver_config.sample_size, ", ",
+        config_.eqn_config.num_time_intervals, ", 1, 1), but got ",
         result.sizes()
     );
 
@@ -638,8 +647,8 @@ void RFMSolver::compute_N(const torch::Tensor& t, const torch::Tensor& x)
 
     TORCH_CHECK(
         result.dim() == 4 &&
-        result.size(0) == config_.net_config.valid_size &&
-        result.size(1) == config_.eqn_config.num_time_interval &&
+        result.size(0) == config_.solver_config.sample_size &&
+        result.size(1) == config_.eqn_config.num_time_intervals &&
         result.size(2) == 1 &&
         result.size(3) == 1,
         "Invalid shape for N(t, x). Expected (",
@@ -665,7 +674,7 @@ void RFMSolver::compute_H(const torch::Tensor& t, const torch::Tensor& x)
     TORCH_CHECK(
         result.size(0) == x.size(0) &&
         result.size(1) == x.size(1) &&
-        result.size(2) == config_.net_config.num_hiddens[0] &&
+        result.size(2) == config_.solver_config.hidden_dim &&
         result.size(3) == 1,
         "Invalid shape for H(t, x). Expected ",
         x.sizes(), ", but got ", result.sizes()
@@ -708,12 +717,12 @@ void RFMSolver::check_tx_shape(
 
     TORCH_CHECK(
         (t.size(0) == x.size(0) || t.size(0) == 1) &&
-        t.size(1) == config_.eqn_config.num_time_interval &&
+        t.size(1) == config_.eqn_config.num_time_intervals &&
         t.size(2) == 1 &&
         t.size(3) == 1,
         "Invalid shape for t. Expected (",
         x.size(0), " or 1, ",
-        config_.eqn_config.num_time_interval,
+        config_.eqn_config.num_time_intervals,
         ", 1, 1), but got ", t.sizes()
     );
 
@@ -729,14 +738,14 @@ void RFMSolver::check_tx_shape(
         );
 
     TORCH_CHECK(
-        x.size(0) == config_.net_config.valid_size &&
-        x.size(1) == config_.eqn_config.num_time_interval &&
+        x.size(0) == config_.solver_config.sample_size &&
+        x.size(1) == config_.eqn_config.num_time_intervals &&
         x.size(2) == 1 &&
-        x.size(3) == config_.eqn_config.dim,
+        x.size(3) == config_.eqn_config.dimension,
         "Invalid shape for x. Expected (",
-        config_.net_config.valid_size, ", ",
-        config_.eqn_config.num_time_interval,
-        ", 1, ", config_.eqn_config.dim,
+        config_.solver_config.sample_size, ", ",
+        config_.eqn_config.num_time_intervals,
+        ", 1, ", config_.eqn_config.dimension,
         "), but got ", x.sizes()
     );
 

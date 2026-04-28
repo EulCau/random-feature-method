@@ -1,7 +1,21 @@
 #include "config.h"
 #include <fstream>
+#include <stdexcept>
 
 using json = nlohmann::json;
+
+namespace
+{
+template <typename T>
+T get_or(const json& j, const char* key, const T& default_value)
+{
+    if (!j.contains(key))
+    {
+        return default_value;
+    }
+    return j.at(key).get<T>();
+}
+}
 
 Config load_config(const std::string& json_path)
 {
@@ -14,28 +28,39 @@ Config load_config(const std::string& json_path)
     json j;
     in >> j;
 
-    EqnConfig eqn_cfg =
-    {
-        j["eqn_config"]["eqn_name"],
-        j["eqn_config"]["total_time"],
-        j["eqn_config"]["dim"],
-        j["eqn_config"]["num_time_interval"]
+    const auto& eqn = j.at("eqn_config");
+    const auto& solver = j.at("solver_config");
+    const auto& nonlinear = solver.at("nonlinear");
+
+    EqnConfig eqn_cfg{
+        get_or<std::string>(eqn, "_comment", ""),
+        eqn.at("equation_name").get<std::string>(),
+        eqn.at("is_linear").get<bool>(),
+        eqn.at("total_time").get<float>(),
+        eqn.at("dimension").get<int64_t>(),
+        eqn.at("num_time_intervals").get<int64_t>(),
+        get_or<json>(eqn, "params", json::object())
     };
 
-    NetConfig net_cfg =
-    {
-        j["net_config"]["y_init_range"].get<std::vector<float>>(),
-        j["net_config"]["num_hiddens"].get<std::vector<int64_t>>(),
-        j["net_config"]["lr_values"].get<std::vector<float>>(),
-        j["net_config"]["lr_boundaries"].get<std::vector<int64_t>>(),
-        j["net_config"]["num_iterations"],
-        j["net_config"]["batch_size"],
-        j["net_config"]["valid_size"],
-        j["net_config"]["dtype"],
-        j["net_config"]["verbose"],
-        j["net_config"]["logging_frequency"],
-        j["net_config"]["warmup_steps"]
+    NonlinearSolveOptions nonlinear_cfg{
+        nonlinear.at("min_lambda").get<float>(),
+        nonlinear.at("max_lambda").get<float>(),
+        nonlinear.at("lambda_decrease").get<float>(),
+        nonlinear.at("lambda_increase").get<float>(),
+        nonlinear.at("error_tol").get<float>(),
+        nonlinear.at("step_tol").get<float>(),
+        nonlinear.at("max_retries").get<int64_t>()
     };
 
-    return Config{ eqn_cfg, net_cfg };
+    SolverConfig solver_cfg{
+        solver.at("use_linear_solver").get<bool>(),
+        solver.at("num_iterations").get<int64_t>(),
+        solver.at("sample_size").get<int64_t>(),
+        solver.at("hidden_dim").get<int64_t>(),
+        solver.at("initial_lambda").get<float>(),
+        solver.at("alpha_init_scale").get<float>(),
+        nonlinear_cfg
+    };
+
+    return Config{eqn_cfg, solver_cfg};
 }

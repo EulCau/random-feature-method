@@ -42,11 +42,15 @@ class BSM final : public Equation
 public:
     explicit BSM(const EqnConfig& eqn_config)
         : Equation(eqn_config),
-          x_init_(torch::ones({dim_})),
-          sigma_(0.2f), r_(0.05f), K_(1.0f)
+          x_init_(torch::full({dim_}, eqn_config.params.value("x_init", 1.0f))),
+          sigma_(eqn_config.params.value("sigma", 0.2f)),
+          r_(eqn_config.params.value("rate", 0.05f)),
+          K_(eqn_config.params.value("strike", 1.0f))
     {
-        linear_ = true;
-        coefficient_ = std::make_shared<BSMCoefficient>(r_);
+        if (linear_)
+        {
+            coefficient_ = std::make_shared<BSMCoefficient>(r_);
+        }
     }
 
     // Sample function, Generate path of dW & X

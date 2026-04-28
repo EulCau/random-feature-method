@@ -1,36 +1,46 @@
 #pragma once
 
 #include "json.hpp"
+#include <cstdint>
 #include <string>
-#include <vector>
 
 struct EqnConfig
 {
-    std::string eqn_name;
+    std::string comment;
+    std::string equation_name;
+    bool is_linear;
     float total_time;
-    int64_t dim;
-    int64_t num_time_interval;
+    int64_t dimension;
+    int64_t num_time_intervals;
+    nlohmann::json params;
 };
 
-struct NetConfig
+struct NonlinearSolveOptions
 {
-    std::vector<float> y_init_range;
-    std::vector<int64_t> num_hiddens;
-    std::vector<float> lr_values;
-    std::vector<int64_t> lr_boundaries;
+    float min_lambda;
+    float max_lambda;
+    float lambda_decrease;
+    float lambda_increase;
+    float error_tol;
+    float step_tol;
+    int64_t max_retries;
+};
+
+struct SolverConfig
+{
+    bool use_linear_solver;
     int64_t num_iterations;
-    int64_t batch_size;
-    int64_t valid_size;
-    std::string dtype;
-    bool verbose;
-    int64_t logging_frequency;
-	int64_t warmup_steps;
+    int64_t sample_size;
+    int64_t hidden_dim;
+    float initial_lambda;
+    float alpha_init_scale;
+    NonlinearSolveOptions nonlinear;
 };
 
 struct Config
 {
     EqnConfig eqn_config;
-    NetConfig net_config;
+    SolverConfig solver_config;
 };
 
 Config load_config(const std::string& json_path);

@@ -1,22 +1,33 @@
 {
   "eqn_config": {
     "_comment": "Black-Scholes equation in doi.org/10.1086/260062",
-    "eqn_name": "BSM",
+    "equation_name": "BSM",
+    "is_linear": true,
     "total_time": 1.0,
-    "dim": 100,
-    "num_time_interval": 100
+    "dimension": 100,
+    "num_time_intervals": 100,
+    "params": {
+      "x_init": 1.0,
+      "sigma": 0.2,
+      "rate": 0.05,
+      "strike": 1.0
+    }
   },
-  "net_config": {
-    "y_init_range": [0, 1],
-    "num_hiddens": [50],
-    "lr_values": [1e-2, 1e-2],
-    "lr_boundaries": [1000],
-    "num_iterations": 2000,
-    "batch_size": 64,
-    "valid_size": 2048,
-    "logging_frequency": 100,
-    "dtype": "float32",
-    "verbose": true,
-    "warmup_steps": 500
+  "solver_config": {
+    "use_linear_solver": true,
+    "num_iterations": 200,
+    "sample_size": 2048,
+    "hidden_dim": 50,
+    "initial_lambda": 0.01,
+    "alpha_init_scale": 0.001,
+    "nonlinear": {
+      "min_lambda": 1e-8,
+      "max_lambda": 1e4,
+      "lambda_decrease": 0.5,
+      "lambda_increase": 3.0,
+      "error_tol": 1e-4,
+      "step_tol": 1e-4,
+      "max_retries": 20
+    }
   }
 }

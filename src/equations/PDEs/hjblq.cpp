@@ -6,9 +6,9 @@ class HJBLQ final : public Equation
 public:
 	explicit HJBLQ(const EqnConfig& eqn_config)
 		: Equation(eqn_config),
-		  x_init_(torch::zeros({dim_})),
-		  sigma_(static_cast<float>(std::sqrt(2.0))),
-		  lambda_(1.0)
+		  x_init_(torch::full({dim_}, eqn_config.params.value("x_init", 0.0f))),
+		  sigma_(eqn_config.params.value("sigma", static_cast<float>(std::sqrt(2.0)))),
+		  lambda_(eqn_config.params.value("lambda", 1.0f))
 	{
 	}
 

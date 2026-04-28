@@ -48,9 +48,9 @@ int main()
     const auto t_start = std::chrono::high_resolution_clock::now();
 
     force_link_all_equations();
-    const Config cfg = load_config("config/hjb_lq_d100.json");
+    const Config cfg = load_config("config/allencahn_d100.json");
     const auto device = torch::cuda::is_available()?torch::kCUDA:torch::kCPU;
-    const auto pde = EquationFactory::instance().create(cfg.eqn_config.eqn_name, cfg.eqn_config);
+    const auto pde = EquationFactory::instance().create(cfg.eqn_config.equation_name, cfg.eqn_config);
 
     auto rfm_solver = RFMSolver(cfg, pde, device, seed);
     rfm_solver.options(std::nullopt, std::nullopt, std::nullopt);
@@ -68,11 +68,11 @@ int main()
 
     std::cout << "y0 = " << y0.item<float>() << std::endl;
     std::cout << "rmse = " << rmse << std::endl;
-    std::cout << "test mse = " << test_mse << std::endl;
+    std::cout << "test rmse = " << test_mse << std::endl;
     std::cout << "dtype: " << alpha.dtype() << std::endl;
-    std::cout << "eqn dim: " << cfg.eqn_config.dim << std::endl;
-    std::cout << "hidden dim: " << cfg.net_config.num_hiddens[0] << std::endl;
-    std::cout << "samples num: " << cfg.net_config.valid_size << std::endl;
+    std::cout << "eqn dim: " << cfg.eqn_config.dimension << std::endl;
+    std::cout << "hidden dim: " << cfg.solver_config.hidden_dim << std::endl;
+    std::cout << "samples num: " << cfg.solver_config.sample_size << std::endl;
     std::cout << "total time: " << elapsed << " ms" << std::endl;
     std::cout << "device: " << device << std::endl;
 
