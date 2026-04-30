@@ -1,186 +1,305 @@
 % !TEX root = ../main.tex
 
-\chapter{数值结果}\label{ch:numerical}
-  本章给出本文方法的数值实验模板.
-  目前实验方程, 参数配置与最终结果仍在整理中,
-  因此本章先给出一个可直接替换占位符的展示框架.
-  该框架区分线性方程与非线性方程两类结果, 并尽量只展示当前程序已经实现或可以直接由程序日志整理得到的指标,
-  如终端残差, 运行时间, 随机特征维数, 样本规模以及 Levenberg--Marquardt 迭代中的残差下降过程等.
+\chapter{数值实验}\label{ch:numerical}
+  本章通过数值实验检验前文随机特征方法在高维抛物型方程上的表现.
+  实验分为两组: 第一组为线性方程, 用来验证线性最小二乘求解器的正确性和效率;
+  第二组为非线性方程, 用来考察 Levenberg--Marquardt 方法在高维 BSDE 离散系统中的收敛情况.
+  最终实验计划包含两个线性方程和两个非线性方程.
+  当前代码中已经实现的方程包括 Black--Scholes 模型, HJB-LQ 方程和 Allen--Cahn 方程;
+  第二个线性方程在表格中保留位置, 后续按最终代码中的方程名称和参数替换.
+
+  所有表格中的数值目前只保留位数格式.
+  其中 $0.000000$ 表示初值或参考值保留六位小数,
+  $0.0000$ 表示误差或残差保留四位小数,
+  $0.000$ 表示时间保留三位小数.
+  后续只需用实际实验输出替换对应位置, 不需要改变本章结构.
 
   \section{实验设置}\label{sec:numerical_setup}
-    所有实验均在统一的软件框架下完成.
-    对于每个测试方程, 首先由方程类生成样本路径 $\{X_k^{(i)}, \Delta W_k^{(i)}\}$,
-    再由随机特征映射构造对 $Z_k$ 的近似, 最后分别调用线性求解器与非线性求解器得到参数 $y_0$ 与 $\alpha$.
-    当前程序已经能够直接输出如下信息:
-    初值近似 $y_0$, 终端残差的均方根误差, 方程维度, 隐藏层宽度, 样本数以及总耗时.
-    对于非线性求解器, 若开启日志输出, 还可进一步记录每一步迭代中的 loss, error, 阻尼参数 $\lambda$ 与步长范数.
+    对每个方程, 程序首先根据给定的随机微分方程生成样本路径
+    $\{X_{k}^{(i)},\Delta W_{k}^{(i)}\}_{k=0}^{N-1}$,
+    然后用随机特征函数近似每个时间层上的 $Z_{k}$.
+    线性方程中, 由于终端值 $Y_N$ 关于 $y_0$ 和输出层参数 $\alpha$ 是线性的,
+    可以直接构造最小二乘问题并求解.
+    非线性方程中, 终端残差关于参数不再线性,
+    因而采用 Levenberg--Marquardt 方法求解非线性最小二乘问题.
 
-    后续实验中建议统一报告表~\ref{tab:exp-config-template} 中的配置项.
-    其中带有 ``待填'' 标记的条目应在具体实验完成后替换为实际数值.
+    本章统一报告训练样本上的终端残差 RMSE 和独立测试样本上的终端残差 RMSE\@.
+    前者反映求解器在已采样路径上的拟合程度,
+    后者用于观察随机特征参数是否只拟合了固定路径.
+    对非线性方程, 若开启迭代日志, 还可以从日志中得到每一步的训练残差,
+    阻尼参数 $\lambda$, 步长范数和是否接受当前步.
 
     \begin{table}
       \centering
-      \caption{实验配置模板}
-      \label{tab:exp-config-template}
-      \begin{tabular}{lll}
+      \caption{主要实验配置}
+      \label{tab:numerical_config}
+      \begin{tabular}{lcccccccc}
         \toprule
-        类别 & 配置项 & 取值 \\
+        方程 & 类型 & $d$ & $T$ & $N$ & $S$ & $H$ & $\lambda_0$ & 求解器 \\
         \midrule
-        方程信息 & 线性测试方程 & \textbf{待填: 例如方程 A / 方程 B} \\
-        方程信息 & 非线性测试方程 & \textbf{待填: 例如方程 C / 方程 D} \\
-        离散参数 & 总时间 $T$ & 0.00 \\
-        离散参数 & 时间剖分步数 $N$ & 0 \\
-        空间参数 & 维度 $d$ & 0 \\
-        随机特征 & 隐藏层宽度 $H$ & 0 \\
-        采样参数 & 训练/验证样本数 & 0 / 0 \\
-        求解参数 & 初始阻尼 $\lambda_0$ & 0.00 \\
-        求解参数 & 最大迭代步数 & 0 \\
-        硬件环境 & 计算设备 & \textbf{待填: CPU / GPU 型号} \\
+        Black--Scholes & 线性 & 100 & 1.0 & 100 & 2048 & 50 & 0.010 & 线性最小二乘 \\
+        线性方程二 & 线性 & 000 & 0.0 & 000 & 00000 & 00 & 0.000 & 线性最小二乘 \\
+        HJB-LQ & 非线性 & 100 & 1.0 & 20 & 16384 & 50 & 0.010 & LM \\
+        Allen--Cahn & 非线性 & 100 & 0.3 & 20 & 16384 & 50 & 0.001 & LM \\
         \bottomrule
       \end{tabular}
     \end{table}
 
-    图~\ref{fig:linear-process-placeholder} 用已有流程图先占住整体方法展示位置.
-    若后续需要, 可替换为更贴近本文实现的算法流程图或实验流程图.
+    随机特征映射固定内层参数, 只训练输出层参数.
+    图~\ref{fig:linear_rfm_process_numerical} 给出线性随机特征求解流程.
+    在线性方程中, 该流程直接导向一个最小二乘系统;
+    在非线性方程中, 同样的随机特征结构被嵌入到 LM 迭代的每一次残差和雅可比计算中.
 
     \begin{figure}[ht]
       \centering
       \includegraphics[width=0.72\textwidth]{linear-rfm-process}
-      \caption{线性随机特征求解流程占位图}
-      \label{fig:linear-process-placeholder}
-      \figurenote{该图目前复用了项目中的已有资源, 用于说明本章图形版式. 后续可替换为更准确的实验流程图.}
+      \caption{随机特征方法的线性求解流程}
+      \label{fig:linear_rfm_process_numerical}
     \end{figure}
 
-  \section{线性方程结果模板}\label{sec:numerical_linear}
-    本节用于展示线性生成元情形下的实验结果.
-    由于线性问题中终端值关于 $y_0$ 与 $\alpha$ 保持线性关系, 当前实现可直接构造系数矩阵并调用最小二乘求解.
-    因而线性部分除了解的精度外, 还适合作为计算效率与稳定性的 baseline.
+  \section{线性方程}\label{sec:numerical_linear}
+    本节考虑生成元关于 $(y,z)$ 具有线性结构的方程.
+    对这类问题, 离散 BSDE 的终端值可以写成
+    \begin{equation}
+      Y_N^{(i)}
+      = A_{i,0} y_0
+      + \sum_{j=1}^{dH} A_{i,j} \theta_j
+      + b_i,
+      \label{eq:numerical_linear_terminal_form}
+    \end{equation}
+    其中 $\theta=\operatorname{vec}(\alpha)$.
+    因此末端匹配条件 $Y_N^{(i)}\approx g(X_N^{(i)})$ 给出一个线性最小二乘问题.
+    这种求解方式避免了非线性迭代, 也避免了对初始参数的敏感性.
 
-    在具体实验中, 建议至少报告以下几类指标:
-    终端残差均方根误差, 求得的 $y_0$ 数值, 单次求解总耗时, 去除初始化后可重复部分耗时, 以及不同维度或不同随机特征宽度下的变化趋势.
-    其中终端残差与运行时间均可以直接由当前程序输出.
+    第一个线性测试方程采用多资产 Black--Scholes 模型.
+    当前代码中状态过程满足
+    \begin{equation}
+      X_{k+1}^{m}
+      =
+      X_k^{m}\exp\!\left((r-\frac{1}{2}\sigma^2)\Delta t
+      + \sigma \Delta W_k^{m}\right),
+      \qquad m=1,\ldots,d,
+      \label{eq:numerical_bsm_forward}
+    \end{equation}
+    生成元为 $f(t,x,y,z)=-r y$, 终端条件为
+    \begin{equation}
+      g(x)=\max\!\left(\frac{1}{d}\sum_{m=1}^{d}x_m-K,0\right).
+      \label{eq:numerical_bsm_terminal}
+    \end{equation}
+    该终端条件是算术平均型 payoff, 因此不能直接使用一维 Black--Scholes 公式作为精确解.
+    本文将其作为线性结构下的高维基准问题; 若后续需要参考初值, 可单独用大样本 Monte Carlo 或更高精度数值结果给出.
+
+    第二个线性方程用于补充线性求解器在不同模型结构下的表现.
+    在最终实验中, 该方程应保持生成元线性, 并给出相应的 $X_t$, $f$ 和 $g$.
+    如果选择热方程或线性反应扩散方程, 则应优先选取有解析参考值或高精度参考值的终端条件,
+    这样可以同时报告残差误差和初值误差.
 
     \begin{table}
       \centering
-      \caption{线性方程数值结果模板}
-      \label{tab:linear-result-template}
-      \begin{tabular}{ccccccc}
+      \caption{线性方程主要结果}
+      \label{tab:linear_main_results}
+      \begin{tabular}{lcccccccc}
         \toprule
-        方程 & 维度 $d$ & 特征宽度 $H$ & 样本数 $S$ & $y_0$ & 终端残差 RMSE & 总耗时 / ms \\
+        方程 & $d$ & $N$ & $H$ & $S$ & $y_0$ & 训练 RMSE & 测试 RMSE & 时间 / ms \\
         \midrule
-        \textbf{待填方程 L1} & 0 & 0 & 0 & 0.00 & 0.00 & 0.00 \\
-        \textbf{待填方程 L2} & 0 & 0 & 0 & 0.00 & 0.00 & 0.00 \\
-        \textbf{待填方程 L3} & 0 & 0 & 0 & 0.00 & 0.00 & 0.00 \\
+        Black--Scholes & 100 & 100 & 50 & 2048 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
+        线性方程二 & 000 & 000 & 00 & 00000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
         \bottomrule
       \end{tabular}
     \end{table}
 
-    若需要进一步比较不同规模下的效率, 可继续使用表~\ref{tab:linear-scaling-template} 展示维度或特征宽度变化时的耗时与残差趋势.
-    这部分数据同样能够从当前实现中直接获得.
+    除最终结果外, 线性部分还需要检查样本数和随机特征宽度对结果的影响.
+    表~\ref{tab:linear_scaling_results} 用于记录固定方程下的规模变化.
+    如果第二个线性方程具有精确参考值, 建议优先对该方程做宽度扫描;
+    否则可以先对 Black--Scholes 模型做样本数扫描, 观察训练残差和测试残差是否同步下降.
 
     \begin{table}
       \centering
-      \caption{线性方程规模扩展结果模板}
-      \label{tab:linear-scaling-template}
-      \begin{tabular}{cccccc}
+      \caption{线性方程规模变化结果}
+      \label{tab:linear_scaling_results}
+      \begin{tabular}{lcccccc}
         \toprule
-        方程 & 维度 $d$ & 特征宽度 $H$ & 样本数 $S$ & 终端残差 RMSE & 可重复耗时 / ms \\
+        方程 & 变量 & 取值 & $y_0$ & 训练 RMSE & 测试 RMSE & 时间 / ms \\
         \midrule
-        \textbf{待填方程} & 0 & 0 & 0 & 0.00 & 0.00 \\
-        \textbf{待填方程} & 0 & 0 & 0 & 0.00 & 0.00 \\
-        \textbf{待填方程} & 0 & 0 & 0 & 0.00 & 0.00 \\
+        Black--Scholes & $S$ & 00000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
+        Black--Scholes & $S$ & 00000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
+        线性方程二 & $H$ & 00 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
+        线性方程二 & $H$ & 00 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
         \bottomrule
       \end{tabular}
     \end{table}
 
-    从展示逻辑上看, 线性实验结果可围绕以下几点展开分析:
-    第一, 终端残差是否随随机特征宽度增加而下降;
-    第二, 在固定误差水平下, 当前方法相比其他基线方法的时间复杂度是否具有优势;
-    第三, 在高维情形下, 残差与耗时是否保持可接受的增长趋势.
-    以上分析文字目前可暂写为占位说明, 待实验完成后替换为具体结论.
+  \section{非线性方程}\label{sec:numerical_nonlinear}
+    本节考虑两个非线性方程: HJB-LQ 方程和 Allen--Cahn 方程.
+    两者都使用同一套随机特征近似 $Z_k$, 但非线性来源不同.
+    HJB-LQ 方程的生成元关于 $z$ 二次非线性,
+    Allen--Cahn 方程的生成元关于 $y$ 三次非线性.
+    因此这两个算例可以分别检验方法对 $z$ 非线性和 $y$ 非线性的处理能力.
 
-  \section{非线性方程结果模板}\label{sec:numerical_nonlinear}
-    本节用于展示非线性生成元情形下的实验结果.
-    与线性部分不同, 非线性问题中需要对终端残差构成的非线性最小二乘问题进行迭代求解.
-    当前实现采用 Levenberg--Marquardt 方法, 可以直接输出每次迭代中的 loss, error, 阻尼参数 $\lambda$ 以及步长范数.
-    因此, 除了最终误差与总耗时外, 还应展示迭代收敛过程.
+    HJB-LQ 方程采用
+    \begin{equation}
+      X_t=\sqrt{2}W_t,\qquad
+      f(t,x,y,z)=-\frac{1}{2}\lVert z\rVert^2,
+      \qquad
+      g(x)=\log\!\left(\frac{1+\lVert x\rVert^2}{2}\right).
+      \label{eq:numerical_hjblq}
+    \end{equation}
+    对应 BSDE 为
+    \begin{equation}
+      \dif Y_t=\frac{1}{2}\lVert Z_t\rVert^2\dif t+Z_t^{\operatorname{T}}\dif W_t.
+      \label{eq:numerical_hjblq_bsde}
+    \end{equation}
+    令 $U_t=\exp(-Y_t)$, 可得 $U_t$ 为鞅.
+    因此初值满足
+    \begin{equation}
+      Y_0
+      =
+      -\log \mathbb{E}
+      \left[
+        \frac{2}{1+\lVert X_T\rVert^2}
+      \right]
+      =
+      -\log \mathbb{E}
+      \left[
+        \frac{2}{1+2T\chi_d^2}
+      \right].
+      \label{eq:numerical_hjblq_reference}
+    \end{equation}
+    当 $d=100$, $T=1$ 时, 参考值为 $Y_0=4.5901617246$.
+
+    Allen--Cahn 方程采用
+    \begin{equation}
+      X_t=\sqrt{2}W_t,\qquad
+      f(t,x,y,z)=y-y^3,
+      \qquad
+      g(x)=\frac{1}{2+0.4\lVert x\rVert^2}.
+      \label{eq:numerical_allencahn}
+    \end{equation}
+    该方程在当前设置下不使用闭式精确解.
+    由于终端值较小, 可将 $y-y^3$ 中的三次项视为较小修正,
+    得到线性化参考
+    \begin{equation}
+      Y_0
+      \approx
+      e^{T}
+      \mathbb{E}
+      \left[
+        \frac{1}{2+0.4\lVert X_T\rVert^2}
+      \right].
+      \label{eq:numerical_allencahn_reference}
+    \end{equation}
+    对 $d=100$, $T=0.3$ 的配置, 该参考值约为 $0.05281$.
+    这个值只作为一致性检查, 不作为严格精确解.
 
     \begin{table}
       \centering
-      \caption{非线性方程最终结果模板}
-      \label{tab:nonlinear-result-template}
-      \begin{tabular}{cccccccc}
+      \caption{非线性方程主要结果}
+      \label{tab:nonlinear_main_results}
+      \begin{tabular}{lccccccccc}
         \toprule
-        方程 & 维度 $d$ & 特征宽度 $H$ & 样本数 $S$ & 迭代步数 & 最终 $\lambda$ & 最终残差 RMSE & 总耗时 / ms \\
+        方程 & $d$ & $N$ & $H$ & $S$ & $y_0$ & 参考值 & 绝对误差 & 训练 RMSE & 测试 RMSE \\
         \midrule
-        \textbf{待填方程 N1} & 0 & 0 & 0 & 0 & 0.00 & 0.00 & 0.00 \\
-        \textbf{待填方程 N2} & 0 & 0 & 0 & 0 & 0.00 & 0.00 & 0.00 \\
-        \textbf{待填方程 N3} & 0 & 0 & 0 & 0 & 0.00 & 0.00 & 0.00 \\
+        HJB-LQ & 100 & 20 & 50 & 16384 & 0.000000 & 4.590162 & 0.0000 & 0.0000 & 0.0000 \\
+        Allen--Cahn & 100 & 20 & 50 & 16384 & 0.000000 & 0.052810 & 0.0000 & 0.0000 & 0.0000 \\
         \bottomrule
       \end{tabular}
     \end{table}
 
-    为了展示迭代行为, 建议绘制残差下降曲线.
-    这部分数据可以通过开启 `output\_log=true` 从求解器日志中整理得到.
-    图~\ref{fig:nonlinear-residual-template} 先用占位图保留版面位置,
-    后续可替换为 ``迭代次数 -- 残差'' 的折线图, 或进一步叠加阻尼参数与步长范数的变化.
+    \begin{table}
+      \centering
+      \caption{非线性方程运行时间与迭代结果}
+      \label{tab:nonlinear_iteration_results}
+      \begin{tabular}{lcccccc}
+        \toprule
+        方程 & 迭代步数 & 接受步数 & 最终 $\lambda$ & 最终步长范数 & 时间 / ms & 设备 \\
+        \midrule
+        HJB-LQ & 000 & 000 & 0.0000 & 0.0000 & 0.000 & CUDA \\
+        Allen--Cahn & 000 & 000 & 0.0000 & 0.0000 & 0.000 & CUDA \\
+        \bottomrule
+      \end{tabular}
+    \end{table}
+
+    图~\ref{fig:nonlinear_residual_history} 用于展示非线性求解器的收敛历史.
+    最终作图时, 横轴取 LM 迭代步数, 纵轴取训练终端残差 RMSE;
+    若残差下降跨越多个数量级, 纵轴采用对数坐标.
+    对拒绝步较多的实验, 可在图中只画接受步, 并在图注中说明.
 
     \begin{figure}[ht]
       \centering
       \includegraphics[width=0.75\textwidth]{nonlinear-residual-placeholder}
-      \caption{非线性求解器残差下降曲线模板}
-      \label{fig:nonlinear-residual-template}
-      \figurenote{后续建议将横轴设为 LM 迭代次数, 纵轴设为终端残差 RMSE 或目标函数值, 并在图注中说明是否采用对数坐标.}
+      \caption{非线性方程的 LM 迭代残差下降}
+      \label{fig:nonlinear_residual_history}
     \end{figure}
 
-    若需要更细致地分析 LM 方法的行为, 还可以补充一张表来记录迭代初末状态, 例如初始残差, 最终残差, 接受步比例以及阻尼参数的变化范围.
-    这些量虽然当前程序未全部直接汇总输出, 但均可由现有迭代日志进一步整理得到.
+  \section{随机特征宽度的影响}\label{sec:numerical_hidden_dim}
+    随机特征宽度 $H$ 控制可训练参数数量.
+    当 $H$ 过小时, 特征空间表达能力不足, 训练残差和测试残差都会较大;
+    当 $H$ 过大而样本数不足时, 训练残差可能继续下降, 但测试残差和 $y_0$ 误差未必同步改善.
+    因此本节固定方程维度, 时间剖分和样本数, 只改变 $H$, 用来选择更稳定的随机特征宽度.
+
+    HJB-LQ 方程具有精确参考值, 因而最适合做这一组实验.
+    表~\ref{tab:hjblq_hidden_dim_scan} 中的误差定义为
+    \begin{equation}
+      e_0=\left|y_0-4.5901617246\right|.
+      \label{eq:numerical_hjblq_abs_error}
+    \end{equation}
 
     \begin{table}
       \centering
-      \caption{非线性求解器迭代统计模板}
-      \label{tab:nonlinear-iter-template}
-      \begin{tabular}{cccccc}
+      \caption{HJB-LQ 方程中随机特征宽度的影响}
+      \label{tab:hjblq_hidden_dim_scan}
+      \begin{tabular}{ccccccc}
         \toprule
-        方程 & 初始残差 RMSE & 最终残差 RMSE & 接受步比例 & $\lambda$ 变化区间 & 备注 \\
+        $H$ & $S$ & $y_0$ & $e_0$ & 训练 RMSE & 测试 RMSE & 时间 / ms \\
         \midrule
-        \textbf{待填方程} & 0.00 & 0.00 & 0.00 & [0.00, 0.00] & \textbf{待填} \\
-        \textbf{待填方程} & 0.00 & 0.00 & 0.00 & [0.00, 0.00] & \textbf{待填} \\
+        8 & 16384 & 0.000000 & 0.0000 & 0.0000 & 0.0000 & 0.000 \\
+        12 & 16384 & 0.000000 & 0.0000 & 0.0000 & 0.0000 & 0.000 \\
+        20 & 16384 & 0.000000 & 0.0000 & 0.0000 & 0.0000 & 0.000 \\
+        50 & 16384 & 0.000000 & 0.0000 & 0.0000 & 0.0000 & 0.000 \\
         \bottomrule
       \end{tabular}
     \end{table}
 
-  \section{与理论解的对比模板}\label{sec:numerical_theory}
-    对于具有显式理论解或高精度参考解的测试方程, 建议单独设置一个小节比较数值解与理论结果.
-    这部分既可以用于验证初值 $u(0, x_0)$ 的准确性, 也可以用于考察方法在整个时间区间或若干代表性空间点上的误差分布.
-
-    由于当前参与实验的具体方程尚未最终确定, 理论分析部分先保留占位说明, 如图~\ref{fig:theory-compare-template}:
-    \textbf{待填: 在此处补充选定方程的理论解表达式, 误差定义方式以及理论分析说明.}
-
-    \begin{table}
-      \centering
-      \caption{理论解与数值解对比模板}
-      \label{tab:theory-compare-template}
-      \begin{tabular}{cccccc}
-        \toprule
-        方程 & 理论值 & 数值值 & 绝对误差 & 相对误差 & 备注 \\
-        \midrule
-        \textbf{待填方程} & 0.00 & 0.00 & 0.00 & 0.00 & \textbf{待填} \\
-        \textbf{待填方程} & 0.00 & 0.00 & 0.00 & 0.00 & \textbf{待填} \\
-        \bottomrule
-      \end{tabular}
-    \end{table}
+    图~\ref{fig:hidden_dim_generalization} 用于展示训练残差和测试残差随 $H$ 的变化.
+    如果训练残差下降而测试残差上升, 则说明固定样本路径上出现了过拟合现象;
+    如果两者同步下降且 $e_0$ 也减小, 则说明增加随机特征宽度确实改善了近似质量.
 
     \begin{figure}[ht]
       \centering
       \includegraphics[width=0.75\textwidth]{theory-compare-placeholder}
-      \caption{理论解与数值解对比图模板}
-      \label{fig:theory-compare-template}
-      \figurenote{该位置可用于展示理论解曲线与数值解曲线的对比, 或展示不同时间层上的误差分布图. 当前为占位图.}\label{fig:figure}
+      \caption{HJB-LQ 方程中随机特征宽度对误差的影响}
+      \label{fig:hidden_dim_generalization}
     \end{figure}
 
+  \section{随机种子稳定性}\label{sec:numerical_seed}
+    由于随机特征内层参数和样本路径都由随机数生成, 单次运行结果不能完全代表方法的稳定性.
+    因此最终结果需要至少选择一个线性方程和两个非线性方程做多随机种子实验.
+    对每个种子, 记录 $y_0$, 训练 RMSE, 测试 RMSE 和运行时间.
+    若篇幅允许, 表中同时给出均值和标准差.
+
+    \begin{table}
+      \centering
+      \caption{随机种子稳定性结果}
+      \label{tab:seed_stability}
+      \begin{tabular}{lccccc}
+        \toprule
+        方程 & seed & $y_0$ & 训练 RMSE & 测试 RMSE & 时间 / ms \\
+        \midrule
+        HJB-LQ & 0000000000000000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
+        HJB-LQ & 0000000000000000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
+        HJB-LQ & 0000000000000000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
+        Allen--Cahn & 0000000000000000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
+        Allen--Cahn & 0000000000000000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
+        Allen--Cahn & 0000000000000000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
+        \bottomrule
+      \end{tabular}
+    \end{table}
+
   \section{本章小结}\label{sec:numerical_summary}
-    本章构造了一个面向后续实验填写的结果模板.
-    其中线性部分主要用于展示终端残差与效率基准, 非线性部分主要用于展示 Levenberg--Marquardt 方法的收敛行为与最终误差,
-    而理论解对比部分则用于补充方法正确性的进一步验证.
-    待后续实验方程, 参数设定与最终数据确定后, 只需将本章中的占位方程名, 数值结果与图像资源替换即可形成完整的数值实验章节.
+    本章给出了两个线性方程和两个非线性方程的实验安排.
+    线性方程主要用于验证最小二乘求解器在高维问题中的效率和测试残差,
+    非线性方程主要用于检验 LM 求解器的收敛性以及随机特征宽度对泛化误差的影响.
+    HJB-LQ 方程具有明确的初值参考值, 可作为主要精度验证算例;
+    Allen--Cahn 方程没有在本文中使用闭式精确解, 因而只将线性化估计作为一致性检查.
+    最终写作时, 需要用实际实验结果替换表格中的占位数字,
+    并将两张占位图替换为 LM 收敛曲线和随机特征宽度误差曲线.

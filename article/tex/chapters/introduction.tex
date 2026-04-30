@@ -9,65 +9,260 @@
   随着深度学习的发展, 已经有很多研究开始使用此方法求解高维 PDEs.
   本文则提出了一种类似方法, 但使用随机特征法代替神经网络, 实现降低维度和线性化的目的.
 
-  \section{线性抛物型偏微分方程}\label{sec:lppde}
-    抛物型方程是一类重要的偏微分方程, 其典型形式为
-    \begin{equation}
-      \frac{\partial u}{\partial t} = \mathcal{L} u + f,
-      \label{eq:ppde0}
-    \end{equation}
-    其中 $\mathcal{L}$ 为关于空间变量的二阶线性椭圆算子.
-    该类方程通常用于描述随时间演化的扩散过程, 例如热传导, 概率密度演化以及金融衍生品定价等问题.
-    为了方便与 BSDE 对齐, 我们将椭圆算子拆分得到如下形式:
-    \begin{equation}
-      \begin{aligned}
-        \frac{\partial u}{\partial t}(t, x)
-        &+ \frac{1}{2} \operatorname{Tr}\!\big(
-        \sigma\sigma^{\operatorname{T}}(t, x)\, \nabla_x^2 u(t, x) \big) \\
-        &+ \langle \mu(t, x), \nabla u(t, x) \rangle \\
-        &+ f\!\big( t, x, u(t,x), \sigma^{\operatorname{T}}(t, x) \nabla u(t, x) \big)
-        = 0.
-      \end{aligned}
-      \label{eq:ppde}
-    \end{equation}
+  抛物型方程是一类重要的偏微分方程, 其典型形式为
+  \begin{equation}
+    \frac{\partial u}{\partial t} = \mathcal{L} u + f,
+    \label{eq:ppde0}
+  \end{equation}
+  其中 $\mathcal{L}$ 为关于空间变量的二阶线性椭圆算子.
+  该类方程通常用于描述随时间演化的扩散过程, 例如热传导, 概率密度演化以及金融衍生品定价等问题.
+  为了方便与 BSDE 对齐, 我们将椭圆算子拆分得到如下形式:
+  \begin{equation}
+    \begin{aligned}
+      \frac{\partial u}{\partial t}(t, x)
+      &+ \frac{1}{2} \operatorname{Tr}\!\big(
+      \sigma\sigma^{\operatorname{T}}(t, x)\, \nabla_x^2 u(t, x) \big) \\
+      &+ \langle \mu(t, x), \nabla u(t, x) \rangle \\
+      &+ f\!\big( t, x, u(t,x), \sigma^{\operatorname{T}}(t, x) \nabla u(t, x) \big)
+      = 0.
+    \end{aligned}
+    \label{eq:ppde}
+  \end{equation}
 
+  \section{线性抛物型方程}\label{sec:lppde}
     首先考虑其中的线性方程, 即 $f$ 是 $u, \nabla u$ 的线性函数.
     一方面, 从数学结构上看, 线性抛物型方程具有良好的正则性与稳定性,
-    其解通常可以通过解析表示 (如基本解或 Green 函数) 或概率表示 (如 Feynman-Kac 公式) 来刻画,
+    其解通常可以通过解析表示 (如基本解或 Green 函数) 或概率表示 (如 Feynman--Kac 公式) 来刻画,
     可以作为 baseline 用来判断方法的正确性并评估计算效率.
-    另一方面, 线性的方程也可以像非线性方程那样通过 Itô 公式变换为 BSDE, 使得此方法可以简单的推广到非线性情形.
+    另一方面, 线性的方程也可以像半线性方程那样通过 Itô 公式变换为 BSDE, 使得此方法可以简单的推广到非线性情形.
     下面列举了常见的线性抛物型方程:
     \begin{enumerate}
       \item
-      Black--Scholes 方程, 用来解决期权定价问题.
-      其维度为资产数量, 对应的
-      $\sigma(t, x) = \operatorname{diag}(x)\, \Sigma^{1/2}$,
-      $\mu(t, x) = r\, x$,
-      $f(t, x, u, z) = -r\, u$.
+      热方程是最经典的线性抛物型偏微分方程之一, 最初来源于热传导问题,
+      也广泛用于描述粒子扩散, 浓度传播以及随机扰动在空间中的扩散过程.
+      从概率角度看, 热方程与布朗运动具有直接联系, 其解可以表示为布朗运动终端函数的期望.
+      因此, 热方程不仅是扩散模型的基础方程, 也是检验随机方法求解线性抛物型 PDE 的标准基准问题.
+      在高维情形下, 热方程的维度对应空间变量的维数, 即 $x\in\mathbb{R}^d$ 中的 $d$.
+      在本文的统一半线性抛物型方程框架下, 热方程对应的随机过程为标准 $d$ 维布朗运动, 即漂移项为零, 扩散系数为单位矩阵.
+      因此有
+      \begin{equation*}
+        \sigma(t, x) = I_{d},\qquad
+        \mu(t, x) = 0,\qquad
+        f(t, x, u, z) = 0.
+      \end{equation*}
+      该算例主要用于验证随机特征法在纯扩散线性问题上的基本逼近能力.
 
       \item
-      热方程, 用来描述扩散过程.
-      其维度为空间维度, 对应的
-      $\sigma(t, x) = I$,
-      $\mu(t, x) = 0$,
-      $f(t, x, u, z) = 0$.
+      Black--Scholes 方程来源于金融衍生品定价理论, 是数学金融中最具有代表性的线性抛物型方程之一.
+      Black 和 Scholes 在期权定价研究中将期权价格视为标的资产价格与时间的函数,
+      并通过无套利思想和动态对冲方法推导出相应的定价方程;
+      在经典单资产情形下, 该模型给出了欧式期权的封闭形式定价公式.
+      \cite{scholesPricingOptionsCorporate} 也展示了这一思路,
+      即把期权价值写成股票价格和时间的函数, 并通过构造对冲组合得到定价微分方程.
+      在多资产情形下, 若期权收益依赖于多个标的资产, 则 PDE 的空间维度等于资产数量,
+      因而 Black--Scholes 方程自然成为高维 PDE 方法中的典型应用算例.
+      设 $x=(x_{1},\ldots,x_{d})$ 表示 $d$ 个资产价格, $r$ 表示无风险利率, $\Sigma$ 表示资产收益率的协方差矩阵.
+      在风险中性测度下, 资产价格通常服从几何布朗运动, 其漂移项为 $r x$, 扩散项与当前资产价格成正比.
+      因此, 在本文的统一框架下, 多资产 Black--Scholes 方程对应
+      \begin{equation*}
+        \sigma(t, x) = \operatorname{diag}(x)\, \Sigma^{1/2},\qquad
+        \mu(t, x) = r\,x,\qquad
+        f(t, x, u, z) = -r\,u.
+      \end{equation*}
+      其中 $-r u$ 项表示未来收益在无风险利率下的折现效应.
+      该算例用于检验本文方法在具有乘性扩散, 非零漂移和折现项的高维金融定价问题上的表现.
 
       \item
-      Ornstein--Uhlenbeck 方程, 用来描述具有均值回复性质的随机过程.
-      其维度为空间维度, 对应的
-      $\sigma(t, x) = \sigma I$,
-      $\mu(t, x) = -\kappa x$,
-      $f(t, x, u, z) = 0$.
+      Ornstein--Uhlenbeck 方程对应的随机过程是一类典型的均值回复过程,
+      最早常用于描述带阻尼的随机运动, 后来也广泛出现在统计物理, 金融数学和随机控制等领域.
+      与布朗运动不同, Ornstein--Uhlenbeck 过程的漂移项会将状态变量拉回长期均值附近,
+      因而适合描述具有稳定中心或长期均衡水平的随机系统.
+      在高维情形下, 其维度同样对应状态变量的空间维数.
 
       \item
-      线性反应-扩散方程, 用来描述扩散与线性反应过程.
-      其维度为空间维度, 对应的
-      $\sigma(t, x) = I$,
-      $\mu(t, x) = 0$,
-      $f(t, x, u, z) = \lambda u + c(t, x)$.
+      线性反应--扩散方程用于描述扩散过程与局部反应过程同时存在的现象.
+      其中扩散项刻画物质, 能量或信息在空间中的传播, 反应项刻画局部增长, 衰减或外部源项作用.
+      这类方程在化学反应, 生物种群动力学, 热源扩散以及物理场演化问题中都有广泛应用.
+      在本文中考虑的线性反应--扩散方程仍然采用标准扩散过程作为其随机过程部分, 即漂移项为零, 扩散系数为单位矩阵.
+      与热方程不同的是, 方程中额外加入了关于解函数 $u$ 的线性反应项以及可能依赖于时间和空间的外部源项 $c(t,x)$.
     \end{enumerate}
 
     尽管部分方程在物理建模中通常定义于低维空间 (如三维), 但在金融建模, 多因子随机过程等问题中,
     其状态变量维度可以显著增加, 因此常被用作高维数值算法的基准问题.
+    由于前两者已经能包含大部分线性方程的形式, 且后面还有非线性方程的实验,
+    本论文将仅对热方程和 Black--Scholes 方程进行数值实验.
+
+  \section{半线性抛物型方程}\label{sec:slppde}
+    如果 $f$ 不是 $u$ 与 $\nabla u$ 的线性函数, 则整个方程为半线性抛物型方程.
+    尽管半线性方程解的解析表示不那么明显, 但通常也有较为完善的理论对其数值做近似估计.
+    在完成线性方程求解的理论分析与实验验证后, 对半线性方程的实验可以进一步说明此方法的有效性.
+    作为线性的推广, 我们依然通过 Itô 公式将此类方程变换为 BSDE 进行求解.
+    下面列举了常见的半线性抛物型方程:
+    \begin{enumerate}
+      \item
+      Hamilton--Jacobi--Bellman 方程来源于动态规划和随机最优控制理论.
+      在最优控制问题中, 解函数通常表示从当前状态出发所能达到的最优代价, 因而也称为值函数.
+      当状态变量维数较高时, HJB 方程的维度等于控制系统的状态空间维度, 传统网格方法会迅速受到维数灾难的限制.
+      因此, HJB 方程是检验高维 PDE 方法的重要非线性算例.
+      本文采用线性二次型高斯控制问题对应的 HJB 方程.
+      设状态变量 $X_{t}\in\mathbb{R}^{d}$ 满足受控随机微分方程
+      \begin{equation*}
+        \dif X_{t} = 2\sqrt{\lambda}\, m_{t} \dif t + \sqrt{2} \dif W_{t},
+      \end{equation*}
+      其中 $m_{t}$ 为控制变量, $\lambda > 0$ 表示控制强度, $W_{t}$ 为 $d$ 维标准布朗运动.
+      控制目标为最小化代价泛函
+      \begin{equation*}
+        J(\{m_{t}\}_{0 \leq t \leq T}) =
+        \mathbb{E}\left[ \int_{0}^{T} \lVert m_t\rVert^{2} \dif t + g(X_{T})\right].
+      \end{equation*}
+      由动态规划原理可得到对应的 HJB 方程
+      \begin{equation*}
+        \frac{\partial u}{\partial t}(t, x)
+        + \Delta u(t, x)
+        - \lambda \lVert \nabla_{x} u(t, x) \rVert^{2}
+        = 0,
+        \qquad
+        u(T, x) = g(x).
+      \end{equation*}
+      在本文的统一半线性抛物型方程框架下, 取
+      \begin{equation*}
+        \mu(t, x) = 0,\qquad
+        \sigma(t, x) = \sqrt{2} I_{d}.
+      \end{equation*}
+      此时
+      \begin{equation*}
+        z = \sigma^{\operatorname T} \nabla_{x} u = \sqrt{2} \nabla_{x} u,
+      \end{equation*}
+      因而非线性项可以写为
+      \begin{equation*}
+        f(t, x, y, z) = - \frac{\lambda}{2} \lVert z \rVert^{2}.
+      \end{equation*}
+      实验中可取
+      \begin{equation*}
+        d = 100, \qquad T = 1, \qquad x_{0} = 0, \qquad \lambda = 1,
+      \end{equation*}
+      终端条件取
+      \begin{equation*}
+        g(x) = \log \left(\frac{1+\lVert x \rVert^{2}}{2}\right).
+      \end{equation*}
+      对于该例, 可利用指数变换得到参考表达式
+      \begin{equation*}
+        u(t,x) = - \frac{1}{\lambda} \log \mathbb{E}
+        \left[
+          \exp \big(- \lambda g(x + \sqrt{2} W_{T - t}) \big)
+        \right],
+      \end{equation*}
+      因而可以通过高精度 Monte Carlo 方法计算参考值.
+      该算例主要用于检验本文方法处理梯度型非线性项的能力.
+
+      \item
+      Allen--Cahn 方程是一类典型的非线性反应--扩散方程, 常用于描述相分离, 界面演化以及有序--无序转变等物理现象.
+      其核心特点是同时包含扩散项和双势阱型反应项.
+      扩散项刻画空间传播或平滑效应, 非线性反应项刻画系统向不同稳定相的演化趋势.
+      与 HJB 方程不同, Allen--Cahn 方程的非线性主要依赖于解函数 $u$ 本身, 而不是梯度.
+
+      一个常用的 Allen--Cahn 方程形式为
+      \begin{equation*}
+        \frac{\partial v}{\partial s}(s, x) = \Delta v(s,x) + v(s,x) - v^3(s,x),
+        \qquad
+        v(0, x) = g(x).
+      \end{equation*}
+      为了与本文采用的终端值问题形式一致, 令
+      \begin{equation*}
+        u(t, x) = v(T-t, x),
+      \end{equation*}
+      则方程可改写为
+      \begin{equation*}
+        \frac{\partial u}{\partial t}(t, x)
+        + \Delta u(t, x)
+        + u(t,x ) - u^{3}(t, x)
+        = 0,
+        \qquad
+        u(T, x) = g(x).
+      \end{equation*}
+      在统一半线性抛物型方程框架下, 取
+      \begin{equation*}
+        \mu(t, x) = 0,\qquad
+        \sigma(t, x) = \sqrt{2} I_{d},
+      \end{equation*}
+      并令
+      \begin{equation*}
+        f(t, x, y, z) = y - y^{3}.
+      \end{equation*}
+      实验中可取
+      \begin{equation*}
+        d = 100, \qquad T = 0.3, \qquad x_{0} = 0,
+      \end{equation*}
+      终端条件取
+      \begin{equation*}
+        g(x) = \frac{1}{2 + 0.4\lVert x \rVert^{2}}.
+      \end{equation*}
+      本文求解的目标量为
+      \begin{equation*}
+        u(0, 0),
+      \end{equation*}
+      它对应原始正向时间方程中 $v(T, 0)$ 的值.
+      由于该方程一般没有简单闭式解, 可采用文献中的高精度数值结果或大规模 Monte Carlo 类方法作为参考.
+      该算例主要用于检验本文方法对反应型非线性项的处理能力.
+
+      \item
+      带违约风险的非线性 Black--Scholes 方程是金融衍生品定价中的一个重要扩展模型.
+      经典 Black--Scholes 方程假设市场不存在违约风险, 此时方程是线性的.
+      但在实际金融市场中, 合约发行方可能发生违约, 合约持有人只能获得部分价值补偿.
+      若违约强度依赖于当前合约价值, 则定价方程中会出现关于 $u$ 的非线性项.
+
+      设 $x=(x_{1}, \ldots, x_{d})$ 表示 $d$ 个标的资产价格, 在风险中性测度下资产价格可建模为几何布朗运动.
+      一类典型的带违约风险 Black--Scholes 方程可写为
+      \begin{equation*}
+        \frac{\partial u}{\partial t}(t, x)
+        + \bar{\mu} x \cdot \nabla_{x} u(t, x)
+        + \frac{\bar{\sigma}^{2}}{2}
+        \sum_{i = 1}^{d} x_{i}^{2}
+        \frac{\partial^{2} u}{\partial x_{i}^{2}}(t, x)
+        - (1 - \delta) Q \big( u(t, x) \big) u(t, x)
+        - R u(t, x)
+        =0.
+      \end{equation*}
+      其中 $R$ 为无风险利率, $\delta \in [0,1)$ 表示违约后的回收比例, $Q(u)$ 表示与当前合约价值有关的违约强度.
+      在统一框架下, 该方程可对应
+      \begin{equation*}
+        \mu(t, x)= \bar{\mu}x, \qquad
+        \sigma(t, x) = \bar{\sigma} \operatorname{diag}(x),
+      \end{equation*}
+      以及
+      \begin{equation*}
+        f(t, x, y, z) = - (1 - \delta) Q(y) y - R y.
+      \end{equation*}
+      该方程展示了金融定价模型中非线性项的一个典型来源: 市场风险因素或信用风险因素会使得原本线性的定价方程变为非线性.
+
+      \item
+      Fisher--KPP 方程是另一类经典的非线性反应--扩散方程, 最初用于描述种群扩散和有利基因传播等问题.
+      其典型特点是反应项具有 Logistic 增长结构: 当解较小时近似线性增长, 当解接近饱和值时增长受到抑制.
+      因此, 该方程常被用来刻画带有扩散机制的传播前沿问题.
+
+      一个典型形式为
+      \begin{equation*}
+        \frac{\partial v}{\partial s}(s, x) = \Delta v(s, x) + v(s, x)(1 - v(s, x)).
+      \end{equation*}
+      通过同样的时间反向变换 $u(t, x) = v(T - t, x)$, 可以写成终端值问题
+      \begin{equation*}
+        \frac{\partial u}{\partial t}(t, x)
+        + \Delta u(t, x)
+        + u(t, x)(1 - u(t, x))
+        =0.
+      \end{equation*}
+      在统一框架下, 可取
+      \begin{equation*}
+        \mu(t, x) = 0,\qquad
+        \sigma(t, x) = \sqrt{2} I_{d},
+      \end{equation*}
+      以及
+      \begin{equation*}
+        f(t, x, y, z) = y(1 - y).
+      \end{equation*}
+      与 Allen--Cahn 方程类似, Fisher--KPP 方程也是反应--扩散型方程,
+      但其非线性项对应的是 Logistic 型增长, 而不是双势阱结构.
+    \end{enumerate}
 
   \section{随机特征法}\label{sec:rfm}
     通常的神经网络通过多层线性变换与非线性激活函数的叠加来逼近目标函数, 这会导致需要求解一个非线性的非凸优化问题.
@@ -81,4 +276,3 @@
     通过合理选择这些参数可以使特征函数张成更丰富的函数空间, 从而提高数值求解的精度.
     因此, 其在保持较低优化复杂度的同时, 为高维函数逼近提供了一种有效的替代方案.
     特别地, 由于其线性结构, 随机特征法在基于最小二乘的偏微分方程数值方法中具有天然优势.
-    \footnote{注脚写法占位} % TODO: delete this line

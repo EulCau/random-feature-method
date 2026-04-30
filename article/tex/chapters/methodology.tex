@@ -1,139 +1,119 @@
 % !TEX root = ../main.tex
 
 \chapter{数值方法}\label{ch:methodology}
-  考虑终值问题 \eqref{eq:ppde}, $u(T, x) = g(x)$, $(t, x) \in [0, T) \times \mathbb{R}^{d}$,
-  为了应用 Itô 公式, 我们假设 $u \in C^{1, 2}([0, T) \times \mathbb{R}^{d})$,
+  考虑方程 \eqref{eq:ppde} 的终值问题, 即
+  \begin{equation}
+    \begin{gathered}
+      \begin{aligned}
+        \frac{\partial u}{\partial t}(t, x)
+        &+ \frac{1}{2} \operatorname{Tr}\!\big(
+        \sigma\sigma^{\operatorname{T}}(t, x)\, \nabla_{x}^{2} u(t, x) \big)
+         + \langle \mu(t, x), \nabla u(t, x) \rangle \\
+        &+ f\!\big( t, x, u(t,x), \sigma^{\operatorname{T}}(t, x) \nabla u(t, x) \big)
+        = 0,
+        \quad (t,x) \in [0,T) \times \mathbb{R}^{d},
+      \end{aligned} \\
+      u(T, x) = g(x), \quad x \in \mathbb{R}^{d}.
+    \end{gathered}
+    \label{eq:ppdeg}
+  \end{equation}d{equation}
+  为了应用 Itô 公式, 假设 $u \in C^{1, 2}([0, T) \times \mathbb{R}^{d})$,
   并要求 $\mu, \sigma, f, g$ 满足足够的正则性与增长条件.
-  令
+  令状态过程满足
   \begin{equation}
     X_{t} = \xi + \int_{0}^{t} \mu(s, X_{s}) \dif s + \int_{0}^{t} \sigma(s, X_{s}) \dif W_{s},
     \label{eq:xt}
   \end{equation}
-  对随机过程 $X_{t}$ 和足够光滑的函数 $u(t, x)$, Itô 公式给出:
-  \begin{equation}
-    \begin{aligned}
-      \dif u(t,X_t) &=
-      \frac{\partial u}{\partial t}(t, X_{t}) \dif t
-      +\nabla u(t, X_{t}) \cdot \dif X_{t} \\
-      &+ \frac{1}{2} \operatorname{Tr}\!\big(
-      \sigma\sigma^{\operatorname{T}}(t, X_{t})\, \nabla_{x}^{2} u(t, X_{t}) \big) \dif t.
-    \end{aligned}
-    \label{eq:ito}
-  \end{equation}
-  代入可得
-  \begin{equation}
-    \begin{aligned}
-      \dif u(t,X_{t}) &=
-      \left( \frac{\partial u}{\partial t}(t, X_{t}) + \mu(t,X_{t}) \cdot \nabla u(t,X_{t})
-      + \frac{1}{2} \operatorname{Tr}\!\big(
-      \sigma\sigma^{\operatorname{T}}(t, X_{t})\nabla_{x}^{2} u(t, X_{t}) \big) \right) \dif t \\
-      & + \nabla u(t, X_{t})^{\operatorname{T}} \sigma(t, X_{t}) \dif W_{t}.
-    \end{aligned}
-    \label{eq:xtinito}
-  \end{equation}
-
-  由于 $u$ 满足 PDE \eqref{eq:ppde}, 所以得到
-  \begin{equation}
-    \begin{aligned}
-      \dif u(t, X_{t}) &=
-      - f\!\big( t, X_{t}, u(t, X_{t}), \sigma^{\operatorname{T}}(t, X_{t}) \nabla u(t, X_{t}) \big) \dif t \\
-      &+ \nabla u(t, X_{t})^{\operatorname{T}} \sigma(t, X_{t}) \dif W_{t},
-    \end{aligned}
-    \label{eq:bsde0}
-  \end{equation}
-  对应积分形式为
-  \begin{equation}
-    \begin{aligned}
-      u(t, X_{t}) - u(0, X_{0}) &=
-      - \int_{0}^{t} f\!\big(
-      s, X_{s}, u(s, X_{s}), \sigma^{\operatorname{T}}(s, X_{s}) \nabla u(s, X_{s}) \big) \dif s \\
-      &+ \int_{0}^{t} \nabla u(s, X_{s})^{\operatorname{T}} \sigma(s, X_{s}) \dif W_{s}.
-    \end{aligned}
-    \label{eq:bsie0}
-  \end{equation}
-  记
+  再定义
   \begin{equation}
     Y_{t} \coloneqq u(t, X_{t}),
     \qquad
-    Z_{t} \coloneqq \sigma^{\operatorname{T}}(t, X_{t}) \nabla u(t, X_{t}),
+    Z_{t} \coloneqq \sigma^{\operatorname{T}}(t, X_{t}) \nabla u(t, X_{t}).
     \label{eq:ytzt}
   \end{equation}
-  则 \eqref{eq:bsde0} 就变成
+  则原方程可写成 BSDE
   \begin{equation}
-    \dif Y_{t} = -f(t, X_{t},Y_{t},Z_{t}) \dif t
+    \dif Y_{t} = -f(t, X_{t}, Y_{t}, Z_{t}) \dif t
     + Z_{t}^{\operatorname{T}} \dif W_{t},
     \label{eq:bsde}
   \end{equation}
-  积分形式为
-  \begin{equation}
-    Y_t =  Y_0 - \int_{0}^{t} f(s, X_{s},Y_{s},Z_{s}) \dif s
-    + \int_{0}^{t} Z_{s}^{\operatorname{T}} \dif W_{s}.
-    \label{eq:bsie}
-  \end{equation}
+  并满足终端条件 $Y_{T}=g(X_{T})$.
+  从 \eqref{eq:ppdeg} 到 \eqref{eq:bsde} 的推导见附录~\ref{ch:derivation} 第\ref{sec:pde2bsde}节.
 
-  对于时间步, 采用前向欧拉进行离散, 得到最终的离散迭代式
+  取时间剖分 $0 = t_{0} < t_{1} < \cdots < t_{N} = T$, 其中 $\Delta t = T/N$,
+  并记 $\Delta W_{k} = W_{t_{k + 1}} - W_{t_{k}}$.
+  对 \eqref{eq:bsde} 采用 Euler 离散后, 得到
   \begin{equation}
-    Y_{k + 1} = Y_{k} - f\!(\frac{k}{n}, X_{k}, Y_{k}, Z_{k}) + \langle Z_{k}, \Delta W_{k} \rangle.
+    Y_{k + 1} = Y_{k} - f\!(t_{k}, X_{k}, Y_{k}, Z_{k}) + \langle Z_{k}, \Delta W_{k} \rangle.
     \label{eq:dbsde}
   \end{equation}
-  由此, 我们可以通过末端函数反向逼近 $Z_{k}$ 和 $Y_{0}$.
+  因而问题转化为: 在离散路径上同时近似初值 $Y_{0}$ 和各时间层的梯度项 $Z_{k}$,
+  使终端值与 $g(X_{T})$ 尽可能一致.
 
   \section{线性方程的求解}\label{sec:linear}
-    假设函数 $f$ 满足线性结构
+    先考虑线性生成元
     \begin{equation}
       f\!( t, \boldsymbol{x}, y, \boldsymbol{z})
       = \mathcal{L}(t, \boldsymbol{x}) y
-      + \langle \mathcal{M}( t, \boldsymbol{x}), \boldsymbol{z} \rangle
-      + \mathcal{N}(t, \boldsymbol{x}),
+      + \langle \mathcal{M}(t, \boldsymbol{x}), \boldsymbol{z} \rangle
+      + \mathcal{N}(t, \boldsymbol{x}).
       \label{eq:linearf}
     \end{equation}
-    由于 $\langle \boldsymbol{\mathcal{M}}( t, \boldsymbol{x}), \boldsymbol{z} \rangle$ 可以与前面的梯度项合并,
-    故仅需考虑 $\mathcal{M} \equiv 0$.
-    由于需要逼近 $Z$, 我们用随机特征映射 $\alpha H_{k}^{(i)}$ 代替 $Z_{k}^{(i)}$.
-    其中 $\alpha$ 为需要训练的参数, $i$ 为采样路径编号,
-    $H_{k}^{(i)} = \tanh(A x_{k}^{(i)} + b t_{k} + c)$ 为随机采样内层参数的随机特征基矩阵.
-    将线性的 $f$ 与含参的 $Z$ 代入 \eqref{eq:dbsde} 得到线性方程的迭代式:
+    其中 $\langle \mathcal{M}, \boldsymbol{z} \rangle$ 可以并入漂移项处理,
+    因此后文只考虑 $\mathcal{M}\equiv 0$ 的情形.
+
+    对每条样本路径 $i$, 用随机特征映射逼近梯度项
     \begin{equation}
-      \begin{aligned}
-        y_{k+1}^{(i)}
-        & = \big( 1 - \Delta t \mathcal{L}(t_{k}, x_{k}^{(i)}) \big) y_{k}^{(i)}
-        + (\Delta W_{k}^{(i)})^{\operatorname{T}} \alpha H_{k}^{(i)}
-        + \mathcal{N}(t_{k}, x_{k}^{(i)}) \Delta t \\
-        & \coloneqq a_{k}^{(i)} y_{k}^{(i)} + (\xi_{k}^{(i)})^{\operatorname{T}} \alpha H_{k}^{(i)} + c_{k}^{(i)}.
-      \end{aligned}
+      Z_{k}^{(i)} \approx \alpha H_{k}^{(i)},
+      \qquad
+      H_{k}^{(i)} = \tanh(A x_{k}^{(i)} + b t_{k} + c),
+      \label{eq:rff@l}
+    \end{equation}
+    其中 $A, b, c$ 为固定随机参数, $\alpha$ 为待训练的输出层参数.
+    代入 \eqref{eq:dbsde} 后得到离散迭代
+    \begin{equation}
+      y_{k + 1}^{(i)}
+      = \big( 1 - \Delta t\, \mathcal{L}(t_{k}, x_{k}^{(i)}) \big) y_{k}^{(i)}
+      + (\Delta W_{k}^{(i)})^{\operatorname{T}} \alpha H_{k}^{(i)}
+      - \Delta t\, \mathcal{N}(t_{k}, x_{k}^{(i)}).
       \label{eq:ldbsde}
     \end{equation}
-    这个式子中 $y_{0}^{(i)} = y_{0}$ 与 $\alpha$ 未知, 但它们每一步都只进行了线性变换.
-    因此 $y_{N}^{(i)}$ 关于 $y_{0}$ 与 $\alpha$ 也是线性的.
-
-    为了减少不必要的运算, 我们手动推导了系数矩阵和观测向量.
-    得到的结果是, 对每条路径 $i$,
+    由于上式关于 $y_{0}$ 和 $\alpha$ 是线性的, 终端值 $y_{N}^{(i)}$ 也必然是它们的仿射函数.
+    将递推完全展开后, 可写为
     \begin{equation}
-      y_{N}^{(i)} = \left( \prod_{j = 0}^{N - 1} a_{j}^{(i)} \right)
-      + \left\langle \sum_{k = 0}^{N - 1} \left(
-        \prod_{j = k + 1}^{N - 1} a_{j}^{(i)} \right) \xi_{k}^{(i)} (H_{k}^{(i)})^{\operatorname{T}},
-        \alpha \right\rangle
-      + \sum_{k = 0}^{N - 1} \left( \prod_{j = k + 1}^{N - 1} a_{j}^{(i)} \right) c_{k}^{(i)},
+      y_{N}^{(i)} = \beta_{i} y_{0} + \langle \Gamma_{i}, \alpha \rangle + \eta_{i},
       \label{eq:yN4i}
     \end{equation}
-    其中 $\langle \cdot, \cdot \rangle$ 为 Frobenius 内积.
+    其中 $\beta_{i}$, $\Gamma_{i}$, $\eta_{i}$ 由路径 $\{x_{k}^{(i)}, \Delta W_{k}^{(i)}\}$ 唯一确定,
+    具体表达式分别见附录~\ref{ch:derivation} 第\ref{sec:linearder}节的
+    \eqref{eq:beta}, \eqref{eq:gamma} 和 \eqref{eq:eta}.
 
-    之后拼接所有路径, 并最小化 $\lVert y_{N} - g(x_{N}) \rVert_{2}$ 即可.
+    将所有路径的终端值拼接后, 便得到标准线性最小二乘问题
+    \begin{equation}
+      \min_{y_{0}, \alpha} \sum_{i = 1}^{S} \big( y_{N}^{(i)} - g(x_{N}^{(i)}) \big)^{2}.
+      \label{eq:llstsq}
+    \end{equation}
+    线性情形的优势在于不需要迭代更新随机特征参数,
+    每次实验只需求解一个最小二乘系统即可.
 
-  \section{非线性方程的求解}\label{sec:nonlinear}
-    考虑一般的非线性生成元 $f\!( t, \boldsymbol{x}, y, \boldsymbol{z})$, 我们同样用随机特征映射
-    $\alpha H_{k}^{(i)}$ 代替 $Z_{k}^{(i)}$.
-    此时离散迭代式变为
+  \section{半线性方程的求解}\label{sec:nonlinear}
+    对一般半线性生成元 $f(t, \boldsymbol{x}, y, \boldsymbol{z})$,
+    仍采用相同的随机特征近似
+    \begin{equation}
+      Z_{k}^{(i)} \approx \alpha H_k^{(i)}.
+      \label{eq:rff@sl}
+    \end{equation}
+    此时离散迭代式为
     \begin{equation}
       y_{k + 1}^{(i)} = y_{k}^{(i)}
       - f\!(t_{k}, x_{k}^{(i)}, y_{k}^{(i)}, \alpha H_{k}^{(i)}) \Delta t
       + (\Delta W_{k}^{(i)})^{\operatorname{T}} \alpha H_{k}^{(i)}.
       \label{eq:nldbsde}
     \end{equation}
-    由于 $f$ 关于 $y$ 或 $z$ 可能是非线性的, $y_{N}^{(i)}$ 不再是关于 $y_{0}$ 与 $\alpha$ 的线性函数.
-    因此需要将末端匹配问题写成非线性最小二乘问题.
+    由于生成元 $f$ 关于 $y$ 或 $z$ 不再保持线性, 终端值 $y_N^{(i)}$ 不能再写成关于参数的线性函数,
+    因此末端匹配需要改写为半线性最小二乘问题.
 
-    令待求参数为
+    令参数向量为
     \begin{equation}
       \theta =
       \begin{bmatrix}
@@ -142,97 +122,67 @@
       \end{bmatrix},
       \label{eq:theta}
     \end{equation}
-    并定义每条路径的末端残差为
+    对第 $i$ 条路径定义终端残差
     \begin{equation}
-      r_{i}(\theta) = y_{N}^{(i)}(\theta) - g(x_{N}^{(i)}).
+      r_{i}(\theta) = y_{N}^{(i)}(\theta) - g(x_{N}^{(i)}),
       \label{eq:residual4i}
     \end{equation}
-    将所有采样路径的残差拼接, 得到
+    并记
     \begin{equation}
       r(\theta) =
       \begin{bmatrix}
         r_{1}(\theta) \\
         \vdots \\
-        r_{n}(\theta)
+        r_{S}(\theta)
       \end{bmatrix}.
       \label{eq:residual}
     \end{equation}
-    于是非线性方程的最终求解转化为
+    最终求解问题为
     \begin{equation}
       \min_{\theta}
       \frac{1}{2} \lVert r(\theta)\rVert_{2}^{2}.
       \label{eq:nlls}
     \end{equation}
 
-    为求解 \eqref{eq:nlls}, 我们采用 Gauss--Newton 或 Levenberg--Marquardt 方法.
-    在第 $m$ 次迭代中, 当前参数 $\theta^{(m)}$ 已知.
-    首先由 \eqref{eq:nldbsde} 前向计算所有路径上的 $y_{N}^{(i)}$, 由此得到当前残差 $r(\theta^{(m)})$.
-    记残差关于参数的雅可比矩阵为
+    本文采用 Levenberg--Marquardt 方法求解 \eqref{eq:nlls}.
+    在第 $m$ 次迭代中, 将残差在当前参数 $\theta^{(m)}$ 处线性化:
     \begin{equation}
-      J(\theta^{(m)}) = \frac{\partial r}{\partial \theta}(\theta^{(m)}).
+      r(\theta^{(m)}+\delta) \approx r(\theta^{(m)}) + J(\theta^{(m)})\delta,
+      \label{eq:reslin}
+    \end{equation}
+    其中
+    \begin{equation}
+      J(\theta^{(m)}) = \frac{\partial r}{\partial \theta}(\theta^{(m)})
       \label{eq:jacobian}
     \end{equation}
-    对残差做一阶线性化:
-    \begin{equation}
-      r(\theta^{(m)}+\delta) \approx r(\theta^{(m)}) + J(\theta^{(m)})\delta.
-      \label{eq:residual_linearization}
-    \end{equation}
-    因此每一步需要求解线性最小二乘子问题
-    \begin{equation}
-      \delta^{(m)} = \arg\min_{\delta}
-        \left\lVert J(\theta^{(m)})\delta + r(\theta^{(m)}) \right\rVert_2^2.
-      \label{eq:delta4m}
-    \end{equation}
-    实际计算中可采用阻尼形式
+    为雅可比矩阵.
+    于是每步需要求解阻尼线性系统
     \begin{equation}
       (J^{\operatorname{T}}J + \lambda I)\delta^{(m)} = - J^{\operatorname{T}}r, \qquad \lambda > 0,
       \label{eq:lm}
     \end{equation}
-    即 Levenberg--Marquardt 方法.
-    若更新后目标函数下降, 则接受该步并减小 $\lambda$; 否则拒绝该步并增大 $\lambda$.
-
-    最后按照
+    并更新
     \begin{equation}
-      \theta^{(m + 1)} = \theta^{(m)} + \delta^{(m)}
+      \theta^{(m + 1)} = \theta^{(m)} + \delta^{(m)}.
       \label{eq:theta+}
     \end{equation}
-    更新参数, 直到末端残差或参数增量满足停止准则.
+    若目标函数下降, 则接受该步并减小阻尼参数; 否则拒绝该步并增大阻尼参数.
 
-    下面给出雅可比矩阵的计算方式.
-    对第 $i$ 条路径, 记
+    为了构造 \eqref{eq:lm}, 需要计算终端残差对参数的灵敏度.
+    对第 $i$ 条路径定义
     \begin{equation}
-      S_k^{(i)} = \frac{\partial y_k^{(i)}}{\partial \theta}.
+      S_{k}^{(i)} = \frac{\partial y_{k}^{(i)}}{\partial \theta},
       \label{eq:Sk}
     \end{equation}
-    由于 $y_{0}$ 是参数向量的第一项, 有
+    则有初值
     \begin{equation}
       S_{0}^{(i)} =
       \begin{bmatrix}
         1 & 0 & \cdots & 0
-      \end{bmatrix}.
+      \end{bmatrix},
       \label{eq:S0}
     \end{equation}
-    对 \eqref{eq:nldbsde} 关于 $\theta$ 求导, 记
-    \begin{equation}
-      f_{y,k}^{(i)} =
-      \frac{\partial f}{\partial y}
-      \left(t_{k}, x_{k}^{(i)}, y_{k}^{(i)}, \alpha H_{k}^{(i)}\right),
-      \qquad
-      f_{z,k}^{(i)}
-      =
-      \frac{\partial f}{\partial z}
-      \left(t_{k}, x_{k}^{(i)}, y_{k}^{(i)}, \alpha H_{k}^{(i)}\right).
-      \label{eq:fyfz}
-    \end{equation}
-    又因为 $z_{k}^{(i)}=\alpha H_k^{(i)}$, 所以
-    \begin{equation}
-      \frac{\partial z_k^{(i)}}{\partial \theta} =
-      \begin{bmatrix}
-        0_{d \times 1} & I_{d} \otimes (H_{k}^{(i)})^{\operatorname{T}}
-      \end{bmatrix}.
-      \label{eq:dzdtheta}
-    \end{equation}
-    于是得到灵敏度递推式
+    并满足递推
     \begin{equation}
       S_{k+1}^{(i)}
       =
@@ -242,34 +192,27 @@
         -\Delta t\, f_{z,k}^{(i)}\right)
       \begin{bmatrix}
         0_{d\times 1} & I_d \otimes (H_k^{(i)})^{\operatorname{T}}
-      \end{bmatrix}.
+      \end{bmatrix},
       \label{eq:srecurrence}
     \end{equation}
-    记
+    其中
     \begin{equation}
-      A_{k}^{(i)} = 1 - \Delta t\, f_{y,k}^{(i)},
-      \label{eq:ak}
+      f_{y,k}^{(i)} = \frac{\partial f}{\partial y} (t_{k}, x_{k}^{(i)}, y_{k}^{(i)}, \alpha H_{k}^{(i)}),
+      \qquad
+      f_{z,k}^{(i)} = \frac{\partial f}{\partial z} (t_{k}, x_{k}^{(i)}, y_{k}^{(i)}, \alpha H_{k}^{(i)}).
+      \label{eq:fyfz}
     \end{equation}
+    因而第 $i$ 条路径对应的雅可比行向量就是
     \begin{equation}
-      B_{k}^{(i)} =
-      \big( (\Delta W_{k}^{(i)})^{\operatorname{T}} - \Delta t\, f_{z,k}^{(i)} \big)
-      \begin{bmatrix}
-        0_{d \times 1} & I_{d} \otimes (H_{k}^{(i)})^{\operatorname{T}}
-      \end{bmatrix}.
-      \label{eq:bk}
-    \end{equation}
-    则
-    \begin{equation}
-      S_{k+1}^{(i)} = A_{k}^{(i)} S_{k}^{(i)} + B_{k}^{(i)}.
-      \label{eq:sab}
-    \end{equation}
-    展开可得
-    \begin{equation}
-      J_{i,:} = S_{N}^{(i)} = (\prod_{j = 0}^{N - 1} A_{j}^{(i)}) S_{0}^{(i)} +
+      J_{i}(\theta) = S_{N}^{(i)}
+      = (\prod_{j = 0}^{N - 1} A_{j}^{(i)}) S_{0}^{(i)} +
       \sum_{k=0}^{N-1} ( \prod_{j =k + 1}^{N - 1} A_j^{(i)}) B_{k}^{(i)}.
-      \label{eq:eq:jrow}
+      \label{eq:jacobian4i}
     \end{equation}
+    上述灵敏度递推及其由来见附录~\ref{ch:derivation} 第\ref{sec:semilinearder}节.
 
     这与线性方程中系数矩阵的推导形式类似,
     区别在于此处 $A_{k}^{(i)}$ 和 $B_{k}^{(i)}$ 依赖当前迭代步中的 $y_{k}^{(i)}$ 和 $\alpha$,
     因而需要在每一次迭代中重新计算.
+    但随机特征结构使待优化参数始终只出现在输出层,
+    从而显著降低了优化问题的规模.

@@ -1,0 +1,259 @@
+% !TEX root = ../main.tex
+
+\chapter{迭代格式推导}\label{ch:derivation}
+  本章给出第\ref{ch:methodology}章中若干关键公式的详细推导.
+
+  \section{从 PDE 到 BSDE}\label{sec:pde2bsde}
+    考虑状态过程 \eqref{eq:xt} 和光滑函数 $u(t, x)$.
+    由 Itô 公式,
+    \begin{equation}
+      \begin{aligned}
+        \dif u(t, X_{t})
+        &=
+        \frac{\partial u}{\partial t}(t, X_{t}) \dif t
+        + \nabla u(t, X_{t})^{\operatorname{T}} \dif X_{t} \\
+        &+ \frac{1}{2} \operatorname{Tr}
+        \big(
+          \sigma \sigma^{\operatorname{T}}(t, X_{t})
+          \nabla_{x}^{2} u(t, X_{t})
+        \big) \dif t.
+      \end{aligned}
+      \label{eq:ito}
+    \end{equation}
+    将 \eqref{eq:xt} 代入上式, 得
+    \begin{equation}
+      \begin{aligned}
+        \dif u(t, X_{t})
+        &=
+        \big(
+          \frac{\partial u}{\partial t}(t, X_{t})
+          + \mu(t, X_{t}) \cdot \nabla u(t, X_{t}) \\
+        &+ \frac{1}{2} \operatorname{Tr}
+          \big(
+            \sigma \sigma^{\operatorname{T}}(t, X_{t})
+            \nabla_{x}^{2} u(t, X_{t})
+          \big)
+        \big) \dif t \\
+        &+ \nabla u(t, X_{t})^{\operatorname{T}} \sigma(t, X_{t}) \dif W_{t}.
+      \end{aligned}
+      \label{eq:xtinito}
+    \end{equation}
+
+    若 $u$ 满足方程 \eqref{eq:ppde}, 则
+    \begin{equation*}
+      \begin{aligned}
+        \frac{\partial u}{\partial t}(t, x)
+        &+ \frac{1}{2} \operatorname{Tr}
+        \big(
+          \sigma \sigma^{\operatorname{T}}(t, x)
+          \nabla_{x}^{2} u(t, x)
+        \big) \\
+        &+ \langle \mu(t, x), \nabla u(t, x) \rangle
+        + f\!\big(
+          t, x, u(t, x), \sigma^{\operatorname{T}}(t, x)\nabla u(t, x)
+        \big)
+        = 0.
+      \end{aligned}
+    \end{equation*}
+    代回 \eqref{eq:xtinito} 得
+    \begin{equation}
+      \begin{aligned}
+        \dif u(t, X_{t})
+        &=
+        - f\!\big(
+          t, X_{t}, u(t, X_{t}),
+          \sigma^{\operatorname{T}}(t, X_{t})\nabla u(t, X_{t})
+        \big) \dif t \\
+        &+ \nabla u(t, X_{t})^{\operatorname{T}} \sigma(t, X_{t}) \dif W_{t}.
+      \end{aligned}
+      \label{eq:bsde0}
+    \end{equation}
+    积分形式为
+    \begin{equation}
+      \begin{aligned}
+        u(t, X_{t}) - u(0, X_{0})
+        &=
+        - \int_{0}^{t}
+        f\!\big(
+          s, X_{s}, u(s, X_{s}),
+          \sigma^{\operatorname{T}}(s, X_{s})\nabla u(s, X_{s})
+        \big) \dif s \\
+        &+ \int_{0}^{t}
+        \nabla u(s, X_{s})^{\operatorname{T}} \sigma(s, X_{s}) \dif W_{s}.
+      \end{aligned}
+      \label{eq:bsie0}
+    \end{equation}
+    再利用 \eqref{eq:ytzt} 的定义, 就得到正文中的 BSDE \eqref{eq:bsde}.
+
+  \section{线性方程终端格式的展开}\label{sec:linearder}
+    对线性生成元, 离散迭代式 \eqref{eq:ldbsde} 可写为
+    \begin{equation}
+      y_{k+1}^{(i)}
+      = a_{k}^{(i)} y_{k}^{(i)}
+      + (\xi_{k}^{(i)})^{\operatorname{T}} \alpha H_{k}^{(i)}
+      + c_{k}^{(i)},
+      \label{eq:linear_abbrev}
+    \end{equation}
+    其中
+    \begin{equation}
+      a_{k}^{(i)} = 1 - \Delta t\, \mathcal{L}(t_{k}, x_{k}^{(i)}),
+      \label{eq:ak}
+    \end{equation}
+    \begin{equation}
+      \xi_{k}^{(i)} = \Delta W_{k}^{(i)},
+      \label{eq:xik}
+    \end{equation}
+    \begin{equation}
+      c_{k}^{(i)} = - \Delta t\, \mathcal{N}(t_{k}, x_{k}^{(i)}).
+      \label{eq:ck}
+    \end{equation}
+
+    从 $y_{0}^{(i)} = y_{0}$ 出发, 前几步展开为
+    \begin{equation}
+      y_{1}^{(i)}
+      = a_{0}^{(i)} y_{0}
+      + (\xi_{0}^{(i)})^{\operatorname{T}} \alpha H_{0}^{(i)}
+      + c_{0}^{(i)},
+      \label{eq:y1}
+    \end{equation}
+    \begin{equation}
+      \begin{aligned}
+        y_2^{(i)}
+        &= a_{1}^{(i)} y_{1}^{(i)}
+        + (\xi_{1}^{(i)})^{\operatorname{T}} \alpha H_{1}^{(i)}
+        + c_{1}^{(i)} \\
+        &= a_{1}^{(i)} a_{0}^{(i)} y_{0}
+        + a_{1}^{(i)} (\xi_{0}^{(i)})^{\operatorname{T}} \alpha H_{0}^{(i)}
+        + (\xi_{1}^{(i)})^{\operatorname{T}} \alpha H_{1}^{(i)} \\
+        &+ a_{1}^{(i)} c_{0}^{(i)} + c_{1}^{(i)}.
+      \end{aligned}
+      \label{eq:y2}
+    \end{equation}
+    由此可见, 每一步都会把已有项乘上新的系数 $a_{k}^{(i)}$, 再加上当前时刻的随机特征项和常数项.
+    归纳可得
+    \begin{equation}
+      \begin{aligned}
+        y_{N}^{(i)}
+        &= \left( \prod_{j = 0}^{N - 1} a_{j}^{(i)} \right) y_{0} \\
+        &+ \left\langle
+          \sum_{k = 0}^{N - 1} \left( \prod_{j = k + 1}^{N - 1} a_{j}^{(i)} \right)
+          \xi_{k}^{(i)} (H_{k}^{(i)})^{\operatorname{T}},
+          \alpha
+        \right\rangle \\
+        &+ \sum_{k = 0}^{N - 1} \left( \prod_{j = k + 1}^{N-1} a_{j}^{(i)} \right) c_{k}^{(i)}.
+      \end{aligned}
+      \label{eq:yN}
+    \end{equation}
+    这里约定当 $k = N - 1$ 时, 空乘积取为 $1$.
+
+    将 \eqref{eq:yN} 与正文中的 \eqref{eq:yN4i} 对照, 可直接识别
+    \begin{equation}
+      \beta_{i} = \prod_{j = 0}^{N - 1} a_{j}^{(i)},
+      \label{eq:beta}
+    \end{equation}
+    \begin{equation}
+      \Gamma_{i} = \sum_{k = 0}^{N - 1}
+      \left( \prod_{j = k + 1}^{N - 1} a_{j}^{(i)} \right)
+      \xi_{k}^{(i)} (H_{k}^{(i)})^{\operatorname{T}},
+      \label{eq:gamma}
+    \end{equation}
+    \begin{equation}
+      \eta_{i} = \sum_{k=0}^{N-1}
+      \left( \prod_{j=k+1}^{N-1} a_{j}^{(i)} \right) c_{k}^{(i)}.
+      \label{eq:eta}
+    \end{equation}
+    因而线性情形确实归结为关于 $y_{0}$ 和 $\alpha$ 的线性最小二乘问题.
+
+  \section{半线性方程的灵敏度递推}\label{sec:semilinearder}
+    对半线性情形, 令
+    \begin{equation*}
+      z_{k}^{(i)} = \alpha H_{k}^{(i)}.
+    \end{equation*}
+    由于参数向量取为 \eqref{eq:theta}, 故
+    \begin{equation}
+      \frac{\partial z_{k}^{(i)}}{\partial \theta}
+      =
+      \begin{bmatrix}
+        0_{d \times 1} & I_d \otimes (H_{k}^{(i)})^{\operatorname{T}}
+      \end{bmatrix}.
+      \label{eq:dzdtheta}
+    \end{equation}
+
+    记
+    \begin{equation*}
+      S_{k}^{(i)} = \frac{\partial y_{k}^{(i)}}{\partial \theta}.
+    \end{equation*}
+    因为 $y_{0}$ 是参数向量的第一项, 而其余参数在初始时刻不直接进入 $y_{0}$,
+    所以有初值 \eqref{eq:S0}.
+
+    对离散迭代式 \eqref{eq:nldbsde} 关于 $\theta$ 求导:
+    \begin{equation*}
+      \begin{aligned}
+        S_{k + 1}^{(i)}
+        &= S_{k}^{(i)}
+        - \Delta t\,
+        \frac{\partial}{\partial \theta}
+        f\!\big( t_{k}, x_{k}^{(i)}, y_{k}^{(i)}, z_{k}^{(i)} \big) \\
+        &+ (\Delta W_{k}^{(i)})^{\operatorname{T}}
+        \frac{\partial z_{k}^{(i)}}{\partial \theta}.
+      \end{aligned}
+    \end{equation*}
+    对生成元使用链式法则,
+    \begin{equation*}
+      \frac{\partial}{\partial \theta}
+      f\!\big( t_{k}, x_{k}^{(i)}, y_{k}^{(i)}, z_{k}^{(i)} \big)
+      = f_{y,k}^{(i)} S_{k}^{(i)}
+      + f_{z,k}^{(i)}
+      \frac{\partial z_{k}^{(i)}}{\partial \theta},
+    \end{equation*}
+    其中 $f_{y, k}^{(i)}$ 和 $f_{z, k}^{(i)}$ 的定义见 \eqref{eq:fyfz}.
+    代回上式得
+    \begin{equation}
+      \begin{aligned}
+        S_{k + 1}^{(i)}
+        &= \left(1 - \Delta t\, f_{y, k}^{(i)}\right) S_{k}^{(i)} \\
+        &+ \left(
+          (\Delta W_{k}^{(i)})^{\operatorname{T}}
+          - \Delta t\, f_{z, k}^{(i)}
+        \right)
+        \frac{\partial z_{k}^{(i)}}{\partial \theta}.
+      \end{aligned}
+      \label{eq:Skn4Sk}
+    \end{equation}
+    再代入 \eqref{eq:dzdtheta}, 即得到正文中的递推式 \eqref{eq:srecurrence}.
+    记
+    \begin{equation}
+      A_{k}^{(i)} = 1 - \Delta t\, f_{y,k}^{(i)},
+      \label{eq:Ak}
+    \end{equation}
+    \begin{equation}
+      B_{k}^{(i)} =
+      \big( (\Delta W_{k}^{(i)})^{\operatorname{T}} - \Delta t\, f_{z,k}^{(i)} \big)
+      \begin{bmatrix}
+        0_{d \times 1} & I_{d} \otimes (H_{k}^{(i)})^{\operatorname{T}}
+      \end{bmatrix}.
+      \label{eq:Bk}
+    \end{equation}
+    则
+    \begin{equation}
+      S_{k+1}^{(i)} = A_{k}^{(i)} S_{k}^{(i)} + B_{k}^{(i)}.
+      \label{eq:sab}
+    \end{equation}
+    展开可得
+    \begin{equation}
+      S_{N}^{(i)} = (\prod_{j = 0}^{N - 1} A_{j}^{(i)}) S_{0}^{(i)} +
+      \sum_{k=0}^{N-1} ( \prod_{j =k + 1}^{N - 1} A_j^{(i)}) B_{k}^{(i)}.
+      \label{eq:eq:jrow}
+    \end{equation}
+
+    由于
+    \begin{equation*}
+      r_{i}(\theta) = y_{N}^{(i)}(\theta) - g(x_{N}^{(i)}),
+    \end{equation*}
+    而终端状态 $x_{N}^{(i)}$ 与参数 $\theta$ 无关, 故
+    \begin{equation*}
+      \frac{\partial r_{i}}{\partial \theta}
+      = \frac{\partial y_{N}^{(i)}}{\partial \theta}
+      = S_{N}^{(i)}.
+    \end{equation*}
+    这就说明了雅可比矩阵可以由所有路径的终端灵敏度直接拼接得到.
