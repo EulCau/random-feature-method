@@ -1,33 +1,21 @@
 % !TEX root = ../main.tex
 
 \chapter{数值实验}\label{ch:numerical}
-  本章通过数值实验检验前文随机特征方法在高维抛物型方程上的表现.
-  实验分为两组: 第一组为线性方程, 用来验证线性最小二乘求解器的正确性和效率;
-  第二组为非线性方程, 用来考察 Levenberg--Marquardt 方法在高维 BSDE 离散系统中的收敛情况.
-  最终实验计划包含两个线性方程和两个非线性方程.
-  当前代码中已经实现的方程包括 Black--Scholes 模型, HJB-LQ 方程和 Allen--Cahn 方程;
-  第二个线性方程在表格中保留位置, 后续按最终代码中的方程名称和参数替换.
-
-  所有表格中的数值目前只保留位数格式.
-  其中 $0.000000$ 表示初值或参考值保留六位小数,
-  $0.0000$ 表示误差或残差保留四位小数,
-  $0.000$ 表示时间保留三位小数.
-  后续只需用实际实验输出替换对应位置, 不需要改变本章结构.
+  本章用两个线性方程和两个半线性方程检验前文方法.
+  线性方程包括 Black--Scholes 方程和 Heat 方程, 用来验证线性最小二乘求解器;
+  半线性方程包括 HJB-LQ 方程和 Allen--Cahn 方程, 用来考察 Levenberg--Marquardt 方法在高维 BSDE 离散系统中的表现.
 
   \section{实验设置}\label{sec:numerical_setup}
-    对每个方程, 程序首先根据给定的随机微分方程生成样本路径
-    $\{X_{k}^{(i)},\Delta W_{k}^{(i)}\}_{k=0}^{N-1}$,
-    然后用随机特征函数近似每个时间层上的 $Z_{k}$.
-    线性方程中, 由于终端值 $Y_N$ 关于 $y_0$ 和输出层参数 $\alpha$ 是线性的,
-    可以直接构造最小二乘问题并求解.
-    非线性方程中, 终端残差关于参数不再线性,
-    因而采用 Levenberg--Marquardt 方法求解非线性最小二乘问题.
+    对每个方程, 先生成样本路径
+    $\{X_k^{(i)},\Delta W_k^{(i)}\}_{k=0}^{N-1}$,
+    再用随机特征函数近似各时间层上的 $Z_k$.
+    线性方程中, 终端值 $Y_N$ 关于 $y_0$ 和输出层参数 $\alpha$ 是线性的,
+    因而直接求解带 ridge 正则的最小二乘问题.
+    半线性方程中, 终端残差关于参数不再线性, 因而采用 LM 方法求解非线性最小二乘问题.
 
     本章统一报告训练样本上的终端残差 RMSE 和独立测试样本上的终端残差 RMSE\@.
-    前者反映求解器在已采样路径上的拟合程度,
-    后者用于观察随机特征参数是否只拟合了固定路径.
-    对非线性方程, 若开启迭代日志, 还可以从日志中得到每一步的训练残差,
-    阻尼参数 $\lambda$, 步长范数和是否接受当前步.
+    前者反映固定样本路径上的拟合程度, 后者用于判断随机特征参数是否发生了路径级过拟合.
+    除特别说明外, 标准配置见表~\ref{tab:numerical_config}.
 
     \begin{table}
       \centering
@@ -37,25 +25,13 @@
         \toprule
         方程 & 类型 & $d$ & $T$ & $N$ & $S$ & $H$ & $\lambda_0$ & 求解器 \\
         \midrule
-        Black--Scholes & 线性 & 100 & 1.0 & 100 & 2048 & 50 & 0.010 & 线性最小二乘 \\
-        线性方程二 & 线性 & 000 & 0.0 & 000 & 00000 & 00 & 0.000 & 线性最小二乘 \\
-        HJB-LQ & 非线性 & 100 & 1.0 & 20 & 16384 & 50 & 0.010 & LM \\
-        Allen--Cahn & 非线性 & 100 & 0.3 & 20 & 16384 & 50 & 0.001 & LM \\
+        Black--Scholes & 线性 & 100 & 1.0 & 100 & 16384 & 50 & 0.010 & 线性最小二乘 \\
+        Heat & 线性 & 100 & 1.0 & 100 & 16384 & 50 & 0.010 & 线性最小二乘 \\
+        HJB-LQ & 半线性 & 100 & 1.0 & 20 & 16384 & 50 & 0.010 & LM \\
+        Allen--Cahn & 半线性 & 100 & 0.3 & 20 & 16384 & 50 & 0.010 & LM \\
         \bottomrule
       \end{tabular}
     \end{table}
-
-    随机特征映射固定内层参数, 只训练输出层参数.
-    图~\ref{fig:linear_rfm_process_numerical} 给出线性随机特征求解流程.
-    在线性方程中, 该流程直接导向一个最小二乘系统;
-    在非线性方程中, 同样的随机特征结构被嵌入到 LM 迭代的每一次残差和雅可比计算中.
-
-    \begin{figure}[ht]
-      \centering
-      \includegraphics[width=0.72\textwidth]{linear-rfm-process}
-      \caption{随机特征方法的线性求解流程}
-      \label{fig:linear_rfm_process_numerical}
-    \end{figure}
 
   \section{线性方程}\label{sec:numerical_linear}
     本节考虑生成元关于 $(y,z)$ 具有线性结构的方程.
@@ -65,14 +41,15 @@
       = A_{i,0} y_0
       + \sum_{j=1}^{dH} A_{i,j} \theta_j
       + b_i,
+      \qquad
+      \theta=\operatorname{vec}(\alpha).
       \label{eq:numerical_linear_terminal_form}
     \end{equation}
-    其中 $\theta=\operatorname{vec}(\alpha)$.
-    因此末端匹配条件 $Y_N^{(i)}\approx g(X_N^{(i)})$ 给出一个线性最小二乘问题.
-    这种求解方式避免了非线性迭代, 也避免了对初始参数的敏感性.
+    因此终端匹配条件 $Y_N^{(i)}\approx g(X_N^{(i)})$ 给出一个线性最小二乘问题,
+    不需要外层非线性迭代.
 
-    第一个线性测试方程采用多资产 Black--Scholes 模型.
-    当前代码中状态过程满足
+    Black--Scholes 算例采用多资产算术平均看涨期权.
+    状态过程满足
     \begin{equation}
       X_{k+1}^{m}
       =
@@ -81,60 +58,57 @@
       \qquad m=1,\ldots,d,
       \label{eq:numerical_bsm_forward}
     \end{equation}
-    生成元为 $f(t,x,y,z)=-r y$, 终端条件为
+    生成元和终端条件为
     \begin{equation}
+      f(t,x,y,z)=-r y,\qquad
       g(x)=\max\!\left(\frac{1}{d}\sum_{m=1}^{d}x_m-K,0\right).
       \label{eq:numerical_bsm_terminal}
     \end{equation}
-    该终端条件是算术平均型 payoff, 因此不能直接使用一维 Black--Scholes 公式作为精确解.
-    本文将其作为线性结构下的高维基准问题; 若后续需要参考初值, 可单独用大样本 Monte Carlo 或更高精度数值结果给出.
+    由于该 payoff 没有简单闭式价格, 本文采用控制变量 Monte Carlo 参考值, 见附录~\ref{ch:reference_values}.
 
-    第二个线性方程用于补充线性求解器在不同模型结构下的表现.
-    在最终实验中, 该方程应保持生成元线性, 并给出相应的 $X_t$, $f$ 和 $g$.
-    如果选择热方程或线性反应扩散方程, 则应优先选取有解析参考值或高精度参考值的终端条件,
-    这样可以同时报告残差误差和初值误差.
+    Heat 算例采用
+    \begin{equation}
+      X_t=x_0+W_t,\qquad
+      f(t,x,y,z)=0,\qquad
+      g(x)=\exp\!\left(-\frac{\lVert x\rVert^2}{a}\right).
+      \label{eq:numerical_heat}
+    \end{equation}
+    由 Feynman--Kac 公式,
+    \begin{equation}
+      u(t,x)
+      =
+      \left(\frac{a}{a+2(T-t)}\right)^{d/2}
+      \exp\!\left(
+        -\frac{\lVert x\rVert^2}{a+2(T-t)}
+      \right).
+      \label{eq:numerical_heat_solution}
+    \end{equation}
+    因而在 $x_0=0$, $a=d$ 时,
+    \begin{equation}
+      Y_0=u(0,0)=\left(\frac{d}{d+2T}\right)^{d/2}.
+      \label{eq:numerical_heat_reference}
+    \end{equation}
 
     \begin{table}
       \centering
       \caption{线性方程主要结果}
       \label{tab:linear_main_results}
-      \begin{tabular}{lcccccccc}
+      \begin{tabular}{lccccc}
         \toprule
-        方程 & $d$ & $N$ & $H$ & $S$ & $y_0$ & 训练 RMSE & 测试 RMSE & 时间 / ms \\
+        方程 & $y_0$ & 参考值 & 绝对误差 & 训练 RMSE & 测试 RMSE \\
         \midrule
-        Black--Scholes & 100 & 100 & 50 & 2048 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
-        线性方程二 & 000 & 000 & 00 & 00000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
+        Black--Scholes & 0.048701 & 0.048809 & $1.08\times10^{-4}$ & 0.0112 & 0.0158 \\
+        Heat & 0.371605 & 0.371528 & $7.71\times10^{-5}$ & 0.0356 & 0.0529 \\
         \bottomrule
       \end{tabular}
     \end{table}
 
-    除最终结果外, 线性部分还需要检查样本数和随机特征宽度对结果的影响.
-    表~\ref{tab:linear_scaling_results} 用于记录固定方程下的规模变化.
-    如果第二个线性方程具有精确参考值, 建议优先对该方程做宽度扫描;
-    否则可以先对 Black--Scholes 模型做样本数扫描, 观察训练残差和测试残差是否同步下降.
+    由表~\ref{tab:linear_main_results} 可见, 两个线性算例的初值都与独立参考值较为接近.
+    Black--Scholes 的误差约为 $10^{-4}$, Heat 方程的误差小于 $10^{-4}$.
 
-    \begin{table}
-      \centering
-      \caption{线性方程规模变化结果}
-      \label{tab:linear_scaling_results}
-      \begin{tabular}{lcccccc}
-        \toprule
-        方程 & 变量 & 取值 & $y_0$ & 训练 RMSE & 测试 RMSE & 时间 / ms \\
-        \midrule
-        Black--Scholes & $S$ & 00000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
-        Black--Scholes & $S$ & 00000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
-        线性方程二 & $H$ & 00 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
-        线性方程二 & $H$ & 00 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
-        \bottomrule
-      \end{tabular}
-    \end{table}
-
-  \section{非线性方程}\label{sec:numerical_nonlinear}
-    本节考虑两个非线性方程: HJB-LQ 方程和 Allen--Cahn 方程.
-    两者都使用同一套随机特征近似 $Z_k$, 但非线性来源不同.
-    HJB-LQ 方程的生成元关于 $z$ 二次非线性,
-    Allen--Cahn 方程的生成元关于 $y$ 三次非线性.
-    因此这两个算例可以分别检验方法对 $z$ 非线性和 $y$ 非线性的处理能力.
+  \section{半线性方程}\label{sec:numerical_nonlinear}
+    HJB-LQ 方程的非线性来自梯度项, Allen--Cahn 方程的非线性来自反应项.
+    这两类非线性分别检验方法对 $z$ 型非线性和 $y$ 型非线性的处理能力.
 
     HJB-LQ 方程采用
     \begin{equation}
@@ -150,7 +124,7 @@
       \label{eq:numerical_hjblq_bsde}
     \end{equation}
     令 $U_t=\exp(-Y_t)$, 可得 $U_t$ 为鞅.
-    因此初值满足
+    因此
     \begin{equation}
       Y_0
       =
@@ -165,7 +139,7 @@
       \right].
       \label{eq:numerical_hjblq_reference}
     \end{equation}
-    当 $d=100$, $T=1$ 时, 参考值为 $Y_0=4.5901617246$.
+    当 $d=100$, $T=1$ 时, 一维积分参考值为 $Y_0=4.5901617246$.
 
     Allen--Cahn 方程采用
     \begin{equation}
@@ -175,131 +149,238 @@
       g(x)=\frac{1}{2+0.4\lVert x\rVert^2}.
       \label{eq:numerical_allencahn}
     \end{equation}
-    该方程在当前设置下不使用闭式精确解.
-    由于终端值较小, 可将 $y-y^3$ 中的三次项视为较小修正,
-    得到线性化参考
-    \begin{equation}
-      Y_0
-      \approx
-      e^{T}
-      \mathbb{E}
-      \left[
-        \frac{1}{2+0.4\lVert X_T\rVert^2}
-      \right].
-      \label{eq:numerical_allencahn_reference}
-    \end{equation}
-    对 $d=100$, $T=0.3$ 的配置, 该参考值约为 $0.05281$.
-    这个值只作为一致性检查, 不作为严格精确解.
+    该方程没有简单闭式解.
+    本文采用独立的径向有限差分方法构造参考值.
+    对 $d=100$, $T=0.3$ 的配置, 参考值为 $Y_0=0.05278464$.
 
     \begin{table}
       \centering
-      \caption{非线性方程主要结果}
+      \caption{半线性方程主要结果}
       \label{tab:nonlinear_main_results}
-      \begin{tabular}{lccccccccc}
+      \begin{tabular}{lccccc}
         \toprule
-        方程 & $d$ & $N$ & $H$ & $S$ & $y_0$ & 参考值 & 绝对误差 & 训练 RMSE & 测试 RMSE \\
+        方程 & $y_0$ & 参考值 & 绝对误差 & 训练 RMSE & 测试 RMSE \\
         \midrule
-        HJB-LQ & 100 & 20 & 50 & 16384 & 0.000000 & 4.590162 & 0.0000 & 0.0000 & 0.0000 \\
-        Allen--Cahn & 100 & 20 & 50 & 16384 & 0.000000 & 0.052810 & 0.0000 & 0.0000 & 0.0000 \\
+        HJB-LQ & 4.590000 & 4.590162 & $1.62\times10^{-4}$ & 0.0990 & 0.1443 \\
+        Allen--Cahn & 0.053131 & 0.052785 & $3.46\times10^{-4}$ & 0.0035 & 0.0051 \\
         \bottomrule
       \end{tabular}
     \end{table}
+
+    表~\ref{tab:nonlinear_main_results} 表明, LM 求解后的两个半线性算例都能给出较准确的初值.
+    HJB-LQ 的初值误差约为 $1.62\times10^{-4}$,
+    Allen--Cahn 的初值误差约为 $3.46\times10^{-4}$.
 
     \begin{table}
       \centering
-      \caption{非线性方程运行时间与迭代结果}
+      \caption{半线性方程的 LM 迭代结果}
       \label{tab:nonlinear_iteration_results}
-      \begin{tabular}{lcccccc}
+      \begin{tabular}{lccccc}
         \toprule
-        方程 & 迭代步数 & 接受步数 & 最终 $\lambda$ & 最终步长范数 & 时间 / ms & 设备 \\
+        方程 & 迭代步数 & 接受步数 & 最终 $\lambda$ & 最终步长范数 & 时间 / ms \\
         \midrule
-        HJB-LQ & 000 & 000 & 0.0000 & 0.0000 & 0.000 & CUDA \\
-        Allen--Cahn & 000 & 000 & 0.0000 & 0.0000 & 0.000 & CUDA \\
+        HJB-LQ & 4 & 3 & $1.00\times10^{4}$ & $2.82\times10^{-7}$ & 3435.640 \\
+        Allen--Cahn & 4 & 3 & $1.00\times10^{6}$ & $5.59\times10^{-10}$ & 3145.050 \\
         \bottomrule
       \end{tabular}
     \end{table}
 
-    图~\ref{fig:nonlinear_residual_history} 用于展示非线性求解器的收敛历史.
-    最终作图时, 横轴取 LM 迭代步数, 纵轴取训练终端残差 RMSE;
-    若残差下降跨越多个数量级, 纵轴采用对数坐标.
-    对拒绝步较多的实验, 可在图中只画接受步, 并在图注中说明.
+    图~\ref{fig:nonlinear_residual_history} 展示半线性求解器的残差下降过程.
+    横轴为 LM 接受步编号, 纵轴为训练终端残差 RMSE\@.
 
     \begin{figure}[ht]
       \centering
-      \includegraphics[width=0.75\textwidth]{nonlinear-residual-placeholder}
-      \caption{非线性方程的 LM 迭代残差下降}
+      \includegraphics[width=0.82\textwidth]{nonlinear-lm-residual}
+      \caption{半线性方程的 LM 迭代残差下降}
       \label{fig:nonlinear_residual_history}
     \end{figure}
 
-  \section{随机特征宽度的影响}\label{sec:numerical_hidden_dim}
-    随机特征宽度 $H$ 控制可训练参数数量.
-    当 $H$ 过小时, 特征空间表达能力不足, 训练残差和测试残差都会较大;
-    当 $H$ 过大而样本数不足时, 训练残差可能继续下降, 但测试残差和 $y_0$ 误差未必同步改善.
-    因此本节固定方程维度, 时间剖分和样本数, 只改变 $H$, 用来选择更稳定的随机特征宽度.
-
-    HJB-LQ 方程具有精确参考值, 因而最适合做这一组实验.
-    表~\ref{tab:hjblq_hidden_dim_scan} 中的误差定义为
-    \begin{equation}
-      e_0=\left|y_0-4.5901617246\right|.
-      \label{eq:numerical_hjblq_abs_error}
-    \end{equation}
+  \section{样本数的影响}\label{sec:numerical_sample_size}
+    样本数直接影响最小二乘系统对真实分布的代表性.
+    表~\ref{tab:sample_size_results} 固定 $d=100$, $H=50$, 只改变训练样本数 $S$.
 
     \begin{table}
       \centering
-      \caption{HJB-LQ 方程中随机特征宽度的影响}
-      \label{tab:hjblq_hidden_dim_scan}
-      \begin{tabular}{ccccccc}
+      \caption{样本数变化结果}
+      \label{tab:sample_size_results}
+      \begin{tabular}{lccccc}
         \toprule
-        $H$ & $S$ & $y_0$ & $e_0$ & 训练 RMSE & 测试 RMSE & 时间 / ms \\
+        方程 & $S$ & $y_0$ & 绝对误差 & 训练 RMSE & 测试 RMSE \\
         \midrule
-        8 & 16384 & 0.000000 & 0.0000 & 0.0000 & 0.0000 & 0.000 \\
-        12 & 16384 & 0.000000 & 0.0000 & 0.0000 & 0.0000 & 0.000 \\
-        20 & 16384 & 0.000000 & 0.0000 & 0.0000 & 0.0000 & 0.000 \\
-        50 & 16384 & 0.000000 & 0.0000 & 0.0000 & 0.0000 & 0.000 \\
+        Heat & 4096 & 0.373519 & $1.99\times10^{-3}$ & 0.0002 & 0.1487 \\
+        Heat & 8192 & 0.372477 & $9.49\times10^{-4}$ & 0.0268 & 0.0700 \\
+        Heat & 16384 & 0.371605 & $7.71\times10^{-5}$ & 0.0356 & 0.0529 \\
+        Black--Scholes & 8192 & 0.040108 & $8.70\times10^{-3}$ & 0.6489 & 1.5086 \\
+        Black--Scholes & 16384 & 0.048701 & $1.08\times10^{-4}$ & 0.0112 & 0.0158 \\
+        HJB-LQ & 4096 & 4.423910 & $1.66\times10^{-1}$ & $1.36\times10^{-6}$ & 0.4595 \\
+        HJB-LQ & 8192 & 4.578700 & $1.15\times10^{-2}$ & 0.0762 & 0.1963 \\
+        HJB-LQ & 16384 & 4.590000 & $1.62\times10^{-4}$ & 0.0990 & 0.1443 \\
+        Allen--Cahn & 8192 & 0.053268 & $4.84\times10^{-4}$ & 0.0028 & 0.0069 \\
+        Allen--Cahn & 16384 & 0.053131 & $3.46\times10^{-4}$ & 0.0035 & 0.0051 \\
         \bottomrule
       \end{tabular}
     \end{table}
 
-    图~\ref{fig:hidden_dim_generalization} 用于展示训练残差和测试残差随 $H$ 的变化.
-    如果训练残差下降而测试残差上升, 则说明固定样本路径上出现了过拟合现象;
-    如果两者同步下降且 $e_0$ 也减小, 则说明增加随机特征宽度确实改善了近似质量.
+    小样本时训练残差不一定可靠.
+    例如 HJB-LQ 在 $S=4096$ 时训练 RMSE 几乎为零, 但初值误差和测试 RMSE 都明显偏大.
+    因此后续判断以独立测试残差和初值误差为主.
+    图~\ref{fig:sample_size_generalization} 给出了相同数据的图形化比较.
 
     \begin{figure}[ht]
       \centering
-      \includegraphics[width=0.75\textwidth]{theory-compare-placeholder}
-      \caption{HJB-LQ 方程中随机特征宽度对误差的影响}
+      \includegraphics[width=0.88\textwidth]{sample-size-generalization}
+      \caption{样本数对测试残差和初值误差的影响}
+      \label{fig:sample_size_generalization}
+    \end{figure}
+
+  \section{随机特征宽度的影响}\label{sec:numerical_hidden_dim}
+    随机特征宽度 $H$ 控制每个时间层上可训练输出参数的数量.
+    表~\ref{tab:hidden_dim_results} 固定 $d=100$, $S=16384$, 只改变 $H$.
+
+    \begin{table}
+      \centering
+      \caption{随机特征宽度变化结果}
+      \label{tab:hidden_dim_results}
+      \begin{tabular}{lccccc}
+        \toprule
+        方程 & $H$ & $y_0$ & 绝对误差 & 训练 RMSE & 测试 RMSE \\
+        \midrule
+        Heat & 8 & 0.372033 & $5.05\times10^{-4}$ & 0.0491 & 0.0521 \\
+        Heat & 20 & 0.371917 & $3.89\times10^{-4}$ & 0.0454 & 0.0520 \\
+        Heat & 50 & 0.371605 & $7.71\times10^{-5}$ & 0.0356 & 0.0529 \\
+        Black--Scholes & 20 & 0.048932 & $1.23\times10^{-4}$ & 0.0140 & 0.0159 \\
+        Black--Scholes & 50 & 0.048701 & $1.08\times10^{-4}$ & 0.0112 & 0.0158 \\
+        HJB-LQ & 8 & 4.597250 & $7.09\times10^{-3}$ & 0.1353 & 0.1429 \\
+        HJB-LQ & 12 & 4.596820 & $6.66\times10^{-3}$ & 0.1321 & 0.1433 \\
+        HJB-LQ & 20 & 4.594760 & $4.60\times10^{-3}$ & 0.1251 & 0.1430 \\
+        HJB-LQ & 50 & 4.590000 & $1.62\times10^{-4}$ & 0.0990 & 0.1443 \\
+        Allen--Cahn & 20 & 0.053057 & $2.72\times10^{-4}$ & 0.0045 & 0.0052 \\
+        Allen--Cahn & 50 & 0.053131 & $3.46\times10^{-4}$ & 0.0035 & 0.0051 \\
+        \bottomrule
+      \end{tabular}
+    \end{table}
+
+    对 HJB-LQ 方程, 增大 $H$ 明显改善初值误差和训练残差;
+    对 Heat, Black--Scholes 和 Allen--Cahn, 当前测试误差对 $H$ 的变化较平缓.
+    图~\ref{fig:hidden_dim_generalization} 展示了测试残差和初值误差随 $H$ 的变化.
+
+    \begin{figure}[ht]
+      \centering
+      \includegraphics[width=0.88\textwidth]{hidden-dim-generalization}
+      \caption{随机特征宽度对测试残差和初值误差的影响}
       \label{fig:hidden_dim_generalization}
     \end{figure}
 
+  \section{维度与运行时间}\label{sec:numerical_dimension_time}
+    为观察维度变化对运行时间的影响, 本节固定 $H=50$, $S=16384$,
+    对 $d=20,50,100$ 分别运行三个随机种子并取平均.
+    表~\ref{tab:dimension_average_results} 给出平均结果.
+
+    \begin{table}
+      \centering
+      \caption{维度变化的平均结果}
+      \label{tab:dimension_average_results}
+      \begin{tabular}{lcccc}
+        \toprule
+        方程 & $d$ & $y_0$ 均值 & 测试 RMSE 均值 & 时间 / ms \\
+        \midrule
+        Heat & 20 & 0.385587 & 0.0500 & $299.2\pm1.2$ \\
+        Heat & 50 & 0.375873 & 0.0528 & $434.1\pm1.4$ \\
+        Heat & 100 & 0.371924 & 0.0520 & $697.3\pm2.6$ \\
+        Black--Scholes & 20 & 0.051706 & 0.0356 & $301.1\pm1.9$ \\
+        Black--Scholes & 50 & 0.049297 & 0.0390 & $440.9\pm2.1$ \\
+        Black--Scholes & 100 & 0.048774 & 0.0124 & $704.6\pm0.7$ \\
+        HJB-LQ & 20 & 2.934457 & 0.1535 & $447.9\pm70.8$ \\
+        HJB-LQ & 50 & 3.888443 & 0.1499 & $1039.8\pm181.7$ \\
+        HJB-LQ & 100 & 4.591863 & 0.1436 & $3324.4\pm265.6$ \\
+        Allen--Cahn & 20 & 0.206768 & 0.0154 & $442.8\pm58.4$ \\
+        Allen--Cahn & 50 & 0.099445 & 0.0088 & $858.8\pm113.5$ \\
+        Allen--Cahn & 100 & 0.053021 & 0.0051 & $2764.5\pm652.0$ \\
+        \bottomrule
+      \end{tabular}
+    \end{table}
+
+    用幂律模型 $t(d)\approx C d^p$ 对平均时间做最小二乘拟合,
+    得到 Heat 的经验阶数 $p=0.52$, Black--Scholes 的经验阶数 $p=0.52$,
+    HJB-LQ 的经验阶数 $p=1.23$, Allen--Cahn 的经验阶数 $p=1.12$.
+    线性方程在这组维度上增长较慢, 半线性方程因为需要重复构造残差和灵敏度矩阵, 时间增长更明显.
+    图~\ref{fig:dimension_time_scaling} 在对数坐标下展示了这一趋势.
+
+    \begin{figure}[ht]
+      \centering
+      \includegraphics[width=0.82\textwidth]{dimension-time-scaling}
+      \caption{运行时间随维度变化的经验阶数}
+      \label{fig:dimension_time_scaling}
+    \end{figure}
+
   \section{随机种子稳定性}\label{sec:numerical_seed}
-    由于随机特征内层参数和样本路径都由随机数生成, 单次运行结果不能完全代表方法的稳定性.
-    因此最终结果需要至少选择一个线性方程和两个非线性方程做多随机种子实验.
-    对每个种子, 记录 $y_0$, 训练 RMSE, 测试 RMSE 和运行时间.
-    若篇幅允许, 表中同时给出均值和标准差.
+    随机特征内层参数和样本路径都由随机数生成, 因此需要检查单次结果是否依赖某个特殊种子.
+    表~\ref{tab:seed_stability} 使用标准配置下的三个种子,
+    报告 $y_0$ 均值, 样本标准差和平均测试残差.
 
     \begin{table}
       \centering
       \caption{随机种子稳定性结果}
       \label{tab:seed_stability}
-      \begin{tabular}{lccccc}
+      \begin{tabular}{lcccc}
         \toprule
-        方程 & seed & $y_0$ & 训练 RMSE & 测试 RMSE & 时间 / ms \\
+        方程 & $y_0$ 均值 & $y_0$ 标准差 & 均值绝对误差 & 测试 RMSE 均值 \\
         \midrule
-        HJB-LQ & 0000000000000000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
-        HJB-LQ & 0000000000000000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
-        HJB-LQ & 0000000000000000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
-        Allen--Cahn & 0000000000000000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
-        Allen--Cahn & 0000000000000000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
-        Allen--Cahn & 0000000000000000 & 0.000000 & 0.0000 & 0.0000 & 0.000 \\
+        Heat & 0.371924 & $2.81\times10^{-4}$ & $3.96\times10^{-4}$ & 0.0520 \\
+        Black--Scholes & 0.048774 & $6.30\times10^{-5}$ & $3.56\times10^{-5}$ & 0.0124 \\
+        HJB-LQ & 4.591863 & $1.62\times10^{-3}$ & $1.70\times10^{-3}$ & 0.1436 \\
+        Allen--Cahn & 0.053021 & $9.54\times10^{-5}$ & $2.37\times10^{-4}$ & 0.0051 \\
         \bottomrule
       \end{tabular}
     \end{table}
 
+    四个方程的 $y_0$ 波动均小于主要数值量级.
+    图~\ref{fig:seed_stability} 给出每个随机种子下的初值绝对误差.
+
+    \begin{figure}[ht]
+      \centering
+      \includegraphics[width=0.78\textwidth]{seed-stability}
+      \caption{不同随机种子下的初值误差}
+      \label{fig:seed_stability}
+    \end{figure}
+
+  \section{与 DeepBSDE 方法的对比}\label{sec:numerical_deepbsde}
+    为了与基于神经网络训练的 BSDE 方法比较,
+    本文在 HJB-LQ 和 Allen--Cahn 两个半线性方程上记录了 DeepBSDE 的训练过程.
+    DeepBSDE 的横轴采用实际运行时间; RFM 方法只有一次 LM 求解结果, 因而在图中以单点表示.
+
+    \begin{table}
+      \centering
+      \caption{RFM 与 DeepBSDE 在半线性方程上的结果对比}
+      \label{tab:deepbsde_compare}
+      \begin{tabular}{llccccc}
+        \toprule
+        方程 & 方法 & 时间 / s & $y_0$ & 参考值 & 绝对误差 & 训练损失 \\
+        \midrule
+        HJB-LQ & RFM & 3.436 & 4.590000 & 4.590162 & $1.62\times10^{-4}$ & $9.80\times10^{-3}$ \\
+        HJB-LQ & DeepBSDE & 15.221 & 4.586627 & 4.590162 & $3.53\times10^{-3}$ & 0.0260 \\
+        Allen--Cahn & RFM & 3.145 & 0.053131 & 0.052785 & $3.46\times10^{-4}$ & $1.24\times10^{-5}$ \\
+        Allen--Cahn & DeepBSDE & 29.192 & 0.052846 & 0.052785 & $6.14\times10^{-5}$ & 0.0020 \\
+        \bottomrule
+      \end{tabular}
+    \end{table}
+
+    在 HJB-LQ 方程上, RFM 在更短时间内得到更小的初值误差和训练损失.
+    在 Allen--Cahn 方程上, DeepBSDE 经过更长训练后初值误差略小,
+    但 RFM 的训练损失和运行时间仍明显更低.
+    图~\ref{fig:deepbsde_rfm_comparison} 展示了训练损失和初值误差随时间变化的过程.
+
+    \begin{figure}[ht]
+      \centering
+      \includegraphics[width=0.90\textwidth]{deepbsde-rfm-comparison}
+      \caption{RFM 与 DeepBSDE 的训练损失和初值误差对比}
+      \label{fig:deepbsde_rfm_comparison}
+    \end{figure}
+
   \section{本章小结}\label{sec:numerical_summary}
-    本章给出了两个线性方程和两个非线性方程的实验安排.
-    线性方程主要用于验证最小二乘求解器在高维问题中的效率和测试残差,
-    非线性方程主要用于检验 LM 求解器的收敛性以及随机特征宽度对泛化误差的影响.
-    HJB-LQ 方程具有明确的初值参考值, 可作为主要精度验证算例;
-    Allen--Cahn 方程没有在本文中使用闭式精确解, 因而只将线性化估计作为一致性检查.
-    最终写作时, 需要用实际实验结果替换表格中的占位数字,
-    并将两张占位图替换为 LM 收敛曲线和随机特征宽度误差曲线.
+    本章的四个算例覆盖了线性最小二乘和半线性 LM 两种求解情形.
+    在线性方程中, Black--Scholes 与 Heat 方程的初值误差均约为 $10^{-4}$.
+    在半线性方程中, HJB-LQ 和 Allen--Cahn 也能在标准配置下得到接近参考值的初值.
+    样本数实验说明, 训练残差过小并不必然代表泛化良好, 因而独立测试残差是必要指标.
+    维度实验显示, 当前实现在线性方程上的时间增长较慢, 半线性方程的时间随维度增长更快.
+    与 DeepBSDE 的对比表明, 在本文两个半线性算例上, 随机特征方法能以较少训练时间得到有竞争力的初值精度.

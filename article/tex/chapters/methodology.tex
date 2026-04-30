@@ -16,7 +16,7 @@
       u(T, x) = g(x), \quad x \in \mathbb{R}^{d}.
     \end{gathered}
     \label{eq:ppdeg}
-  \end{equation}d{equation}
+  \end{equation}
   为了应用 Itô 公式, 假设 $u \in C^{1, 2}([0, T) \times \mathbb{R}^{d})$,
   并要求 $\mu, \sigma, f, g$ 满足足够的正则性与增长条件.
   令状态过程满足
@@ -44,7 +44,7 @@
   并记 $\Delta W_{k} = W_{t_{k + 1}} - W_{t_{k}}$.
   对 \eqref{eq:bsde} 采用 Euler 离散后, 得到
   \begin{equation}
-    Y_{k + 1} = Y_{k} - f\!(t_{k}, X_{k}, Y_{k}, Z_{k}) + \langle Z_{k}, \Delta W_{k} \rangle.
+    Y_{k + 1} = Y_{k} - \Delta t\, f\!(t_{k}, X_{k}, Y_{k}, Z_{k}) + \langle Z_{k}, \Delta W_{k} \rangle.
     \label{eq:dbsde}
   \end{equation}
   因而问题转化为: 在离散路径上同时近似初值 $Y_{0}$ 和各时间层的梯度项 $Z_{k}$,
@@ -88,10 +88,54 @@
     具体表达式分别见附录~\ref{ch:derivation} 第\ref{sec:linearder}节的
     \eqref{eq:beta}, \eqref{eq:gamma} 和 \eqref{eq:eta}.
 
-    将所有路径的终端值拼接后, 便得到标准线性最小二乘问题
+    将所有路径的终端值拼接后, 便得到线性最小二乘问题.
+    记
     \begin{equation}
-      \min_{y_{0}, \alpha} \sum_{i = 1}^{S} \big( y_{N}^{(i)} - g(x_{N}^{(i)}) \big)^{2}.
+      \vartheta =
+      \begin{bmatrix}
+        y_0 \\
+        \operatorname{vec}(\alpha)
+      \end{bmatrix},
+      \qquad
+      A_{i,\cdot} =
+      \begin{bmatrix}
+        \beta_i & \operatorname{vec}(\Gamma_i)^{\operatorname{T}}
+      \end{bmatrix},
+      \qquad
+      B_i = g(x_N^{(i)})-\eta_i.
+      \label{eq:linear_design}
+    \end{equation}
+    则线性方程最终求解
+    \begin{equation}
+      \min_{\vartheta}
+      \lVert A\vartheta-B\rVert_2^2+\lambda_{\mathrm{r}}\lVert R\vartheta\rVert_2^2,
       \label{eq:llstsq}
+    \end{equation}
+    其中 $\lambda_{\mathrm{r}}>0$ 为 ridge 正则化参数,
+    \begin{equation}
+      R =
+      \begin{bmatrix}
+        0 & 0 \\
+        0 & I_{dH}
+      \end{bmatrix}.
+      \label{eq:linpen}
+    \end{equation}
+    也就是说, 正则化只作用在随机特征输出层参数 $\alpha$ 上, 不惩罚初值 $y_{0}$.
+    这样做可以避免把 $y_{0}$ 人为向零偏移, 同时抑制病态线性系统给出的过大 $\alpha$.
+
+    实际计算时, 设未知量个数为 $p=1 + dH$.
+    当样本数 $S \ge p$ 时, 直接求解 primal ridge 系统
+    \begin{equation}
+      \left(A^{\operatorname{T}}A+\lambda_{\mathrm{r}}R^{\operatorname{T}}R\right)\vartheta
+      = A^{\operatorname{T}}B.
+      \label{eq:primal}
+    \end{equation}
+    当 $S < p$ 时, 使用对偶形式降低线性系统规模.
+    由于当前实现的对偶形式主要用于欠定情形, 其正则化写为
+    \begin{equation}
+      \vartheta =
+      A^{\operatorname{T}} \left(AA^{\operatorname{T}}+\lambda_{\mathrm{r}}I_S\right)^{-1}B.
+      \label{eq:dual}
     \end{equation}
     线性情形的优势在于不需要迭代更新随机特征参数,
     每次实验只需求解一个最小二乘系统即可.

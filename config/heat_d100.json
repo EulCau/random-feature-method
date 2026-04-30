@@ -1,16 +1,14 @@
 {
   "eqn_config": {
-    "_comment": "Black-Scholes equation in doi.org/10.1086/260062",
-    "equation_name": "BSM",
+    "_comment": "Heat equation with dX_t = dW_t, f = 0, and g(x) = exp(-||x||^2 / d)",
+    "equation_name": "Heat",
     "is_linear": true,
     "total_time": 1.0,
     "dimension": 100,
     "num_time_intervals": 100,
     "params": {
-      "x_init": 1.0,
-      "sigma": 0.2,
-      "rate": 0.05,
-      "strike": 1.0
+      "x_init": 0.0,
+      "terminal_scale": 100.0
     }
   },
   "solver_config": {

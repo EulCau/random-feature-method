@@ -4,7 +4,21 @@
 #include "register_all_eqn.h"
 #include <iostream>
 #include <chrono>
+#include <cstdlib>
 #include <optional>
+#include <stdexcept>
+#include <string>
+
+namespace
+{
+constexpr auto kDefaultConfigPath = "config/heat_d100.json";
+
+struct CommandLineOptions
+{
+    std::string config_path{kDefaultConfigPath};
+    std::optional<uint64_t> seed;
+};
+}
 
 uint64_t splitmix64(uint64_t x)
 {
@@ -41,14 +55,90 @@ uint64_t get_seed()
     return splitmix64(user_seed);
 }
 
-int main()
+uint64_t parse_seed(const std::string& input)
 {
-    const uint64_t seed = get_seed();
+    uint64_t user_seed = 0;
+    try
+    {
+        user_seed = std::stoull(input, nullptr, 16);
+    } catch (...)
+    {
+        throw std::runtime_error("Invalid hex seed: " + input);
+    }
+
+    return splitmix64(user_seed);
+}
+
+void print_usage(const char* program_name)
+{
+    std::cout
+        << "Usage: " << program_name << " [--config PATH] [--seed HEX]\n"
+        << "       " << program_name << " [-c PATH] [-s HEX]\n"
+        << "\n"
+        << "Defaults:\n"
+        << "  config: " << kDefaultConfigPath << "\n"
+        << "  seed: ask interactively, then fallback to built-in default on empty input\n";
+}
+
+CommandLineOptions parse_args(const int argc, char* argv[])
+{
+    CommandLineOptions options;
+
+    for (int i = 1; i < argc; ++i)
+    {
+        const std::string arg = argv[i];
+
+        if (arg == "--help" || arg == "-h")
+        {
+            print_usage(argv[0]);
+            std::exit(0);
+        }
+
+        if (arg == "--config" || arg == "-c")
+        {
+            if (i + 1 >= argc)
+            {
+                throw std::runtime_error(arg + " requires a path argument");
+            }
+            options.config_path = argv[++i];
+            continue;
+        }
+
+        if (arg == "--seed" || arg == "-s")
+        {
+            if (i + 1 >= argc)
+            {
+                throw std::runtime_error(arg + " requires a hex seed argument");
+            }
+            options.seed = parse_seed(argv[++i]);
+            continue;
+        }
+
+        throw std::runtime_error("Unknown argument: " + arg);
+    }
+
+    return options;
+}
+
+int main(const int argc, char* argv[])
+{
+    CommandLineOptions options;
+    try
+    {
+        options = parse_args(argc, argv);
+    } catch (const std::exception& e)
+    {
+        std::cerr << e.what() << "\n\n";
+        print_usage(argv[0]);
+        return 1;
+    }
+
+    const uint64_t seed = options.seed.has_value() ? options.seed.value() : get_seed();
 
     const auto t_start = std::chrono::high_resolution_clock::now();
 
     force_link_all_equations();
-    const Config cfg = load_config("config/allencahn_d100.json");
+    const Config cfg = load_config(options.config_path);
     const auto device = torch::cuda::is_available()?torch::kCUDA:torch::kCPU;
     const auto pde = EquationFactory::instance().create(cfg.eqn_config.equation_name, cfg.eqn_config);
 

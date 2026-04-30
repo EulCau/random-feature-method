@@ -3,7 +3,8 @@ add_library(
     STATIC
     allencahn.cpp
     hjblq.cpp
-    bsm.cpp)
+    bsm.cpp
+    heat.cpp)
 
 target_include_directories(
     equations

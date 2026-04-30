@@ -186,7 +186,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear() const
         A, B,
         config_.eqn_config.dimension,
         config_.solver_config.hidden_dim,
-        1e-6
+        config_.solver_config.initial_lambda
     );
 
     return result;

@@ -23,15 +23,36 @@ inline std::tuple<torch::Tensor, torch::Tensor, float> solve_y0_alpha_ridge_dual
     );
     TORCH_CHECK(lambda > 0.0, "lambda must be positive");
 
-    auto device = A.device();
-    auto dtype = A.dtype();
+    const auto device = A.device();
+    const auto dtype = A.dtype();
+    const int64_t n = A.size(0);
+    const int64_t p = A.size(1);
 
-    // 对偶形式: x = A^T (A A^T + lambda I)^(-1) B
-    const auto At = A.transpose(0, 1).contiguous();                 // (p, n)
-    const auto G = torch::matmul(A, At);                   // (n, n)
-    const auto I = torch::eye(G.size(0), torch::TensorOptions().dtype(dtype).device(device));
-    const auto Y = torch::linalg_solve(G + lambda * I, B);    // (n, 1)
-    const auto X = torch::matmul(At, Y).contiguous();      // (p, 1)
+    const auto opts = torch::TensorOptions().dtype(dtype).device(device);
+    const auto A_work = A.contiguous();
+    const auto B_work = B.contiguous();
+
+    torch::Tensor X;
+    if (n >= p)
+    {
+        const auto At = A_work.transpose(0, 1).contiguous(); // (p, n)
+        const auto normal = torch::matmul(At, A_work);       // (p, p)
+        const auto rhs = torch::matmul(At, B_work);          // (p, 1)
+        auto penalty = torch::eye(p, opts);
+
+        // y0 is not a random-feature coefficient, so only regularize alpha.
+        penalty.index_put_({0, 0}, 0.0);
+        X = torch::linalg_solve(normal + lambda * penalty, rhs).contiguous();
+    }
+    else
+    {
+        // Dual ridge form for underdetermined systems.
+        const auto At = A_work.transpose(0, 1).contiguous(); // (p, n)
+        const auto G = torch::matmul(A_work, At);            // (n, n)
+        const auto I = torch::eye(n, opts);
+        const auto Y = torch::linalg_solve(G + lambda * I, B_work);
+        X = torch::matmul(At, Y).contiguous();               // (p, 1)
+    }
 
     // 拆分参数
     const auto y0 = X.index({0, 0}).clone();                  // scalar
@@ -41,7 +62,7 @@ inline std::tuple<torch::Tensor, torch::Tensor, float> solve_y0_alpha_ridge_dual
     }).reshape({dim, hidden_dim}).contiguous();
 
     // 计算 MSE loss
-    const auto residual = torch::matmul(A, X) - B;         // (n, 1)
+    const auto residual = torch::matmul(A_work, X) - B_work; // (n, 1)
     const auto mse_loss = std::sqrt(residual.pow(2).mean().item<float>());
 
     return {y0, alpha, mse_loss};

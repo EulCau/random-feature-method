@@ -19,7 +19,7 @@
     "num_iterations": 200,
     "sample_size": 16384,
     "hidden_dim": 50,
-    "initial_lambda": 0.001,
+    "initial_lambda": 0.010,
     "alpha_init_scale": 0.001,
     "nonlinear": {
       "min_lambda": 1e-12,
