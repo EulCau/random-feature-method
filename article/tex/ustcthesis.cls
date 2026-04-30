@@ -664,7 +664,7 @@
     % 注意第~\ref{sec:list} 节去掉了列表的间距，所以不再修改 \cs{@listi}。
   \else
     \renewcommand\normalsize{%
-      \@setfontsize\normalsize{12bp}{22bp}%
+      \@setfontsize\normalsize{12bp}{20bp}%
       \abovedisplayskip 6bp \@plus3bp \@minus3bp%
       \abovedisplayshortskip 6bp \@plus3bp \@minus3bp%
       \belowdisplayshortskip \abovedisplayshortskip
@@ -2421,36 +2421,42 @@
   \setcounter{secnumdepth}{4}
   \ctexset{
   %
-  % 论文的致谢、目录、摘要和参考文献等标题用小二号（18 bp）黑体字，居中，
+  % 论文的致谢、目录、摘要和参考文献等标题用三号（16 bp）黑体字，居中，
   % 这通过 \cs{if@mainmatter} 区分。
   % 正文中的标题分章、节、段三级；章、节标题居中，段标题居左，
   % 分别用三号（16 bp）黑体、小三（15 bp）黑体、四号（14 bp）黑体。
     chapter = {
       format = {%
-        \centering\sffamily
+        \centering\heiti
         \if@mainmatter
-          \fontsize{16bp}{29.33bp}\selectfont
+          \fontsize{16bp}{20.8bp}\selectfont
         \else
-          \fontsize{18bp}{33bp}\selectfont
+          \fontsize{16bp}{20.8bp}\selectfont
         \fi
       },
       titleformat = \ustc@spaced@title,
     },
     section = {
-      format = \centering\sffamily\fontsize{15bp}{27.5bp}\selectfont,
+      format     = \centering\heiti\fontsize{15bp}{20bp}\selectfont,
+      beforeskip = 24bp,
+      afterskip  = 6bp,
     },
     subsection = {
-      format    = \sffamily\fontsize{14bp}{25.67bp}\selectfont,
-      indent    = 0bp,
+      format     = \heiti\fontsize{14bp}{20bp}\selectfont,
+      indent     = 0bp,
+      beforeskip = 12bp,
+      afterskip  = 6bp,
     },
     subsubsection = {
-      format    = \rmfamily\fontsize{12bp}{22bp}\selectfont,
-      number    = \arabic{subsubsection},
-      aftername = .\hspace{0.5em},
-      indent    = 1em,
+      format     = \rmfamily\fontsize{12bp}{20bp}\selectfont,
+      number     = \arabic{subsubsection},
+      aftername  = .\hspace{0.5em},
+      indent     = 1em,
+      beforeskip = 0bp,
+      afterskip  = 0bp,
     },
     paragraph = {
-      format    = \rmfamily\fontsize{12bp}{22bp}\selectfont,
+      format    = \rmfamily\fontsize{12bp}{20bp}\selectfont,
       number     = （\arabic{paragraph}）,
       aftername = {},
       indent    = 1em,
@@ -2459,7 +2465,7 @@
       runin      = false,
     },
   }
-  %
+  %`
   % 本科生的阿拉伯数字式标题的格式与研究生几乎一致，只有中文数字式需要修改。
   \ifustc@section@style@arabic\else
     \ctexset{
@@ -2524,10 +2530,12 @@
 }
 \newenvironment{abstract}{%
   \ustcsetup{language=chinese}%
+  \fontsize{12bp}{20bp}\selectfont
   \ustc@chapter{摘要}%
 }{
   \par\null\par
   \setlength\hangindent{4em}%
+  \fontsize{12bp}{20bp}\selectfont
   \noindent
   \textbf{关键词：}\ustc@keywords@text\par
   \ustc@reset@main@language
@@ -2551,14 +2559,15 @@
     \ctexset{autoindent = 2em}%
   \else
     \begingroup
-      % 本科生的英文摘要使用小二号衬线体
-      \ctexset{chapter/format=\centering\fontsize{18bp}{33bp}\selectfont}%
+      \fontsize{12bp}{20bp}\selectfont
+      \ctexset{chapter/format=\centering\rmfamily\bfseries\fontsize{16bp}{20.8bp}\selectfont}%
       \ustc@chapter{ABSTRACT}%
     \endgroup
   \fi
 }{
   \par\null\par
   \setlength\hangindent{6.5em}%
+  \fontsize{12bp}{20bp}\selectfont
   \noindent
   \ifustc@degree@bachelor
     \textbf{Key Words:}\space
@@ -2622,15 +2631,15 @@
 \else
   % 本科生的目录使用小四宋体（同正文字体），其他同研究生的格式相近。
   \titlecontents{chapter}
-    [0bp]{}
+    [0bp]{\heiti\bfseries}
     {\contentspush{\thecontentslabel\quad}}{}
     {\ustc@leaders\thecontentspage}
   \titlecontents{section}
-    [1em]{}
+    [2em]{}
     {\contentspush{\thecontentslabel\quad}}{}
     {\ustc@leaders\thecontentspage}
   \titlecontents{subsection}
-    [2em]{}
+    [4em]{}
     {\contentspush{\thecontentslabel
       \ifustc@section@style@arabic\quad\else 、\fi}}{}
     {\ustc@leaders\thecontentspage}
@@ -2805,7 +2814,7 @@
 \DeclareCaptionFont{ustc}{\ustc@caption@font}
 \newcommand\ustc@caption@font{%
   \ifustc@degree@bachelor
-    \fontsize{12bp}{22bp}\selectfont
+    \fontsize{12bp}{20bp}\selectfont
   \else
     \ifustc@language@chinese
       \fontsize{11bp}{14.3bp}\selectfont
