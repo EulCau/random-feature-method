@@ -362,12 +362,14 @@
     \end{figure}
 
   \section{与 DeepBSDE 方法的对比}\label{sec:numerical_deepbsde}
-    为了与基于神经网络训练的 BSDE 方法比较,
+    Han 等\cite{hanSolvingHighdimensionalPartial2018}提出了一种基于神经网络求解高维抛物型方程的方法,
+    后文暂称为 Deep BSDE.
+    此方法也是将方程转化为 BSDE 后拟合其中的梯度项.
+    但是其使用标准的前馈神经网络 MLP 来逼近, 使得训练过程较为复杂.
+    为了与此方法比较, 本文实现了其中提到的算法, 并使用相同方程参数在相同环境下进行对比实验.
     本文在 HJB-LQ 和 Allen--Cahn 两个半线性方程上记录了 DeepBSDE 的训练过程.
     由于 DeepBSDE 的训练损失和本文 RFM 的终端残差并不是同一个优化目标,
-    这里不直接比较损失数值, 只比较初值相对误差随时间的变化.
-    对 RFM, 将总运行时间按接受步均匀分配到各接受步上,
-    仅用于展示 LM 迭代中初值相对误差下降的大致时间位置.
+    这里不直接比较损失数值, 而是仅比较初值相对误差随时间的变化.
 
     \begin{table}
       \centering
