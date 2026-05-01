@@ -12,11 +12,21 @@
       g(x)=\exp\!\left(-\frac{\lVert x\rVert^2}{d}\right),
       \qquad x_0=0,\qquad T=1.
     \end{equation}
-    由正文中的 \eqref{eq:numerical_heat_solution} 可得
+    由 Feynman--Kac 公式,
+    \begin{equation}
+      u(t,x)
+      =
+      \left(\frac{a}{a+2(T-t)}\right)^{d/2}
+      \exp\!\left(
+              -\frac{\lVert x\rVert^2}{a+2(T-t)}
+      \right).
+      \label{eq:numerical_heat_solution}
+    \end{equation}
+    因而在 $x_0=0$, $a=d$ 时,
     \begin{equation}
       Y_0 = \left(\frac{d}{d+2}\right)^{d/2}.
     \end{equation}
-    因而
+    带入维度可得:
     \begin{equation}
       d=20 \Rightarrow Y_0=0.385543289429532,
     \end{equation}
@@ -38,7 +48,13 @@
     这些值由显式公式直接给出, 不涉及额外数值误差.
 
   \section{HJB-LQ 方程的积分参考值}\label{sec:ref_hjb}
-    对 HJB-LQ 方程, 由正文中的 \eqref{eq:numerical_hjblq_reference},
+    此方程对应 BSDE 为
+    \begin{equation}
+      \dif Y_t=\frac{1}{2}\lVert Z_t\rVert^2\dif t+Z_t^{\operatorname{T}}\dif W_t.
+      \label{eq:numerical_hjblq_bsde}
+    \end{equation}
+    令 $U_t=\exp(-Y_t)$, 可得 $U_t$ 为鞅.
+    于是
     \begin{equation}
       Y_0
       =
