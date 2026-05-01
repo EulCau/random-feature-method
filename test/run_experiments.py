@@ -17,6 +17,8 @@ DEFAULT_SEEDS = [
     "0000000000000002",
 ]
 
+DIMENSION_SCAN_DIMS = {20, 30, 50, 100, 200, 300}
+
 
 def parse_args() -> argparse.Namespace:
     root = Path(__file__).resolve().parent
@@ -97,7 +99,7 @@ def is_dimension_config(config_path: Path, cfg: dict) -> bool:
         "_h50_s16384" in name
         and solver["hidden_dim"] == 50
         and solver["sample_size"] == 16384
-        and eqn["dimension"] in {20, 50, 100}
+        and eqn["dimension"] in DIMENSION_SCAN_DIMS
     )
 
 
@@ -202,7 +204,11 @@ def main() -> int:
         out.write(f"seeds: {' '.join(args.seeds)}\n")
         out.write(f"all_seeds_for_all: {args.all_seeds_for_all}\n\n")
         out.write("Run order: baseline, parameter scans, dimension scans, remaining configs.\n")
-        out.write("Dimension scan configs are repeated for every listed seed and summarized at the end.\n\n")
+        out.write(
+            "Dimension scan configs "
+            f"(d={','.join(str(d) for d in sorted(DIMENSION_SCAN_DIMS))}) "
+            "are repeated for every listed seed and summarized at the end.\n\n"
+        )
 
         dimension_records: list[dict] = []
 

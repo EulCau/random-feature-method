@@ -3,10 +3,16 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
+
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,10 +20,38 @@ DEFAULT_RESULT_DIR = ROOT / "test" / "result"
 DEFAULT_ARTICLE_FIGURE_DIR = ROOT / "article" / "tex" / "figures"
 
 REFS = {
-    "Heat": {20: 0.385543289429532, 50: 0.375116802253964, 100: 0.371527882126961},
-    "BSM": {50: 0.04921354, 100: 0.04880920},
-    "HJBLQ": {50: 3.882006682195226, 100: 4.590161724604434},
-    "AllenCahn": {50: 0.09908593, 100: 0.05278464},
+    "Heat": {
+        20: 0.385543289429532,
+        30: 0.379812405815246,
+        50: 0.375116802253964,
+        100: 0.371527882126961,
+        200: 0.369711212329119,
+        300: 0.369102310996184,
+    },
+    "BSM": {
+        20: 0.05173661,
+        30: 0.05021835,
+        50: 0.04921751,
+        100: 0.04881270,
+        200: 0.04877301,
+        300: 0.04876993,
+    },
+    "HJBLQ": {
+        20: 2.921014735738689,
+        30: 3.351223237182463,
+        50: 3.882006682195226,
+        100: 4.590161724604434,
+        200: 5.290814736008237,
+        300: 5.698781231260821,
+    },
+    "AllenCahn": {
+        20: 0.20635880,
+        30: 0.15199385,
+        50: 0.09908593,
+        100: 0.05278464,
+        200: 0.02724542,
+        300: 0.01835709,
+    },
 }
 
 DISPLAY = {
@@ -35,6 +69,16 @@ COLORS = {
     "DeepBSDE": (0.75, 0.22, 0.15),
     "RFM": (0.10, 0.28, 0.55),
 }
+
+plt.rcParams.update(
+    {
+        "axes.spines.right": False,
+        "axes.spines.top": False,
+        "font.family": "DejaVu Sans",
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,
+    }
+)
 
 DEEP_HJB = [
     (100, 17.167496, 0.462873, 1.150),
@@ -140,6 +184,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--figure-dir", type=Path, default=DEFAULT_RESULT_DIR, help="Directory receiving generated figures.")
     parser.add_argument("--article-figure-dir", type=Path, default=DEFAULT_ARTICLE_FIGURE_DIR, help="Directory receiving copied figures.")
     parser.add_argument("--no-copy", action="store_true", help="Do not copy generated figures into the thesis figure directory.")
+    parser.add_argument("--interactive", action="store_true", help="Show each figure before saving so positions can be adjusted manually.")
     return parser.parse_args()
 
 
@@ -224,153 +269,54 @@ def parse_result(path: Path) -> tuple[list[Run], list[DimensionSummary]]:
     return runs, summaries
 
 
-class Pdf:
-    def __init__(self, path: Path, width: int = 720, height: int = 460):
-        self.path = path
-        self.w = width
-        self.h = height
-        self.ops: list[str] = []
-
-    def line(self, x1, y1, x2, y2, color=(0, 0, 0), width=1.0):
-        self.ops.append(f"{color[0]} {color[1]} {color[2]} RG {width} w {x1:.2f} {y1:.2f} m {x2:.2f} {y2:.2f} l S")
-
-    def polyline(self, pts, color=(0, 0, 0), width=1.5):
-        if len(pts) < 2:
-            return
-        parts = [f"{color[0]} {color[1]} {color[2]} RG {width} w {pts[0][0]:.2f} {pts[0][1]:.2f} m"]
-        parts.extend(f"{x:.2f} {y:.2f} l" for x, y in pts[1:])
-        parts.append("S")
-        self.ops.append(" ".join(parts))
-
-    def circle(self, x, y, r=3, color=(0, 0, 0)):
-        c = 0.55228475 * r
-        self.ops.append(
-            f"{color[0]} {color[1]} {color[2]} rg "
-            f"{x+r:.2f} {y:.2f} m "
-            f"{x+r:.2f} {y+c:.2f} {x+c:.2f} {y+r:.2f} {x:.2f} {y+r:.2f} c "
-            f"{x-c:.2f} {y+r:.2f} {x-r:.2f} {y+c:.2f} {x-r:.2f} {y:.2f} c "
-            f"{x-r:.2f} {y-c:.2f} {x-c:.2f} {y-r:.2f} {x:.2f} {y-r:.2f} c "
-            f"{x+c:.2f} {y-r:.2f} {x+r:.2f} {y-c:.2f} {x+r:.2f} {y:.2f} c f"
+def plot_panel(ax, series, title, xlabel, ylabel, logx=False, logy=False, legend=True):
+    for item in series:
+        points = [(x, y) for x, y in item["points"] if (x > 0 or not logx) and (y > 0 or not logy)]
+        if not points:
+            continue
+        xs = [x for x, _ in points]
+        ys = [y for _, y in points]
+        linestyle = "-" if item.get("line", True) else "None"
+        ax.plot(
+            xs,
+            ys,
+            linestyle=linestyle,
+            marker="o",
+            markersize=4,
+            linewidth=1.6,
+            color=item["color"],
+            label=item["label"],
         )
 
-    def text(self, x, y, s, size=10, color=(0, 0, 0)):
-        safe = s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-        self.ops.append(f"BT /F1 {size} Tf {color[0]} {color[1]} {color[2]} rg {x:.2f} {y:.2f} Td ({safe}) Tj ET")
-
-    def write(self):
-        stream = "\n".join(self.ops).encode("latin-1")
-        objects = [
-            b"<< /Type /Catalog /Pages 2 0 R >>",
-            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-            (
-                f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {self.w} {self.h}] "
-                f"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>"
-            ).encode("latin-1"),
-            f"<< /Length {len(stream)} >>\nstream\n".encode("latin-1") + stream + b"\nendstream",
-            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        ]
-        out = bytearray(b"%PDF-1.4\n")
-        offsets = [0]
-        for i, obj in enumerate(objects, 1):
-            offsets.append(len(out))
-            out.extend(f"{i} 0 obj\n".encode("latin-1"))
-            out.extend(obj)
-            out.extend(b"\nendobj\n")
-        xref = len(out)
-        out.extend(f"xref\n0 {len(objects)+1}\n0000000000 65535 f \n".encode("latin-1"))
-        for off in offsets[1:]:
-            out.extend(f"{off:010d} 00000 n \n".encode("latin-1"))
-        out.extend(f"trailer << /Size {len(objects)+1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode("latin-1"))
-        self.path.write_bytes(out)
-
-
-def tick_values(vmin: float, vmax: float, count=5, log=False):
-    if log:
-        lo = math.floor(math.log10(vmin))
-        hi = math.ceil(math.log10(vmax))
-        return [10**k for k in range(lo, hi + 1)]
-    if vmax == vmin:
-        return [vmin]
-    step = (vmax - vmin) / (count - 1)
-    return [vmin + i * step for i in range(count)]
-
-
-def plot_panel(pdf: Pdf, rect, series, title, xlabel, ylabel, logx=False, logy=False, legend=True):
-    x0, y0, w, h = rect
-    xs = [x for s in series for x, _ in s["points"] if x > 0 or not logx]
-    ys = [y for s in series for _, y in s["points"] if y > 0 or not logy]
-    xmin, xmax = min(xs), max(xs)
-    ymin, ymax = min(ys), max(ys)
-    if xmin == xmax:
-        xmin -= 1
-        xmax += 1
-    if ymin == ymax:
-        ymin *= 0.9
-        ymax *= 1.1
-
     if logx:
-        xmin = max(xmin * 0.85, 1e-12)
-        xmax *= 1.15
-        lxmin, lxmax = math.log10(xmin), math.log10(xmax)
-    else:
-        pad = 0.08 * (xmax - xmin)
-        xmin -= pad
-        xmax += pad
+        ax.set_xscale("log")
     if logy:
-        ymin = max(ymin * 0.7, 1e-12)
-        ymax *= 1.5
-        lymin, lymax = math.log10(ymin), math.log10(ymax)
-    else:
-        pad = 0.08 * (ymax - ymin)
-        ymin -= pad
-        ymax += pad
-
-    def px(x):
-        if logx:
-            return x0 + (math.log10(x) - lxmin) / (lxmax - lxmin) * w
-        return x0 + (x - xmin) / (xmax - xmin) * w
-
-    def py(y):
-        if logy:
-            return y0 + (math.log10(y) - lymin) / (lymax - lymin) * h
-        return y0 + (y - ymin) / (ymax - ymin) * h
-
-    pdf.line(x0, y0, x0 + w, y0, width=0.8)
-    pdf.line(x0, y0, x0, y0 + h, width=0.8)
-
-    for t in tick_values(xmin, xmax, 5, logx):
-        if t <= 0:
-            continue
-        x = px(t)
-        pdf.line(x, y0, x, y0 - 4, width=0.6)
-        label = f"{t:.0e}" if logx and t < 1 else f"{t:g}"
-        pdf.text(x - 12, y0 - 18, label, 8)
-    for t in tick_values(ymin, ymax, 5, logy):
-        if t <= 0:
-            continue
-        y = py(t)
-        pdf.line(x0 - 4, y, x0, y, width=0.6)
-        label = f"{t:.0e}" if logy else f"{t:.3g}"
-        pdf.text(x0 - 50, y - 3, label, 8)
-
-    pdf.text(x0 + w * 0.38, y0 - 36, xlabel, 10)
-    pdf.text(x0 - 52, y0 + h + 8, ylabel, 10)
-    pdf.text(x0, y0 + h + 24, title, 12)
-
-    for s in series:
-        pts = [(px(x), py(y)) for x, y in s["points"] if (x > 0 or not logx) and (y > 0 or not logy)]
-        if s.get("line", True):
-            pdf.polyline(pts, s["color"], 1.6)
-        for x, y in pts:
-            pdf.circle(x, y, 2.6, s["color"])
-
+        ax.set_yscale("log")
+    ax.set_xlabel(xlabel, fontsize=10)
+    ax.set_ylabel(ylabel, fontsize=10)
+    ax.tick_params(axis="both", labelsize=8)
+    ax.grid(True, which="both", linestyle=":", linewidth=0.5, alpha=0.45)
     if legend:
-        lx, ly = x0 + w - 126, y0 + h - 12
-        for i, s in enumerate(series):
-            yy = ly - 15 * i
-            pdf.line(lx, yy + 3, lx + 18, yy + 3, s["color"], 1.6)
-            pdf.circle(lx + 9, yy + 3, 2.4, s["color"])
-            pdf.text(lx + 24, yy, s["label"], 8)
+        ax.legend(fontsize=8, frameon=False)
+
+
+def save_after_adjustment(fig: Figure, path: Path, interactive: bool) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if interactive:
+        try:
+            fig.canvas.manager.set_window_title(path.name)
+        except AttributeError:
+            pass
+        fig.canvas.draw_idle()
+        print(f"{path.name}: adjust the figure window, then close it to save.")
+        plt.show(block=True)
+    fig.savefig(path, bbox_inches="tight")
+    plt.close(fig)
+    return path
+
+
+def rel_error(value: float, reference: float) -> float:
+    return abs(value - reference) / abs(reference)
 
 
 def first_run(runs: list[Run], config: str, seed="C02E7A5B3F91A8C3") -> Run:
@@ -392,11 +338,11 @@ def accepted_points(run: Run):
     return points
 
 
-def plot_lm_residual(runs: list[Run], figure_dir: Path) -> Path:
-    pdf = Pdf(figure_dir / "nonlinear-lm-residual.pdf")
+def plot_lm_residual(runs: list[Run], figure_dir: Path) -> tuple[Path, Figure]:
+    path = figure_dir / "nonlinear-lm-residual.pdf"
+    fig, ax = plt.subplots(figsize=(7.2, 4.6))
     plot_panel(
-        pdf,
-        (78, 76, 560, 310),
+        ax,
         [
             {"label": "HJB-LQ", "points": accepted_points(first_run(runs, "hjblq_d100_h50_s16384.json")), "color": COLORS["HJBLQ"]},
             {"label": "Allen-Cahn", "points": accepted_points(first_run(runs, "allencahn_d100_h50_s16384.json")), "color": COLORS["AllenCahn"]},
@@ -406,53 +352,55 @@ def plot_lm_residual(runs: list[Run], figure_dir: Path) -> Path:
         "train RMSE",
         logy=True,
     )
-    pdf.write()
-    return pdf.path
+    fig.tight_layout()
+    return path, fig
 
 
-def plot_sample_size(runs: list[Run], figure_dir: Path) -> Path:
+def plot_sample_size(runs: list[Run], figure_dir: Path) -> tuple[Path, Figure]:
     groups = {
         "Heat": ["heat_d100_h50_s4096.json", "heat_d100_h50_s8192.json", "heat_d100_h50_s16384.json"],
         "BSM": ["bsm_d100_h50_s8192.json", "bsm_d100_h50_s16384.json"],
         "HJBLQ": ["hjblq_d100_h50_s4096.json", "hjblq_d100_h50_s8192.json", "hjblq_d100_h50_s16384.json"],
         "AllenCahn": ["allencahn_d100_h50_s8192.json", "allencahn_d100_h50_s16384.json"],
     }
-    pdf = Pdf(figure_dir / "sample-size-generalization.pdf", 760, 500)
-    rmse_series = []
+    path = figure_dir / "sample-size-generalization.pdf"
+    fig, axes = plt.subplots(1, 2, figsize=(7.6, 3.5))
+    ratio_series = []
     err_series = []
     for eq, cfgs in groups.items():
         rr = [first_run(runs, cfg) for cfg in cfgs]
         ref = REFS[eq][100]
-        rmse_series.append({"label": DISPLAY[eq], "points": [(r.samples, r.test_rmse) for r in rr], "color": COLORS[eq]})
-        err_series.append({"label": DISPLAY[eq], "points": [(r.samples, abs(r.y0 - ref)) for r in rr], "color": COLORS[eq]})
-    plot_panel(pdf, (80, 290, 560, 135), rmse_series, "Sample size and test residual", "S", "test RMSE", logx=True, logy=True)
-    plot_panel(pdf, (80, 78, 560, 135), err_series, "Sample size and y0 error", "S", "abs error", logx=True, logy=True)
-    pdf.write()
-    return pdf.path
+        ratio_series.append({"label": DISPLAY[eq], "points": [(r.samples, r.test_rmse / r.rmse) for r in rr], "color": COLORS[eq]})
+        err_series.append({"label": DISPLAY[eq], "points": [(r.samples, rel_error(r.y0, ref)) for r in rr], "color": COLORS[eq]})
+    plot_panel(axes[0], ratio_series, "", "S", "test RMSE / train RMSE", logx=True, logy=True)
+    plot_panel(axes[1], err_series, "", "S", "relative error", logx=True, logy=True)
+    fig.tight_layout()
+    return path, fig
 
 
-def plot_hidden_dim(runs: list[Run], figure_dir: Path) -> Path:
+def plot_hidden_dim(runs: list[Run], figure_dir: Path) -> tuple[Path, Figure]:
     groups = {
         "Heat": ["heat_d100_h8_s16384.json", "heat_d100_h20_s16384.json", "heat_d100_h50_s16384.json"],
         "BSM": ["bsm_d100_h20_s16384.json", "bsm_d100_h50_s16384.json"],
         "HJBLQ": ["hjblq_d100_h8_s16384.json", "hjblq_d100_h12_s16384.json", "hjblq_d100_h20_s16384.json", "hjblq_d100_h50_s16384.json"],
         "AllenCahn": ["allencahn_d100_h20_s16384.json", "allencahn_d100_h50_s16384.json"],
     }
-    pdf = Pdf(figure_dir / "hidden-dim-generalization.pdf", 760, 500)
+    path = figure_dir / "hidden-dim-generalization.pdf"
+    fig, axes = plt.subplots(1, 2, figsize=(7.6, 3.5))
     rmse_series = []
     err_series = []
     for eq, cfgs in groups.items():
         rr = [first_run(runs, cfg) for cfg in cfgs]
         ref = REFS[eq][100]
         rmse_series.append({"label": DISPLAY[eq], "points": [(r.h, r.test_rmse) for r in rr], "color": COLORS[eq]})
-        err_series.append({"label": DISPLAY[eq], "points": [(r.h, abs(r.y0 - ref)) for r in rr], "color": COLORS[eq]})
-    plot_panel(pdf, (80, 290, 560, 135), rmse_series, "Random feature width and test residual", "H", "test RMSE", logx=True, logy=True)
-    plot_panel(pdf, (80, 78, 560, 135), err_series, "Random feature width and y0 error", "H", "abs error", logx=True, logy=True)
-    pdf.write()
-    return pdf.path
+        err_series.append({"label": DISPLAY[eq], "points": [(r.h, rel_error(r.y0, ref)) for r in rr], "color": COLORS[eq]})
+    plot_panel(axes[0], rmse_series, "", "H", "test RMSE", logx=True, logy=True)
+    plot_panel(axes[1], err_series, "", "H", "relative error", logx=True, logy=True)
+    fig.tight_layout()
+    return path, fig
 
 
-def plot_seed_stability(runs: list[Run], figure_dir: Path) -> Path:
+def plot_seed_stability(runs: list[Run], figure_dir: Path) -> tuple[Path, Figure]:
     configs = {
         "Heat": "heat_d100_h50_s16384.json",
         "BSM": "bsm_d100_h50_s16384.json",
@@ -465,83 +413,67 @@ def plot_seed_stability(runs: list[Run], figure_dir: Path) -> Path:
         rr = [run for run in runs if run.config == cfg]
         ref = REFS[eq][100]
         for j, run in enumerate(rr):
-            points.append((idx + (j - 1) * 0.08, abs(run.y0 - ref)))
+            points.append((idx + (j - 1) * 0.08, rel_error(run.y0, ref)))
         labels.append((idx, DISPLAY[eq]))
 
-    pdf = Pdf(figure_dir / "seed-stability.pdf", 680, 420)
+    path = figure_dir / "seed-stability.pdf"
+    fig, ax = plt.subplots(figsize=(6.8, 4.2))
     plot_panel(
-        pdf,
-        (84, 78, 500, 265),
+        ax,
         [{"label": "seed runs", "points": points, "color": COLORS["RFM"], "line": False}],
-        "Seed stability of y0",
+        "",
         "equation",
-        "absolute y0 error",
+        "relative y0 error",
         logy=True,
         legend=False,
     )
-    for x, label in labels:
-        pdf.text(84 + (x - 1) / 3 * 500 - 24, 44, label, 9)
-    pdf.write()
-    return pdf.path
+    ax.set_xticks([x for x, _ in labels])
+    ax.set_xticklabels([label for _, label in labels])
+    fig.tight_layout()
+    return path, fig
 
 
-def plot_deepbsde_compare(runs: list[Run], figure_dir: Path) -> Path:
+def rfm_y0_relative_error_path(run: Run, reference: float) -> list[tuple[float, float]]:
+    accepted = [log for log in run.lm_logs if log["accepted"]]
+    if not accepted:
+        return [(run.time_ms / 1000, rel_error(run.y0, reference))]
+    y0_values = [log["y0"] for log in accepted] + [run.y0]
+    interval = run.time_ms / 1000 / len(y0_values)
+    return [((i + 1) * interval, rel_error(y0, reference)) for i, y0 in enumerate(y0_values)]
+
+
+def plot_deepbsde_compare(runs: list[Run], figure_dir: Path) -> tuple[Path, Figure]:
     hjb = first_run(runs, "hjblq_d100_h50_s16384.json")
     allen = first_run(runs, "allencahn_d100_h50_s16384.json")
     hjb_ref = REFS["HJBLQ"][100]
     allen_ref = REFS["AllenCahn"][100]
 
-    pdf = Pdf(figure_dir / "deepbsde-rfm-comparison.pdf", 760, 620)
+    path = figure_dir / "deepbsde-rfm-comparison.pdf"
+    fig, axes = plt.subplots(1, 2, figsize=(7.6, 3.6))
     plot_panel(
-        pdf,
-        (76, 392, 260, 150),
+        axes[0],
         [
-            {"label": "DeepBSDE", "points": [(t, loss) for _, loss, _, t in DEEP_HJB], "color": COLORS["DeepBSDE"]},
-            {"label": "RFM", "points": [(hjb.time_ms / 1000, hjb.rmse * hjb.rmse)], "color": COLORS["RFM"], "line": False},
+            {"label": "DeepBSDE", "points": [(t, rel_error(y0, hjb_ref)) for _, _, y0, t in DEEP_HJB], "color": COLORS["DeepBSDE"]},
+            {"label": "RFM", "points": rfm_y0_relative_error_path(hjb, hjb_ref), "color": COLORS["RFM"]},
         ],
-        "HJB-LQ loss",
+        "",
         "time (s)",
-        "loss",
+        "relative error",
         logy=True,
     )
     plot_panel(
-        pdf,
-        (448, 392, 230, 150),
+        axes[1],
         [
-            {"label": "DeepBSDE", "points": [(t, abs(y0 - hjb_ref)) for _, _, y0, t in DEEP_HJB], "color": COLORS["DeepBSDE"]},
-            {"label": "RFM", "points": [(hjb.time_ms / 1000, abs(hjb.y0 - hjb_ref))], "color": COLORS["RFM"], "line": False},
+            {"label": "DeepBSDE", "points": [(t, rel_error(y0, allen_ref)) for _, _, y0, t in DEEP_ALLEN], "color": COLORS["DeepBSDE"]},
+            {"label": "RFM", "points": rfm_y0_relative_error_path(allen, allen_ref), "color": COLORS["RFM"]},
         ],
-        "HJB-LQ y0 error",
+        "",
         "time (s)",
-        "abs error",
+        "relative error",
         logy=True,
     )
-    plot_panel(
-        pdf,
-        (76, 112, 260, 150),
-        [
-            {"label": "DeepBSDE", "points": [(t, loss) for _, loss, _, t in DEEP_ALLEN], "color": COLORS["DeepBSDE"]},
-            {"label": "RFM", "points": [(allen.time_ms / 1000, allen.rmse * allen.rmse)], "color": COLORS["RFM"], "line": False},
-        ],
-        "Allen-Cahn loss",
-        "time (s)",
-        "loss",
-        logy=True,
-    )
-    plot_panel(
-        pdf,
-        (448, 112, 230, 150),
-        [
-            {"label": "DeepBSDE", "points": [(t, abs(y0 - allen_ref)) for _, _, y0, t in DEEP_ALLEN], "color": COLORS["DeepBSDE"]},
-            {"label": "RFM", "points": [(allen.time_ms / 1000, abs(allen.y0 - allen_ref))], "color": COLORS["RFM"], "line": False},
-        ],
-        "Allen-Cahn y0 error",
-        "time (s)",
-        "abs error",
-        logy=True,
-    )
-    pdf.write()
-    return pdf.path
+    fig.tight_layout()
+    return path, fig
 
 
 def power_slope(points: list[tuple[float, float]]) -> float:
@@ -552,7 +484,7 @@ def power_slope(points: list[tuple[float, float]]) -> float:
     return sum((x - xm) * (y - ym) for x, y in zip(xs, ys)) / sum((x - xm) ** 2 for x in xs)
 
 
-def plot_dimension_time(summaries: list[DimensionSummary], figure_dir: Path) -> Path:
+def plot_dimension_time(summaries: list[DimensionSummary], figure_dir: Path) -> tuple[Path, Figure]:
     by_eq: dict[str, list[DimensionSummary]] = {}
     for item in summaries:
         by_eq.setdefault(item.equation, []).append(item)
@@ -563,23 +495,69 @@ def plot_dimension_time(summaries: list[DimensionSummary], figure_dir: Path) -> 
         if not arr:
             continue
         points = [(item.dim, item.time_ms_mean) for item in arr]
-        slope = power_slope(points)
-        series.append({"label": f"{DISPLAY[eq]} p={slope:.2f}", "points": points, "color": COLORS[eq]})
+        series.append({"label": DISPLAY[eq], "points": points, "color": COLORS[eq]})
 
-    pdf = Pdf(figure_dir / "dimension-time-scaling.pdf", 720, 460)
+    path = figure_dir / "dimension-time-scaling.pdf"
+    fig, ax = plt.subplots(figsize=(7.2, 4.6))
     plot_panel(
-        pdf,
-        (86, 82, 520, 295),
+        ax,
         series,
-        "Runtime scaling with dimension",
+        "",
         "dimension d",
         "time (ms)",
         logx=True,
         logy=True,
     )
-    pdf.text(86, 40, "p is fitted from time = C d^p on d = 20, 50, 100.", 9)
-    pdf.write()
-    return pdf.path
+    fig.tight_layout()
+    return path, fig
+
+
+def plot_dimension_relative_error(runs: list[Run], figure_dir: Path) -> tuple[Path, Figure]:
+    seed_order = ["C02E7A5B3F91A8C3", "0000000000000001", "0000000000000002"]
+    seed_offsets = {
+        "C02E7A5B3F91A8C3": 0.965,
+        "0000000000000001": 1.0,
+        "0000000000000002": 1.035,
+    }
+    path = figure_dir / "dimension-relative-error.pdf"
+    fig, ax = plt.subplots(figsize=(7.2, 4.6))
+    for eq in ["Heat", "BSM", "HJBLQ", "AllenCahn"]:
+        for seed in seed_order:
+            seed_runs = [
+                run
+                for run in runs
+                if run.equation == eq
+                and run.seed == seed
+                and run.h == 50
+                and run.samples == 16384
+                and run.dim in REFS[eq]
+                and run.config.endswith("_h50_s16384.json")
+            ]
+            seed_runs.sort(key=lambda run: run.dim)
+            xs = [run.dim * seed_offsets[seed] for run in seed_runs]
+            ys = [rel_error(run.y0, REFS[eq][run.dim]) for run in seed_runs]
+            if not xs:
+                continue
+            label = DISPLAY[eq] if seed == seed_order[0] else None
+            ax.plot(
+                xs,
+                ys,
+                linestyle="None",
+                color=COLORS[eq],
+                marker="o",
+                markersize=3.8,
+                alpha=0.72,
+                label=label,
+            )
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("dimension d", fontsize=10)
+    ax.set_ylabel("relative y0 error", fontsize=10)
+    ax.tick_params(axis="both", labelsize=8)
+    ax.grid(True, which="both", linestyle=":", linewidth=0.5, alpha=0.45)
+    ax.legend(fontsize=8, frameon=False)
+    fig.tight_layout()
+    return path, fig
 
 
 def main() -> int:
@@ -592,14 +570,19 @@ def main() -> int:
         article_dir.mkdir(parents=True, exist_ok=True)
 
     runs, summaries = parse_result(result_path)
-    outputs = [
-        plot_lm_residual(runs, figure_dir),
-        plot_sample_size(runs, figure_dir),
-        plot_hidden_dim(runs, figure_dir),
-        plot_seed_stability(runs, figure_dir),
-        plot_deepbsde_compare(runs, figure_dir),
-        plot_dimension_time(summaries, figure_dir),
+    figure_builders = [
+        lambda: plot_lm_residual(runs, figure_dir),
+        lambda: plot_sample_size(runs, figure_dir),
+        lambda: plot_hidden_dim(runs, figure_dir),
+        lambda: plot_seed_stability(runs, figure_dir),
+        lambda: plot_deepbsde_compare(runs, figure_dir),
+        lambda: plot_dimension_time(summaries, figure_dir),
+        lambda: plot_dimension_relative_error(runs, figure_dir),
     ]
+    outputs = []
+    for build in figure_builders:
+        path, fig = build()
+        outputs.append(save_after_adjustment(fig, path, args.interactive))
 
     if not args.no_copy:
         for path in outputs:

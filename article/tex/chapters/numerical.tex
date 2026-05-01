@@ -25,8 +25,8 @@
         \toprule
         方程 & 类型 & $d$ & $T$ & $N$ & $S$ & $H$ & $\lambda_0$ & 求解器 \\
         \midrule
-        Black--Scholes & 线性 & 100 & 1.0 & 100 & 16384 & 50 & 0.010 & 线性最小二乘 \\
-        Heat & 线性 & 100 & 1.0 & 100 & 16384 & 50 & 0.010 & 线性最小二乘 \\
+        Black--Scholes & 线性 & 100 & 1.0 & 20 & 16384 & 50 & 0.010 & 线性最小二乘 \\
+        Heat & 线性 & 100 & 1.0 & 20 & 16384 & 50 & 0.010 & 线性最小二乘 \\
         HJB-LQ & 半线性 & 100 & 1.0 & 20 & 16384 & 50 & 0.010 & LM \\
         Allen--Cahn & 半线性 & 100 & 0.3 & 20 & 16384 & 50 & 0.010 & LM \\
         \bottomrule
@@ -95,16 +95,16 @@
       \label{tab:linear_main_results}
       \begin{tabular}{lccccc}
         \toprule
-        方程 & $y_0$ & 参考值 & 绝对误差 & 训练 RMSE & 测试 RMSE \\
+        方程 & $y_0$ & 参考值 & 相对误差 & 训练 RMSE & 测试 RMSE \\
         \midrule
-        Black--Scholes & 0.048701 & 0.048809 & $1.08\times10^{-4}$ & 0.0112 & 0.0158 \\
-        Heat & 0.371605 & 0.371528 & $7.71\times10^{-5}$ & 0.0356 & 0.0529 \\
+        Black--Scholes & 0.048726 & 0.048813 & $0.178\%$ & 0.0529 & 0.0746 \\
+        Heat & 0.372581 & 0.371528 & $0.283\%$ & 0.0360 & 0.0517 \\
         \bottomrule
       \end{tabular}
     \end{table}
 
     由表~\ref{tab:linear_main_results} 可见, 两个线性算例的初值都与独立参考值较为接近.
-    Black--Scholes 的误差约为 $10^{-4}$, Heat 方程的误差小于 $10^{-4}$.
+    Black--Scholes 的相对误差约为 $0.18\%$, Heat 方程的相对误差约为 $0.28\%$.
 
   \section{半线性方程}\label{sec:numerical_nonlinear}
     HJB-LQ 方程的非线性来自梯度项, Allen--Cahn 方程的非线性来自反应项.
@@ -159,17 +159,17 @@
       \label{tab:nonlinear_main_results}
       \begin{tabular}{lccccc}
         \toprule
-        方程 & $y_0$ & 参考值 & 绝对误差 & 训练 RMSE & 测试 RMSE \\
+        方程 & $y_0$ & 参考值 & 相对误差 & 训练 RMSE & 测试 RMSE \\
         \midrule
-        HJB-LQ & 4.590000 & 4.590162 & $1.62\times10^{-4}$ & 0.0990 & 0.1443 \\
-        Allen--Cahn & 0.053131 & 0.052785 & $3.46\times10^{-4}$ & 0.0035 & 0.0051 \\
+        HJB-LQ & 4.590000 & 4.590162 & $0.0035\%$ & 0.0990 & 0.1443 \\
+        Allen--Cahn & 0.053131 & 0.052785 & $0.656\%$ & 0.0035 & 0.0051 \\
         \bottomrule
       \end{tabular}
     \end{table}
 
     表~\ref{tab:nonlinear_main_results} 表明, LM 求解后的两个半线性算例都能给出较准确的初值.
-    HJB-LQ 的初值误差约为 $1.62\times10^{-4}$,
-    Allen--Cahn 的初值误差约为 $3.46\times10^{-4}$.
+    HJB-LQ 的相对误差约为 $0.0035\%$,
+    Allen--Cahn 的相对误差约为 $0.66\%$.
 
     \begin{table}
       \centering
@@ -179,8 +179,8 @@
         \toprule
         方程 & 迭代步数 & 接受步数 & 最终 $\lambda$ & 最终步长范数 & 时间 / ms \\
         \midrule
-        HJB-LQ & 4 & 3 & $1.00\times10^{4}$ & $2.82\times10^{-7}$ & 3435.640 \\
-        Allen--Cahn & 4 & 3 & $1.00\times10^{6}$ & $5.59\times10^{-10}$ & 3145.050 \\
+        HJB-LQ & 4 & 3 & $1.00\times10^{4}$ & $2.82\times10^{-7}$ & 3377.930 \\
+        Allen--Cahn & 4 & 3 & $1.00\times10^{6}$ & $5.59\times10^{-10}$ & 3148.710 \\
         \bottomrule
       \end{tabular}
     \end{table}
@@ -203,114 +203,131 @@
       \centering
       \caption{样本数变化结果}
       \label{tab:sample_size_results}
-      \begin{tabular}{lccccc}
+      \small
+      \begin{tabular}{lcccccc}
         \toprule
-        方程 & $S$ & $y_0$ & 绝对误差 & 训练 RMSE & 测试 RMSE \\
+        方程 & $S$ & $y_0$ & 相对误差 & 训练 RMSE & 测试 RMSE & 测试/训练 \\
         \midrule
-        Heat & 4096 & 0.373519 & $1.99\times10^{-3}$ & 0.0002 & 0.1487 \\
-        Heat & 8192 & 0.372477 & $9.49\times10^{-4}$ & 0.0268 & 0.0700 \\
-        Heat & 16384 & 0.371605 & $7.71\times10^{-5}$ & 0.0356 & 0.0529 \\
-        Black--Scholes & 8192 & 0.040108 & $8.70\times10^{-3}$ & 0.6489 & 1.5086 \\
-        Black--Scholes & 16384 & 0.048701 & $1.08\times10^{-4}$ & 0.0112 & 0.0158 \\
-        HJB-LQ & 4096 & 4.423910 & $1.66\times10^{-1}$ & $1.36\times10^{-6}$ & 0.4595 \\
-        HJB-LQ & 8192 & 4.578700 & $1.15\times10^{-2}$ & 0.0762 & 0.1963 \\
-        HJB-LQ & 16384 & 4.590000 & $1.62\times10^{-4}$ & 0.0990 & 0.1443 \\
-        Allen--Cahn & 8192 & 0.053268 & $4.84\times10^{-4}$ & 0.0028 & 0.0069 \\
-        Allen--Cahn & 16384 & 0.053131 & $3.46\times10^{-4}$ & 0.0035 & 0.0051 \\
+        Heat & 4096 & 0.376310 & $1.287\%$ & 0.0002 & 0.1414 & 846.37 \\
+        Heat & 8192 & 0.373278 & $0.471\%$ & 0.0270 & 0.0696 & 2.57 \\
+        Heat & 16384 & 0.372581 & $0.283\%$ & 0.0360 & 0.0517 & 1.44 \\
+        Black--Scholes & 8192 & 0.048520 & $0.599\%$ & 0.0084 & 0.0199 & 2.38 \\
+        Black--Scholes & 16384 & 0.048726 & $0.178\%$ & 0.0529 & 0.0746 & 1.41 \\
+        HJB-LQ & 4096 & 4.423910 & $3.622\%$ & $1.36\times10^{-6}$ & 0.4595 & $3.37\times10^{5}$ \\
+        HJB-LQ & 8192 & 4.578700 & $0.250\%$ & 0.0762 & 0.1963 & 2.58 \\
+        HJB-LQ & 16384 & 4.590000 & $0.0035\%$ & 0.0990 & 0.1443 & 1.46 \\
+        Allen--Cahn & 8192 & 0.053268 & $0.916\%$ & 0.0028 & 0.0069 & 2.49 \\
+        Allen--Cahn & 16384 & 0.053131 & $0.656\%$ & 0.0035 & 0.0051 & 1.45 \\
         \bottomrule
       \end{tabular}
     \end{table}
 
     小样本时训练残差不一定可靠.
-    例如 HJB-LQ 在 $S=4096$ 时训练 RMSE 几乎为零, 但初值误差和测试 RMSE 都明显偏大.
-    因此后续判断以独立测试残差和初值误差为主.
-    图~\ref{fig:sample_size_generalization} 给出了相同数据的图形化比较.
+    随机种子决定了内层随机特征, 因而也决定了线性无关核函数的有效数量;
+    在样本数较小时, 某些随机特征组合可能把训练路径拟合得很好, 却没有相应改善独立测试路径.
+    因此表中加入测试 RMSE 与训练 RMSE 的比值作为泛化性指标.
+    例如 HJB-LQ 在 $S=4096$ 时训练 RMSE 几乎为零, 但测试/训练比值达到 $3.37\times10^{5}$,
+    初值相对误差也明显偏大.
+    因此后续判断以独立测试残差和初值相对误差为主.
+    图~\ref{fig:sample_size_generalization} 给出了测试/训练比值和初值相对误差的图形化比较.
 
     \begin{figure}[ht]
       \centering
       \includegraphics[width=0.88\textwidth]{sample-size-generalization}
-      \caption{样本数对测试残差和初值误差的影响}
+      \caption{样本数对泛化比值和初值相对误差的影响}
       \label{fig:sample_size_generalization}
     \end{figure}
 
   \section{随机特征宽度的影响}\label{sec:numerical_hidden_dim}
     随机特征宽度 $H$ 控制每个时间层上可训练输出参数的数量.
-    表~\ref{tab:hidden_dim_results} 固定 $d=100$, $S=16384$, 只改变 $H$.
-
-    \begin{table}
-      \centering
-      \caption{随机特征宽度变化结果}
-      \label{tab:hidden_dim_results}
-      \begin{tabular}{lccccc}
-        \toprule
-        方程 & $H$ & $y_0$ & 绝对误差 & 训练 RMSE & 测试 RMSE \\
-        \midrule
-        Heat & 8 & 0.372033 & $5.05\times10^{-4}$ & 0.0491 & 0.0521 \\
-        Heat & 20 & 0.371917 & $3.89\times10^{-4}$ & 0.0454 & 0.0520 \\
-        Heat & 50 & 0.371605 & $7.71\times10^{-5}$ & 0.0356 & 0.0529 \\
-        Black--Scholes & 20 & 0.048932 & $1.23\times10^{-4}$ & 0.0140 & 0.0159 \\
-        Black--Scholes & 50 & 0.048701 & $1.08\times10^{-4}$ & 0.0112 & 0.0158 \\
-        HJB-LQ & 8 & 4.597250 & $7.09\times10^{-3}$ & 0.1353 & 0.1429 \\
-        HJB-LQ & 12 & 4.596820 & $6.66\times10^{-3}$ & 0.1321 & 0.1433 \\
-        HJB-LQ & 20 & 4.594760 & $4.60\times10^{-3}$ & 0.1251 & 0.1430 \\
-        HJB-LQ & 50 & 4.590000 & $1.62\times10^{-4}$ & 0.0990 & 0.1443 \\
-        Allen--Cahn & 20 & 0.053057 & $2.72\times10^{-4}$ & 0.0045 & 0.0052 \\
-        Allen--Cahn & 50 & 0.053131 & $3.46\times10^{-4}$ & 0.0035 & 0.0051 \\
-        \bottomrule
-      \end{tabular}
-    \end{table}
-
-    对 HJB-LQ 方程, 增大 $H$ 明显改善初值误差和训练残差;
-    对 Heat, Black--Scholes 和 Allen--Cahn, 当前测试误差对 $H$ 的变化较平缓.
-    图~\ref{fig:hidden_dim_generalization} 展示了测试残差和初值误差随 $H$ 的变化.
+    本节固定 $d=100$, $S=16384$, 只改变 $H$.
+    对 HJB-LQ 方程, 增大 $H$ 明显改善初值相对误差和训练残差;
+    对 Heat, Black--Scholes 和 Allen--Cahn, 当 $H$ 已达到当前规模后,
+    继续增大 $H$ 并不能稳定带来更高精度.
+    这说明随机特征宽度不是唯一限制因素;
+    样本路径数量, 随机特征的有效线性无关程度以及最小二乘系统的条件数都会共同影响结果.
+    图~\ref{fig:hidden_dim_generalization} 展示了测试残差和初值相对误差随 $H$ 的变化.
 
     \begin{figure}[ht]
       \centering
       \includegraphics[width=0.88\textwidth]{hidden-dim-generalization}
-      \caption{随机特征宽度对测试残差和初值误差的影响}
+      \caption{随机特征宽度对测试残差和初值相对误差的影响}
       \label{fig:hidden_dim_generalization}
     \end{figure}
 
   \section{维度与运行时间}\label{sec:numerical_dimension_time}
     为观察维度变化对运行时间的影响, 本节固定 $H=50$, $S=16384$,
-    对 $d=20,50,100$ 分别运行三个随机种子并取平均.
-    表~\ref{tab:dimension_average_results} 给出平均结果.
+    对 $d=20,30,50,100,200,300$ 分别运行三个随机种子并取平均.
+    由于总运行时间包含初始化, 公用数据构造和求解等多个部分,
+    不适合直接将总用时对维度进行拟合, 因此对相邻两组维度 $d_{j-1}$ 和 $d_j$, 定义局部阶
+    \begin{equation}
+      p_j =
+      \frac{\log(t_j/t_{j-1})}{\log(d_j/d_{j-1})},
+      \label{eq:dimension_local_order}
+    \end{equation}
+    其中 $t_j$ 为该维度下三次运行的平均时间.
+    表~\ref{tab:dimension_average_results} 列出了不同维度下的平均时间和相邻维度局部阶.
 
     \begin{table}
       \centering
       \caption{维度变化的平均结果}
       \label{tab:dimension_average_results}
-      \begin{tabular}{lcccc}
+      \small
+      \begin{tabular}{lccc lccc}
         \toprule
-        方程 & $d$ & $y_0$ 均值 & 测试 RMSE 均值 & 时间 / ms \\
+        方程 & $d$ & 时间 / ms & $p_j$ & 方程 & $d$ & 时间 / ms & $p_j$ \\
         \midrule
-        Heat & 20 & 0.385587 & 0.0500 & $299.2\pm1.2$ \\
-        Heat & 50 & 0.375873 & 0.0528 & $434.1\pm1.4$ \\
-        Heat & 100 & 0.371924 & 0.0520 & $697.3\pm2.6$ \\
-        Black--Scholes & 20 & 0.051706 & 0.0356 & $301.1\pm1.9$ \\
-        Black--Scholes & 50 & 0.049297 & 0.0390 & $440.9\pm2.1$ \\
-        Black--Scholes & 100 & 0.048774 & 0.0124 & $704.6\pm0.7$ \\
-        HJB-LQ & 20 & 2.934457 & 0.1535 & $447.9\pm70.8$ \\
-        HJB-LQ & 50 & 3.888443 & 0.1499 & $1039.8\pm181.7$ \\
-        HJB-LQ & 100 & 4.591863 & 0.1436 & $3324.4\pm265.6$ \\
-        Allen--Cahn & 20 & 0.206768 & 0.0154 & $442.8\pm58.4$ \\
-        Allen--Cahn & 50 & 0.099445 & 0.0088 & $858.8\pm113.5$ \\
-        Allen--Cahn & 100 & 0.053021 & 0.0051 & $2764.5\pm652.0$ \\
+        Heat & 20 & $204.4\pm3.5$ & -- & Black--Scholes & 20 & $209.5\pm5.1$ & -- \\
+        Heat & 30 & $216.0\pm3.6$ & 0.14 & Black--Scholes & 30 & $219.1\pm2.0$ & 0.11 \\
+        Heat & 50 & $238.8\pm2.7$ & 0.20 & Black--Scholes & 50 & $242.7\pm4.2$ & 0.20 \\
+        Heat & 100 & $314.7\pm3.8$ & 0.40 & Black--Scholes & 100 & $325.3\pm4.5$ & 0.42 \\
+        Heat & 200 & $568.8\pm1.3$ & 0.85 & Black--Scholes & 200 & $599.1\pm9.9$ & 0.88 \\
+        Heat & 300 & $1031.7\pm4.8$ & 1.47 & Black--Scholes & 300 & $1057.3\pm0.3$ & 1.40 \\
+        \midrule
+        HJB-LQ & 20 & $435.5\pm69.2$ & -- & Allen--Cahn & 20 & $444.7\pm65.6$ & -- \\
+        HJB-LQ & 30 & $680.6\pm92.5$ & 1.10 & Allen--Cahn & 30 & $648.0\pm112.1$ & 0.93 \\
+        HJB-LQ & 50 & $1053.4\pm176.5$ & 0.85 & Allen--Cahn & 50 & $856.4\pm90.0$ & 0.55 \\
+        HJB-LQ & 100 & $3273.2\pm263.6$ & 1.64 & Allen--Cahn & 100 & $2780.4\pm649.2$ & 1.70 \\
+        HJB-LQ & 200 & $5616.8\pm3150.0$ & 0.78 & Allen--Cahn & 200 & $6472.6\pm3419.0$ & 1.22 \\
+        HJB-LQ & 300 & $27300.8\pm4323.0$ & 3.90 & Allen--Cahn & 300 & $40998.0\pm7671.0$ & 4.55 \\
         \bottomrule
       \end{tabular}
     \end{table}
 
-    用幂律模型 $t(d)\approx C d^p$ 对平均时间做最小二乘拟合,
-    得到 Heat 的经验阶数 $p=0.52$, Black--Scholes 的经验阶数 $p=0.52$,
-    HJB-LQ 的经验阶数 $p=1.23$, Allen--Cahn 的经验阶数 $p=1.12$.
-    线性方程在这组维度上增长较慢, 半线性方程因为需要重复构造残差和灵敏度矩阵, 时间增长更明显.
-    图~\ref{fig:dimension_time_scaling} 在对数坐标下展示了这一趋势.
+    表~\ref{tab:dimension_average_results} 显示, 线性方程在低维到中等维度上的局部阶较小,
+    到 $d=200,300$ 时局部阶逐渐增大;
+    半线性方程的时间增长更明显, 尤其在 $d=300$ 时受到非线性迭代和线性代数规模的共同影响.
+    这种高维端局部阶升高不应简单解释为算法本身具有对应的理论复杂度.
+    一方面, 维度增大后参数矩阵和样本路径占用显存显著增加,
+    GPU 并行度可能受到显存带宽, 缓存命中率和临时张量分配的限制;
+    另一方面, 半线性方程每次 LM 试探步都要重新传播路径并构造灵敏度,
+    拒绝步和重试次数会直接放大运行时间.
+    此外, 当问题接近实验设备的显存上限时, 内存碎片, kernel 调度开销,
+    以及矩阵求解例程在大尺寸矩阵上的工作区需求都可能造成额外开销.
+    本实验中 $d=300$, $H=50$, $S=16384$ 已接近设备可运行上限,
+    因而该端点更适合作为硬件瓶颈下的压力测试, 而不是复杂度阶数的稳定估计点.
+    图~\ref{fig:dimension_scaling_combined} 左图在 log-log 坐标下展示了平均运行时间随维度变化的趋势.
+    除运行时间外, 还需要确认高维下初值仍处在可接受范围内.
+    图~\ref{fig:dimension_scaling_combined} 右图给出了不同维度, 不同随机种子下的初值相对误差.
+    这些点整体处于较低量级, 说明方法在更高维度下仍能给出有效初值.
 
     \begin{figure}[ht]
       \centering
-      \includegraphics[width=0.82\textwidth]{dimension-time-scaling}
-      \caption{运行时间随维度变化的经验阶数}
-      \label{fig:dimension_time_scaling}
+      \begin{subfigure}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{dimension-time-scaling}
+        \caption{运行时间随维度变化}
+        \label{fig:dimension_time_scaling}
+      \end{subfigure}
+      \hfill
+      \begin{subfigure}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{dimension-relative-error}
+        \caption{不同种子下的初值相对误差}
+        \label{fig:dimension_relative_error}
+      \end{subfigure}
+      \caption{维度变化下的运行时间和初值相对误差}
+      \label{fig:dimension_scaling_combined}
     \end{figure}
 
   \section{随机种子稳定性}\label{sec:numerical_seed}
@@ -324,63 +341,67 @@
       \label{tab:seed_stability}
       \begin{tabular}{lcccc}
         \toprule
-        方程 & $y_0$ 均值 & $y_0$ 标准差 & 均值绝对误差 & 测试 RMSE 均值 \\
+        方程 & $y_0$ 均值 & $y_0$ 标准差 & 均值相对误差 & 测试 RMSE 均值 \\
         \midrule
-        Heat & 0.371924 & $2.81\times10^{-4}$ & $3.96\times10^{-4}$ & 0.0520 \\
-        Black--Scholes & 0.048774 & $6.30\times10^{-5}$ & $3.56\times10^{-5}$ & 0.0124 \\
-        HJB-LQ & 4.591863 & $1.62\times10^{-3}$ & $1.70\times10^{-3}$ & 0.1436 \\
-        Allen--Cahn & 0.053021 & $9.54\times10^{-5}$ & $2.37\times10^{-4}$ & 0.0051 \\
+        Heat & 0.372764 & $8.04\times10^{-4}$ & $0.333\%$ & 0.0520 \\
+        Black--Scholes & 0.048843 & $1.26\times10^{-4}$ & $0.063\%$ & 0.0379 \\
+        HJB-LQ & 4.591863 & $1.62\times10^{-3}$ & $0.037\%$ & 0.1436 \\
+        Allen--Cahn & 0.053021 & $9.54\times10^{-5}$ & $0.449\%$ & 0.0051 \\
         \bottomrule
       \end{tabular}
     \end{table}
 
     四个方程的 $y_0$ 波动均小于主要数值量级.
-    图~\ref{fig:seed_stability} 给出每个随机种子下的初值绝对误差.
+    图~\ref{fig:seed_stability} 给出每个随机种子下的初值相对误差.
 
     \begin{figure}[ht]
       \centering
       \includegraphics[width=0.78\textwidth]{seed-stability}
-      \caption{不同随机种子下的初值误差}
+      \caption{不同随机种子下的初值相对误差}
       \label{fig:seed_stability}
     \end{figure}
 
   \section{与 DeepBSDE 方法的对比}\label{sec:numerical_deepbsde}
     为了与基于神经网络训练的 BSDE 方法比较,
     本文在 HJB-LQ 和 Allen--Cahn 两个半线性方程上记录了 DeepBSDE 的训练过程.
-    DeepBSDE 的横轴采用实际运行时间; RFM 方法只有一次 LM 求解结果, 因而在图中以单点表示.
+    由于 DeepBSDE 的训练损失和本文 RFM 的终端残差并不是同一个优化目标,
+    这里不直接比较损失数值, 只比较初值相对误差随时间的变化.
+    对 RFM, 将总运行时间按接受步均匀分配到各接受步上,
+    仅用于展示 LM 迭代中初值相对误差下降的大致时间位置.
 
     \begin{table}
       \centering
       \caption{RFM 与 DeepBSDE 在半线性方程上的结果对比}
       \label{tab:deepbsde_compare}
-      \begin{tabular}{llccccc}
+      \begin{tabular}{llcccc}
         \toprule
-        方程 & 方法 & 时间 / s & $y_0$ & 参考值 & 绝对误差 & 训练损失 \\
+        方程 & 方法 & 时间 / s & $y_0$ & 参考值 & 相对误差 \\
         \midrule
-        HJB-LQ & RFM & 3.436 & 4.590000 & 4.590162 & $1.62\times10^{-4}$ & $9.80\times10^{-3}$ \\
-        HJB-LQ & DeepBSDE & 15.221 & 4.586627 & 4.590162 & $3.53\times10^{-3}$ & 0.0260 \\
-        Allen--Cahn & RFM & 3.145 & 0.053131 & 0.052785 & $3.46\times10^{-4}$ & $1.24\times10^{-5}$ \\
-        Allen--Cahn & DeepBSDE & 29.192 & 0.052846 & 0.052785 & $6.14\times10^{-5}$ & 0.0020 \\
+        HJB-LQ & RFM & 3.378 & 4.590000 & 4.590162 & $0.0035\%$ \\
+        HJB-LQ & DeepBSDE & 15.221 & 4.586627 & 4.590162 & $0.077\%$ \\
+        Allen--Cahn & RFM & 3.149 & 0.053131 & 0.052785 & $0.656\%$ \\
+        Allen--Cahn & DeepBSDE & 29.192 & 0.052846 & 0.052785 & $0.116\%$ \\
         \bottomrule
       \end{tabular}
     \end{table}
 
-    在 HJB-LQ 方程上, RFM 在更短时间内得到更小的初值误差和训练损失.
-    在 Allen--Cahn 方程上, DeepBSDE 经过更长训练后初值误差略小,
-    但 RFM 的训练损失和运行时间仍明显更低.
-    图~\ref{fig:deepbsde_rfm_comparison} 展示了训练损失和初值误差随时间变化的过程.
+    在 HJB-LQ 方程上, RFM 在更短时间内得到更小的初值相对误差.
+    在 Allen--Cahn 方程上, DeepBSDE 经过更长训练后初值相对误差略小,
+    而 RFM 的运行时间明显更短.
+    图~\ref{fig:deepbsde_rfm_comparison} 展示了初值相对误差随时间变化的过程.
 
     \begin{figure}[ht]
       \centering
       \includegraphics[width=0.90\textwidth]{deepbsde-rfm-comparison}
-      \caption{RFM 与 DeepBSDE 的训练损失和初值误差对比}
+      \caption{RFM 与 DeepBSDE 的初值相对误差对比}
       \label{fig:deepbsde_rfm_comparison}
     \end{figure}
 
   \section{本章小结}\label{sec:numerical_summary}
     本章的四个算例覆盖了线性最小二乘和半线性 LM 两种求解情形.
-    在线性方程中, Black--Scholes 与 Heat 方程的初值误差均约为 $10^{-4}$.
+    在线性方程中, Black--Scholes 与 Heat 方程的初值相对误差均低于 $0.3\%$.
     在半线性方程中, HJB-LQ 和 Allen--Cahn 也能在标准配置下得到接近参考值的初值.
     样本数实验说明, 训练残差过小并不必然代表泛化良好, 因而独立测试残差是必要指标.
-    维度实验显示, 当前实现在线性方程上的时间增长较慢, 半线性方程的时间随维度增长更快.
+    维度实验显示, 当前实现在线性方程上的时间增长较慢, 半线性方程的时间随维度增长更快;
+    同时, 高维下仍需要同时观察相对误差和测试残差, 例如 Heat 方程在 $d=300$ 时出现了明显精度退化.
     与 DeepBSDE 的对比表明, 在本文两个半线性算例上, 随机特征方法能以较少训练时间得到有竞争力的初值精度.

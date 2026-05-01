@@ -21,10 +21,19 @@
       d=20 \Rightarrow Y_0=0.385543289429532,
     \end{equation}
     \begin{equation}
+      d=30 \Rightarrow Y_0=0.379812405815246,
+    \end{equation}
+    \begin{equation}
       d=50 \Rightarrow Y_0=0.375116802253964,
     \end{equation}
     \begin{equation}
       d=100 \Rightarrow Y_0=0.371527882126961.
+    \end{equation}
+    \begin{equation}
+      d=200 \Rightarrow Y_0=0.369711212329119,
+    \end{equation}
+    \begin{equation}
+      d=300 \Rightarrow Y_0=0.369102310996184.
     \end{equation}
     这些值由显式公式直接给出, 不涉及额外数值误差.
 
@@ -55,10 +64,22 @@
 
     最终得到
     \begin{equation}
+      d=20 \Rightarrow Y_0=2.921014735738689,
+    \end{equation}
+    \begin{equation}
+      d=30 \Rightarrow Y_0=3.351223237182463,
+    \end{equation}
+    \begin{equation}
       d=50 \Rightarrow Y_0=3.882006682195226,
     \end{equation}
     \begin{equation}
       d=100 \Rightarrow Y_0=4.590161724604434.
+    \end{equation}
+    \begin{equation}
+      d=200 \Rightarrow Y_0=5.290814736008237,
+    \end{equation}
+    \begin{equation}
+      d=300 \Rightarrow Y_0=5.698781231260821.
     \end{equation}
 
   \section{Black--Scholes 方程的 Monte Carlo 参考值}\label{sec:ref_bsm}
@@ -85,12 +106,28 @@
 
     本文使用 $10^6$ 条路径计算参考值, 并报告 $95\%$ 置信区间:
     \begin{equation}
-      d=50 \Rightarrow Y_0=0.04921354,\qquad
-      95\%\text{ CI}=[0.04920245,\ 0.04922462],
+      d=20 \Rightarrow Y_0=0.05173661,\qquad
+      95\%\text{ CI}=[0.05172011,\ 0.05175310],
     \end{equation}
     \begin{equation}
-      d=100 \Rightarrow Y_0=0.04880920,\qquad
-      95\%\text{ CI}=[0.04880137,\ 0.04881702].
+      d=30 \Rightarrow Y_0=0.05021835,\qquad
+      95\%\text{ CI}=[0.05020434,\ 0.05023235],
+    \end{equation}
+    \begin{equation}
+      d=50 \Rightarrow Y_0=0.04921751,\qquad
+      95\%\text{ CI}=[0.04920643,\ 0.04922860],
+    \end{equation}
+    \begin{equation}
+      d=100 \Rightarrow Y_0=0.04881270,\qquad
+      95\%\text{ CI}=[0.04880488,\ 0.04882053],
+    \end{equation}
+    \begin{equation}
+      d=200 \Rightarrow Y_0=0.04877301,\qquad
+      95\%\text{ CI}=[0.04876747,\ 0.04877854],
+    \end{equation}
+    \begin{equation}
+      d=300 \Rightarrow Y_0=0.04876993,\qquad
+      95\%\text{ CI}=[0.04876541,\ 0.04877445].
     \end{equation}
 
   \section{Allen--Cahn 方程的有限差分参考值}\label{sec:ref_allencahn}
@@ -122,12 +159,28 @@
     进行计算, 并将两组结果的差作为误差估计.
     最终采用细网格结果作为参考值, 得到
     \begin{equation}
+      d=20 \Rightarrow Y_0=0.20635880,\qquad
+      \text{网格差约 }2.08\times 10^{-6},
+    \end{equation}
+    \begin{equation}
+      d=30 \Rightarrow Y_0=0.15199385,\qquad
+      \text{网格差约 }1.59\times 10^{-6},
+    \end{equation}
+    \begin{equation}
       d=50 \Rightarrow Y_0=0.09908593,\qquad
       \text{网格差约 }3.19\times 10^{-6},
     \end{equation}
     \begin{equation}
       d=100 \Rightarrow Y_0=0.05278464,\qquad
-      \text{网格差约 }2.81\times 10^{-6}.
+      \text{网格差约 }2.81\times 10^{-6},
+    \end{equation}
+    \begin{equation}
+      d=200 \Rightarrow Y_0=0.02724542,\qquad
+      \text{网格差约 }1.79\times 10^{-6},
+    \end{equation}
+    \begin{equation}
+      d=300 \Rightarrow Y_0=0.01835709,\qquad
+      \text{网格差约 }1.29\times 10^{-6}.
     \end{equation}
     此外, 当边界截断半径从 $15$ 增加到 $30$ 时结果几乎不变,
     因而边界截断误差相较于网格误差可以忽略.
