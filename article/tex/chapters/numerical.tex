@@ -157,172 +157,173 @@
       \label{fig:nonlinear_residual_history}
     \end{figure}
 
-  \section{样本数的影响}\label{sec:numerical_sample_size}
-    样本数会影响训练路径对真实分布的代表性.
-    表~\ref{tab:sample_size_results} 固定 $d=100$, $H=50$, 只改变训练样本数 $S$.
+  \section{参数敏感度分析}\label{sec:par}
+    \subsection{样本数的影响}\label{subsec:numerical_sample_size}
+      样本数会影响训练路径对真实分布的代表性.
+      表~\ref{tab:sample_size_results} 固定 $d=100$, $H=50$, 只改变训练样本数 $S$.
 
-    \begin{table}
-      \centering
-      \caption{样本数变化结果}
-      \label{tab:sample_size_results}
-      \small
-      \begin{tabular}{lcccccc}
-        \toprule
-        方程 & $S$ & $y_0$ & 相对误差 & 训练 RMSE & 测试 RMSE & 测试/训练 \\
-        \midrule
-        Heat & 4096 & 0.376310 & $1.287\%$ & 0.0002 & 0.1414 & 846.37 \\
-        Heat & 8192 & 0.373278 & $0.471\%$ & 0.0270 & 0.0696 & 2.57 \\
-        Heat & 16384 & 0.372581 & $0.283\%$ & 0.0360 & 0.0517 & 1.44 \\
-        Black--Scholes & 8192 & 0.048520 & $0.599\%$ & 0.0084 & 0.0199 & 2.38 \\
-        Black--Scholes & 16384 & 0.048726 & $0.178\%$ & 0.0529 & 0.0746 & 1.41 \\
-        HJB-LQ & 4096 & 4.423910 & $3.622\%$ & $1.36\times10^{-6}$ & 0.4595 & $3.37\times10^{5}$ \\
-        HJB-LQ & 8192 & 4.578700 & $0.250\%$ & 0.0762 & 0.1963 & 2.58 \\
-        HJB-LQ & 16384 & 4.590000 & $0.0035\%$ & 0.0990 & 0.1443 & 1.46 \\
-        Allen--Cahn & 8192 & 0.053268 & $0.916\%$ & 0.0028 & 0.0069 & 2.49 \\
-        Allen--Cahn & 16384 & 0.053131 & $0.656\%$ & 0.0035 & 0.0051 & 1.45 \\
-        \bottomrule
-      \end{tabular}
-    \end{table}
-
-    当样本数较小时, 训练残差本身不一定可靠.
-    随机种子决定了内层随机特征, 也会影响有效特征的数量;
-    在样本较少时, 某些随机特征组合可能很好地拟合训练路径, 但在独立测试路径上误差仍然较大.
-    因此表中加入测试 RMSE 与训练 RMSE 的比值, 作为观察泛化情况的辅助指标.
-    例如 HJB-LQ 在 $S=4096$ 时训练 RMSE 几乎为零, 但测试/训练比值达到 $3.37\times10^{5}$,
-    初值相对误差也偏大.
-    因此后续分析主要参考独立测试残差和初值相对误差.
-    图~\ref{fig:sample_size_generalization} 给出了测试/训练比值和初值相对误差的对比.
-
-    \begin{figure}[ht]
-      \centering
-      \includegraphics[width=0.88\textwidth]{sample-size-generalization}
-      \caption{样本数对泛化比值和初值相对误差的影响}
-      \label{fig:sample_size_generalization}
-    \end{figure}
-
-  \section{随机特征宽度的影响}\label{sec:numerical_hidden_dim}
-    随机特征宽度 $H$ 决定每个时间层上可训练输出参数的数量.
-    本节固定 $d=100$, $S=16384$, 只改变 $H$.
-    对 HJB-LQ 方程, 增大 $H$ 后初值相对误差和训练残差都有改善;
-    对 Heat, Black--Scholes 和 Allen--Cahn, 当 $H$ 已达到当前规模后,
-    继续增大 $H$ 并不能稳定带来更高精度.
-    这说明随机特征宽度并不是唯一的限制因素;
-    样本路径数量, 随机特征的有效线性无关程度以及最小二乘系统的条件数都会共同影响结果.
-    图~\ref{fig:hidden_dim_generalization} 展示了测试残差和初值相对误差随 $H$ 变化的情况.
-
-    \begin{figure}[ht]
-      \centering
-      \includegraphics[width=0.88\textwidth]{hidden-dim-generalization}
-      \caption{随机特征宽度对测试残差和初值相对误差的影响}
-      \label{fig:hidden_dim_generalization}
-    \end{figure}
-
-  \section{维度与运行时间}\label{sec:numerical_dimension_time}
-    为了观察维度变化对运行时间的影响, 本节固定 $H=50$, $S=16384$,
-    对 $d=20,30,50,100,200,300$ 分别运行三个随机种子并取平均.
-    由于总运行时间包含初始化, 公用数据构造和求解等多个部分,
-    直接用总时间拟合维度阶数并不合适.
-    因此对相邻两组维度 $d_{j-1}$ 和 $d_j$, 定义局部阶
-    \begin{equation}
-      p_j =
-      \frac{\log(t_j/t_{j-1})}{\log(d_j/d_{j-1})},
-      \label{eq:dimension_local_order}
-    \end{equation}
-    其中 $t_j$ 表示该维度下三次运行的平均时间.
-    表~\ref{tab:dimension_average_results} 列出了不同维度下的平均时间和相邻维度的局部阶.
-
-    \begin{table}
-      \centering
-      \caption{维度变化的平均结果}
-      \label{tab:dimension_average_results}
-      \small
-      \begin{tabular}{lccc lccc}
-        \toprule
-        方程 & $d$ & 时间 / ms & $p_j$ & 方程 & $d$ & 时间 / ms & $p_j$ \\
-        \midrule
-        Heat & 20 & $204.4\pm3.5$ & -- & Black--Scholes & 20 & $209.5\pm5.1$ & -- \\
-        Heat & 30 & $216.0\pm3.6$ & 0.14 & Black--Scholes & 30 & $219.1\pm2.0$ & 0.11 \\
-        Heat & 50 & $238.8\pm2.7$ & 0.20 & Black--Scholes & 50 & $242.7\pm4.2$ & 0.20 \\
-        Heat & 100 & $314.7\pm3.8$ & 0.40 & Black--Scholes & 100 & $325.3\pm4.5$ & 0.42 \\
-        Heat & 200 & $568.8\pm1.3$ & 0.85 & Black--Scholes & 200 & $599.1\pm9.9$ & 0.88 \\
-        Heat & 300 & $1031.7\pm4.8$ & 1.47 & Black--Scholes & 300 & $1057.3\pm0.3$ & 1.40 \\
-        \midrule
-        HJB-LQ & 20 & $435.5\pm69.2$ & -- & Allen--Cahn & 20 & $444.7\pm65.6$ & -- \\
-        HJB-LQ & 30 & $680.6\pm92.5$ & 1.10 & Allen--Cahn & 30 & $648.0\pm112.1$ & 0.93 \\
-        HJB-LQ & 50 & $1053.4\pm176.5$ & 0.85 & Allen--Cahn & 50 & $856.4\pm90.0$ & 0.55 \\
-        HJB-LQ & 100 & $3273.2\pm263.6$ & 1.64 & Allen--Cahn & 100 & $2780.4\pm649.2$ & 1.70 \\
-        HJB-LQ & 200 & $5616.8\pm3150.0$ & 0.78 & Allen--Cahn & 200 & $6472.6\pm3419.0$ & 1.22 \\
-        HJB-LQ & 300 & $27300.8\pm4323.0$ & 3.90 & Allen--Cahn & 300 & $40998.0\pm7671.0$ & 4.55 \\
-        \bottomrule
-      \end{tabular}
-    \end{table}
-
-    从表~\ref{tab:dimension_average_results} 可以看到, 线性方程在低维到中等维度上的局部阶较小,
-    到 $d=200,300$ 时局部阶逐渐增大;
-    半线性方程的时间增长更快, 尤其在 $d=300$ 时受到非线性迭代和线性代数规模的共同影响.
-    这里的高维端局部阶升高, 不宜直接解释为算法本身的理论复杂度.
-    一方面, 维度增大后, 参数矩阵和样本路径占用的显存增加较多,
-    GPU 并行度可能受到显存带宽, 缓存命中率和临时张量分配的限制;
-    另一方面, 半线性方程每次 LM 试探步都要重新传播路径并构造灵敏度,
-    拒绝步和重试次数会直接放大运行时间.
-    此外, 当问题接近实验设备的显存上限时, 内存碎片, kernel 调度开销,
-    以及矩阵求解例程在大尺寸矩阵上的工作区需求都可能造成额外开销.
-    本实验中 $d=300$, $H=50$, $S=16384$ 已接近设备可运行上限,
-    因而这个端点更适合作为硬件压力测试, 而不是复杂度阶数的稳定估计点.
-    图~\ref{fig:dimension_scaling_combined} 左图在 log-log 坐标下展示了平均运行时间随维度变化的趋势.
-    除运行时间外, 还需要检查高维下的初值精度.
-    图~\ref{fig:dimension_scaling_combined} 右图给出了不同维度, 不同随机种子下的初值相对误差.
-    图中的误差大多仍然较小, 说明方法在较高维度下仍能给出有效初值.
-
-    \begin{figure}[ht]
-      \centering
-      \begin{subfigure}{0.49\textwidth}
+      \begin{table}
         \centering
-        \includegraphics[width=\textwidth]{dimension-time-scaling}
-        \caption{运行时间随维度变化}
-        \label{fig:dimension_time_scaling}
-      \end{subfigure}
-      \hfill
-      \begin{subfigure}{0.49\textwidth}
+        \caption{样本数变化结果}
+        \label{tab:sample_size_results}
+        \small
+        \begin{tabular}{lcccccc}
+          \toprule
+          方程 & $S$ & $y_0$ & 相对误差 & 训练 RMSE & 测试 RMSE & 测试/训练 \\
+          \midrule
+          Heat & 4096 & 0.376310 & $1.287\%$ & 0.0002 & 0.1414 & 846.37 \\
+          Heat & 8192 & 0.373278 & $0.471\%$ & 0.0270 & 0.0696 & 2.57 \\
+          Heat & 16384 & 0.372581 & $0.283\%$ & 0.0360 & 0.0517 & 1.44 \\
+          Black--Scholes & 8192 & 0.048520 & $0.599\%$ & 0.0084 & 0.0199 & 2.38 \\
+          Black--Scholes & 16384 & 0.048726 & $0.178\%$ & 0.0529 & 0.0746 & 1.41 \\
+          HJB-LQ & 4096 & 4.423910 & $3.622\%$ & $1.36\times10^{-6}$ & 0.4595 & $3.37\times10^{5}$ \\
+          HJB-LQ & 8192 & 4.578700 & $0.250\%$ & 0.0762 & 0.1963 & 2.58 \\
+          HJB-LQ & 16384 & 4.590000 & $0.0035\%$ & 0.0990 & 0.1443 & 1.46 \\
+          Allen--Cahn & 8192 & 0.053268 & $0.916\%$ & 0.0028 & 0.0069 & 2.49 \\
+          Allen--Cahn & 16384 & 0.053131 & $0.656\%$ & 0.0035 & 0.0051 & 1.45 \\
+          \bottomrule
+        \end{tabular}
+      \end{table}
+
+      当样本数较小时, 训练残差本身不一定可靠.
+      随机种子决定了内层随机特征, 也会影响有效特征的数量;
+      在样本较少时, 某些随机特征组合可能很好地拟合训练路径, 但在独立测试路径上误差仍然较大.
+      因此表中加入测试 RMSE 与训练 RMSE 的比值, 作为观察泛化情况的辅助指标.
+      例如 HJB-LQ 在 $S=4096$ 时训练 RMSE 几乎为零, 但测试/训练比值达到 $3.37\times10^{5}$,
+      初值相对误差也偏大.
+      因此后续分析主要参考独立测试残差和初值相对误差.
+      图~\ref{fig:sample_size_generalization} 给出了测试/训练比值和初值相对误差的对比.
+
+      \begin{figure}[ht]
         \centering
-        \includegraphics[width=\textwidth]{dimension-relative-error}
-        \caption{不同种子下的初值相对误差}
-        \label{fig:dimension_relative_error}
-      \end{subfigure}
-      \caption{维度变化下的运行时间和初值相对误差}
-      \label{fig:dimension_scaling_combined}
-    \end{figure}
+        \includegraphics[width=0.88\textwidth]{sample-size-generalization}
+        \caption{样本数对泛化比值和初值相对误差的影响}
+        \label{fig:sample_size_generalization}
+      \end{figure}
 
-  \section{随机种子稳定性}\label{sec:numerical_seed}
-    随机特征内层参数和样本路径都由随机数生成, 因此需要检查结果是否依赖某个特定种子.
-    表~\ref{tab:seed_stability} 使用标准配置下的三个种子,
-    报告 $y_0$ 均值, 样本标准差和平均测试残差.
+    \subsection{随机特征宽度的影响}\label{subsec:hidden}
+      随机特征宽度 $H$ 决定每个时间层上可训练输出参数的数量.
+      本节固定 $d=100$, $S=16384$, 只改变 $H$.
+      对 HJB-LQ 方程, 增大 $H$ 后初值相对误差和训练残差都有改善;
+      对 Heat, Black--Scholes 和 Allen--Cahn, 当 $H$ 已达到当前规模后,
+      继续增大 $H$ 并不能稳定带来更高精度.
+      这说明随机特征宽度并不是唯一的限制因素;
+      样本路径数量, 随机特征的有效线性无关程度以及最小二乘系统的条件数都会共同影响结果.
+      图~\ref{fig:hidden_dim_generalization} 展示了测试残差和初值相对误差随 $H$ 变化的情况.
 
-    \begin{table}
-      \centering
-      \caption{随机种子稳定性结果}
-      \label{tab:seed_stability}
-      \begin{tabular}{lcccc}
-        \toprule
-        方程 & $y_0$ 均值 & $y_0$ 标准差 & 均值相对误差 & 测试 RMSE 均值 \\
-        \midrule
-        Heat & 0.372764 & $8.04\times10^{-4}$ & $0.333\%$ & 0.0520 \\
-        Black--Scholes & 0.048843 & $1.26\times10^{-4}$ & $0.063\%$ & 0.0379 \\
-        HJB-LQ & 4.591863 & $1.62\times10^{-3}$ & $0.037\%$ & 0.1436 \\
-        Allen--Cahn & 0.053021 & $9.54\times10^{-5}$ & $0.449\%$ & 0.0051 \\
-        \bottomrule
-      \end{tabular}
-    \end{table}
+      \begin{figure}[ht]
+        \centering
+        \includegraphics[width=0.88\textwidth]{hidden-dim-generalization}
+        \caption{随机特征宽度对测试残差和初值相对误差的影响}
+        \label{fig:hidden_dim_generalization}
+      \end{figure}
 
-    四个方程的 $y_0$ 波动都小于主要数值量级.
-    图~\ref{fig:seed_stability} 给出每个随机种子下的初值相对误差.
+    \subsection{维度与运行时间}\label{subsec:dim&time}
+      为了观察维度变化对运行时间的影响, 本节固定 $H=50$, $S=16384$,
+      对 $d=20,30,50,100,200,300$ 分别运行三个随机种子并取平均.
+      由于总运行时间包含初始化, 公用数据构造和求解等多个部分,
+      直接用总时间拟合维度阶数并不合适.
+      因此对相邻两组维度 $d_{j-1}$ 和 $d_j$, 定义局部阶
+      \begin{equation}
+        p_j =
+        \frac{\log(t_j/t_{j-1})}{\log(d_j/d_{j-1})},
+        \label{eq:dimension_local_order}
+      \end{equation}
+      其中 $t_j$ 表示该维度下三次运行的平均时间.
+      表~\ref{tab:dimension_average_results} 列出了不同维度下的平均时间和相邻维度的局部阶.
 
-    \begin{figure}[ht]
-      \centering
-      \includegraphics[width=0.78\textwidth]{seed-stability}
-      \caption{不同随机种子下的初值相对误差}
-      \label{fig:seed_stability}
-    \end{figure}
+      \begin{table}
+        \centering
+        \caption{维度变化的平均结果}
+        \label{tab:dimension_average_results}
+        \small
+        \begin{tabular}{lccc lccc}
+          \toprule
+          方程 & $d$ & 时间 / ms & $p_j$ & 方程 & $d$ & 时间 / ms & $p_j$ \\
+          \midrule
+          Heat & 20 & $204.4\pm3.5$ & -- & Black--Scholes & 20 & $209.5\pm5.1$ & -- \\
+          Heat & 30 & $216.0\pm3.6$ & 0.14 & Black--Scholes & 30 & $219.1\pm2.0$ & 0.11 \\
+          Heat & 50 & $238.8\pm2.7$ & 0.20 & Black--Scholes & 50 & $242.7\pm4.2$ & 0.20 \\
+          Heat & 100 & $314.7\pm3.8$ & 0.40 & Black--Scholes & 100 & $325.3\pm4.5$ & 0.42 \\
+          Heat & 200 & $568.8\pm1.3$ & 0.85 & Black--Scholes & 200 & $599.1\pm9.9$ & 0.88 \\
+          Heat & 300 & $1031.7\pm4.8$ & 1.47 & Black--Scholes & 300 & $1057.3\pm0.3$ & 1.40 \\
+          \midrule
+          HJB-LQ & 20 & $435.5\pm69.2$ & -- & Allen--Cahn & 20 & $444.7\pm65.6$ & -- \\
+          HJB-LQ & 30 & $680.6\pm92.5$ & 1.10 & Allen--Cahn & 30 & $648.0\pm112.1$ & 0.93 \\
+          HJB-LQ & 50 & $1053.4\pm176.5$ & 0.85 & Allen--Cahn & 50 & $856.4\pm90.0$ & 0.55 \\
+          HJB-LQ & 100 & $3273.2\pm263.6$ & 1.64 & Allen--Cahn & 100 & $2780.4\pm649.2$ & 1.70 \\
+          HJB-LQ & 200 & $5616.8\pm3150.0$ & 0.78 & Allen--Cahn & 200 & $6472.6\pm3419.0$ & 1.22 \\
+          HJB-LQ & 300 & $27300.8\pm4323.0$ & 3.90 & Allen--Cahn & 300 & $40998.0\pm7671.0$ & 4.55 \\
+          \bottomrule
+        \end{tabular}
+      \end{table}
+
+      从表~\ref{tab:dimension_average_results} 可以看到, 线性方程在低维到中等维度上的局部阶较小,
+      到 $d=200,300$ 时局部阶逐渐增大;
+      半线性方程的时间增长更快, 尤其在 $d=300$ 时受到非线性迭代和线性代数规模的共同影响.
+      这里的高维端局部阶升高, 不宜直接解释为算法本身的理论复杂度.
+      一方面, 维度增大后, 参数矩阵和样本路径占用的显存增加较多,
+      GPU 并行度可能受到显存带宽, 缓存命中率和临时张量分配的限制;
+      另一方面, 半线性方程每次 LM 试探步都要重新传播路径并构造灵敏度,
+      拒绝步和重试次数会直接放大运行时间.
+      此外, 当问题接近实验设备的显存上限时, 内存碎片, kernel 调度开销,
+      以及矩阵求解例程在大尺寸矩阵上的工作区需求都可能造成额外开销.
+      本实验中 $d=300$, $H=50$, $S=16384$ 已接近设备可运行上限,
+      因而这个端点更适合作为硬件压力测试, 而不是复杂度阶数的稳定估计点.
+      图~\ref{fig:dimension_scaling_combined} 左图在 log-log 坐标下展示了平均运行时间随维度变化的趋势.
+      除运行时间外, 还需要检查高维下的初值精度.
+      图~\ref{fig:dimension_scaling_combined} 右图给出了不同维度, 不同随机种子下的初值相对误差.
+      图中的误差大多仍然较小, 说明方法在较高维度下仍能给出有效初值.
+
+      \begin{figure}[ht]
+        \centering
+        \begin{subfigure}{0.49\textwidth}
+          \centering
+          \includegraphics[width=\textwidth]{dimension-time-scaling}
+          \caption{运行时间随维度变化}
+          \label{fig:dimension_time_scaling}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}{0.49\textwidth}
+          \centering
+          \includegraphics[width=\textwidth]{dimension-relative-error}
+          \caption{不同种子下的初值相对误差}
+          \label{fig:dimension_relative_error}
+        \end{subfigure}
+        \caption{维度变化下的运行时间和初值相对误差}
+        \label{fig:dimension_scaling_combined}
+      \end{figure}
+
+    \subsection{随机种子稳定性}\label{subsec:numerical_seed}
+      随机特征内层参数和样本路径都由随机数生成, 因此需要检查结果是否依赖某个特定种子.
+      表~\ref{tab:seed_stability} 使用标准配置下的三个种子,
+      报告 $y_0$ 均值, 样本标准差和平均测试残差.
+
+      \begin{table}
+        \centering
+        \caption{随机种子稳定性结果}
+        \label{tab:seed_stability}
+        \begin{tabular}{lcccc}
+          \toprule
+          方程 & $y_0$ 均值 & $y_0$ 标准差 & 均值相对误差 & 测试 RMSE 均值 \\
+          \midrule
+          Heat & 0.372764 & $8.04\times10^{-4}$ & $0.333\%$ & 0.0520 \\
+          Black--Scholes & 0.048843 & $1.26\times10^{-4}$ & $0.063\%$ & 0.0379 \\
+          HJB-LQ & 4.591863 & $1.62\times10^{-3}$ & $0.037\%$ & 0.1436 \\
+          Allen--Cahn & 0.053021 & $9.54\times10^{-5}$ & $0.449\%$ & 0.0051 \\
+          \bottomrule
+        \end{tabular}
+      \end{table}
+
+      四个方程的 $y_0$ 波动都小于主要数值量级.
+      图~\ref{fig:seed_stability} 给出每个随机种子下的初值相对误差.
+
+      \begin{figure}[ht]
+        \centering
+        \includegraphics[width=0.78\textwidth]{seed-stability}
+        \caption{不同随机种子下的初值相对误差}
+        \label{fig:seed_stability}
+      \end{figure}
 
   \section{与 DeepBSDE 方法的对比}\label{sec:numerical_deepbsde}
     Han 等\cite{hanSolvingHighdimensionalPartial2018}提出了一种基于神经网络求解高维抛物型方程的方法,

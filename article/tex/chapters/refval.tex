@@ -11,6 +11,7 @@
     \begin{equation}
       g(x)=\exp\!\left(-\frac{\lVert x\rVert^2}{d}\right),
       \qquad x_0=0,\qquad T=1.
+      \label{eq:heatterm}
     \end{equation}
     更一般地, 若终端条件写为
     \begin{equation*}
@@ -29,6 +30,7 @@
     因而在 $x_0=0$, $a=d$ 时,
     \begin{equation}
       Y_0 = \left(\frac{d}{d+2}\right)^{d/2}.
+      \label{eq:heaty0}
     \end{equation}
     代入不同维度得到表~\ref{tab:ref_heat}.
     这些值由显式公式直接计算, 不包含额外的数值离散误差.
@@ -52,6 +54,11 @@
     \end{table}
 
   \section{HJB-LQ 方程的积分参考值}\label{sec:ref_hjb}
+    HJB-LQ 方程的终端条件取为
+    \begin{equation}
+      g(x) = \log \left(\frac{1+\lVert x \rVert^{2}}{2}\right).
+      \label{eq:hjbterm}
+    \end{equation}
     HJB-LQ 方程对应的 BSDE 为
     \begin{equation}
       \dif Y_t=\frac{1}{2}\lVert Z_t\rVert^2\dif t+Z_t^{\operatorname{T}}\dif W_t.
@@ -67,6 +74,7 @@
       \left[
         \frac{2}{1+2T\chi_d^2}
       \right].
+      \label{eq:hjby0}
     \end{equation}
     因此参考值可以通过下面的一维积分计算:
     \begin{equation}
@@ -77,6 +85,7 @@
       =
       \int_{0}^{\infty}
       \frac{2}{1+2Ty} f_{\chi_d^2}(y)\,\dif y.
+      \label{eq:hjbint}
     \end{equation}
     本文采用自适应 Simpson 积分在有限区间上计算该积分.
     当积分上限从 $300$ 增加到 $500$ 时, 结果变化不超过 $5\times 10^{-12}$,
@@ -105,6 +114,7 @@
     对 Black--Scholes 方程, 终端收益函数为高维算术平均型欧式看涨期权
     \begin{equation}
       g(x)=\max\!\left(\frac{1}{d}\sum_{m=1}^{d}x_m-K,0\right).
+      \label{eq:bsterm}
     \end{equation}
     该问题没有类似一维 Black--Scholes 公式的简单闭式解.
     因此本文采用独立的大样本 Monte Carlo 方法估计其初值,
@@ -115,11 +125,13 @@
     由于几何平均
     \begin{equation}
       \bar{G}_T = \exp\!\left(\frac{1}{d}\sum_{m=1}^{d}\log X_T^{m}\right)
+      \label{eq:bsgbar}
     \end{equation}
     仍服从对数正态分布, 因而 $\mathbb{E}[G]$ 可以显式计算.
     于是采用控制变量估计量
     \begin{equation}
       A^{\ast}=A-\beta\bigl(G-\mathbb{E}[G]\bigr),
+      \label{eq:bsdsigma}
     \end{equation}
     同时结合对偶路径进一步降低方差.
 
@@ -156,18 +168,19 @@
       + v - v^3,
       \qquad
       v(0,r)=\frac{1}{2+0.4r^2}.
+      \label{eq:acv}
     \end{equation}
     本文在区间 $r\in[0,20]$ 上采用径向有限差分离散,
     对扩散项作隐式处理, 对非线性反应项作显式处理.
     在 $r=0$ 处施加径向对称边界条件, 在远端边界取零值近似.
 
     为评估离散误差, 分别使用两组网格
-    \begin{equation}
+    \begin{equation*}
       (\Delta r,\Delta \tau)=(0.025,\ 5\times 10^{-5}),
-    \end{equation}
-    \begin{equation}
+    \end{equation*}
+    \begin{equation*}
       (\Delta r,\Delta \tau)=(0.0125,\ 2.5\times 10^{-5})
-    \end{equation}
+    \end{equation*}
     进行计算, 并将两组结果的差作为误差估计.
     最终采用细网格结果作为参考值, 结果见表~\ref{tab:ref_allencahn}.
 
