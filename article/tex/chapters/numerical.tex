@@ -3,17 +3,19 @@
 \chapter{数值实验}\label{ch:numerical}
   本章通过两个线性方程和两个半线性方程测试前文方法.
   线性方程选取 Black--Scholes 方程和热方程, 主要观察线性最小二乘求解器的精度;
-  半线性方程选取 HJB-LQ 方程和 Allen--Cahn 方程, 用于观察 Levenberg--Marquardt 方法在高维 BSDE 离散系统中的效果.
+  半线性方程选取线性二次型 Hamilton--Jacobi--Bellman 方程
+  (Hamilton--Jacobi--Bellman Linear-Quadratic equation, HJB-LQ equation) 和 Allen--Cahn 方程,
+  用于观察 Levenberg--Marquardt 方法 (Levenberg--Marquardt method, LM method) 在高维 BSDE 离散系统中的效果.
 
   \section{实验设置}\label{sec:numerical_setup}
     每个算例都先生成样本路径
     $\{X_k^{(i)},\Delta W_k^{(i)}\}_{k=0}^{N-1}$,
     然后用随机特征函数近似各时间层的 $Z_k$.
     对线性方程, 终端值 $Y_N$ 关于 $y_0$ 和输出层参数 $\alpha$ 保持线性,
-    所以可以直接求解带 ridge 正则的最小二乘问题.
+    所以可以直接求解带岭正则化 (ridge regularization) 的最小二乘问题.
     对半线性方程, 终端残差关于参数不再是线性的, 本文采用 LM 方法求解相应的非线性最小二乘问题.
 
-    本章统一报告训练样本上的终端残差 RMSE 和独立测试样本上的终端残差 RMSE\@.
+    本章统一报告训练样本上的终端残差均方根误差 (Root Mean Square Error, RMSE) 和独立测试样本上的终端残差 RMSE\@.
     前者反映模型在固定样本路径上的拟合程度, 后者用于观察参数是否只适应了训练路径.
     除特别说明外, 标准配置见表~\ref{tab:numerical_config}.
 
@@ -51,29 +53,79 @@
     不需要再做外层非线性迭代.
 
     Black--Scholes 算例采用多资产算术平均看涨期权.
-    状态过程满足
+    为避免与统一框架中的扩散系数函数 $\sigma(t,x)$ 混淆, 这里记常数波动率为 $\sigma_{\mathrm{BS}}$.
+    统一框架下取
+    \begin{equation}
+      \mu(t,x)=r x,\qquad
+      \sigma(t,x)=\sigma_{\mathrm{BS}}\operatorname{diag}(x),
+      \qquad
+      f(t,x,y,z)=-r y.
+      \label{eq:numerical_bsm_coeff}
+    \end{equation}
+    具体方程为
+    \begin{equation}
+      \frac{\partial u}{\partial t}(t,x)
+      + \frac{1}{2}\sigma_{\mathrm{BS}}^{2}
+        \sum_{m=1}^{d}x_m^2\frac{\partial^2 u}{\partial x_m^2}(t,x)
+      + r\sum_{m=1}^{d}x_m\frac{\partial u}{\partial x_m}(t,x)
+      - r u(t,x)
+      =0,
+      \label{eq:numerical_bsm_pde}
+    \end{equation}
+    终端条件为
+    \begin{equation}
+      u(T,x)=g(x)=\max\!\left(\frac{1}{d}\sum_{m=1}^{d}x_m-K,0\right).
+      \label{eq:numerical_bsm_terminal}
+    \end{equation}
+    本文实验取
+    \begin{equation*}
+      d=100,\qquad T=1,\qquad x_0=(1,\ldots,1),\qquad
+      r=0.05,\qquad \sigma_{\mathrm{BS}}=0.2,\qquad K=1.
+    \end{equation*}
+    对应状态过程满足
     \begin{equation}
       X_{k+1}^{m}
       =
-      X_k^{m}\exp\!\left((r-\frac{1}{2}\sigma^2)\Delta t
-      + \sigma \Delta W_k^{m}\right),
+      X_k^{m}\exp\!\left((r-\frac{1}{2}\sigma_{\mathrm{BS}}^2)\Delta t
+      + \sigma_{\mathrm{BS}} \Delta W_k^{m}\right),
       \qquad m=1,\ldots,d,
       \label{eq:numerical_bsm_forward}
     \end{equation}
-    生成元和终端条件为
-    \begin{equation}
-      f(t,x,y,z)=-r y,\qquad
-      g(x)=\max\!\left(\frac{1}{d}\sum_{m=1}^{d}x_m-K,0\right).
-      \label{eq:numerical_bsm_terminal}
-    \end{equation}
+    该算例没有类似一维 Black--Scholes 公式的简单闭式解, 本文采用附录~\ref{sec:ref_bsm} 中的控制变量 Monte Carlo 参考值.
 
-    Heat 算例采用
+    Heat 算例在统一框架下取
     \begin{equation}
-      X_t=x_0+W_t,\qquad
-      f(t,x,y,z)=0,\qquad
-      g(x)=\exp\!\left(-\frac{\lVert x\rVert^2}{a}\right).
-      \label{eq:numerical_heat}
+      \mu(t,x)=0,\qquad
+      \sigma(t,x)=I_d,\qquad
+      f(t,x,y,z)=0.
+      \label{eq:numerical_heat_coeff}
     \end{equation}
+    具体方程为
+    \begin{equation}
+      \frac{\partial u}{\partial t}(t,x)
+      + \frac{1}{2}\Delta u(t,x)=0,
+      \qquad
+      u(T,x)=g(x).
+      \label{eq:numerical_heat_pde}
+    \end{equation}
+    本文实验取
+    \begin{equation}
+      d=100,\qquad T=1,\qquad x_0=0,\qquad
+      g(x)=\exp\!\left(-\frac{\lVert x\rVert^2}{a}\right),\qquad a=d.
+      \label{eq:numerical_heat_terminal}
+    \end{equation}
+    状态过程为 $X_t=x_0+W_t$.
+    由 Feynman--Kac 公式, 该算例具有显式解
+    \begin{equation}
+      u(t,x)
+      =
+      \left(\frac{a}{a+2(T-t)}\right)^{d/2}
+      \exp\!\left(
+              -\frac{\lVert x\rVert^2}{a+2(T-t)}
+      \right).
+      \label{eq:numerical_heat_solution_main}
+    \end{equation}
+    因而在上述参数下 $Y_0=(d/(d+2))^{d/2}$.
 
     \begin{table}
       \centering
@@ -97,23 +149,78 @@
     HJB-LQ 方程的非线性来自梯度项, Allen--Cahn 方程的非线性来自反应项.
     这两个算例分别对应 $z$ 型非线性和 $y$ 型非线性.
 
-    HJB-LQ 方程采用
+    HJB-LQ 方程在统一框架下取
     \begin{equation}
-      X_t=\sqrt{2}W_t,\qquad
-      f(t,x,y,z)=-\frac{1}{2}\lVert z\rVert^2,
+      \mu(t,x)=0,\qquad
+      \sigma(t,x)=\sqrt{2}I_d,\qquad
+      f(t,x,y,z)=-\frac{1}{2}\lVert z\rVert^2.
+      \label{eq:numerical_hjblq_coeff}
+    \end{equation}
+    具体方程为
+    \begin{equation}
+      \frac{\partial u}{\partial t}(t,x)
+      + \Delta u(t,x)
+      - \lVert\nabla_x u(t,x)\rVert^2
+      =0,
       \qquad
+      u(T,x)=g(x).
+      \label{eq:numerical_hjblq_pde}
+    \end{equation}
+    本文实验取
+    \begin{equation}
+      d=100,\qquad T=1,\qquad x_0=0,\qquad
       g(x)=\log\!\left(\frac{1+\lVert x\rVert^2}{2}\right).
-      \label{eq:numerical_hjblq}
+      \label{eq:numerical_hjblq_terminal}
     \end{equation}
-
-    Allen--Cahn 方程采用
+    状态过程为 $X_t=\sqrt{2}W_t$.
+    对该终端条件, 指数变换给出参考表达式
     \begin{equation}
-      X_t=\sqrt{2}W_t,\qquad
-      f(t,x,y,z)=y-y^3,
-      \qquad
-      g(x)=\frac{1}{2+0.4\lVert x\rVert^2}.
-      \label{eq:numerical_allencahn}
+      u(t,x)
+      =
+      -\log
+      \mathbb{E}\left[
+        \exp\bigl(-g(x+\sqrt{2}W_{T-t})\bigr)
+      \right].
+      \label{eq:numerical_hjblq_reference}
     \end{equation}
+    特别地,
+    \begin{equation}
+      Y_0
+      =
+      -\log
+      \mathbb{E}
+      \left[
+        \frac{2}{1+2T\chi_d^2}
+      \right],
+      \label{eq:numerical_hjblq_y0}
+    \end{equation}
+    数值参考值由附录~\ref{sec:ref_hjb} 中的一维积分计算.
+
+    Allen--Cahn 方程在统一框架下取
+    \begin{equation}
+      \mu(t,x)=0,\qquad
+      \sigma(t,x)=\sqrt{2}I_d,\qquad
+      f(t,x,y,z)=y-y^3.
+      \label{eq:numerical_allencahn_coeff}
+    \end{equation}
+    具体方程为
+    \begin{equation}
+      \frac{\partial u}{\partial t}(t,x)
+      + \Delta u(t,x)
+      + u(t,x)-u^3(t,x)
+      =0,
+      \qquad
+      u(T,x)=g(x).
+      \label{eq:numerical_allencahn_pde}
+    \end{equation}
+    本文实验取
+    \begin{equation}
+      d=100,\qquad T=0.3,\qquad x_0=0,\qquad
+      g(x)=\frac{1}{2+0.4\lVert x\rVert^2}.
+      \label{eq:numerical_allencahn_terminal}
+    \end{equation}
+    状态过程为 $X_t=\sqrt{2}W_t$.
+    该方程没有简单闭式解析解, 本文采用附录~\ref{sec:ref_allencahn} 中的径向有限差分参考值.
 
     \begin{table}
       \centering
@@ -327,9 +434,9 @@
 
   \section{与 DeepBSDE 方法的对比}\label{sec:numerical_deepbsde}
     Han 等\cite{hanSolvingHighdimensionalPartial2018}提出了一种基于神经网络求解高维抛物型方程的方法,
-    后文暂称为 Deep BSDE\@.
+    后文暂称为深度倒向随机微分方程方法 (Deep Backward Stochastic Differential Equation method, Deep BSDE method).
     该方法同样先将方程转化为 BSDE, 再拟合其中的梯度项.
-    不同的是, Deep BSDE 使用标准前馈神经网络 MLP 进行逼近, 训练过程相对更复杂.
+    不同的是, Deep BSDE 使用标准多层感知机 (Multilayer Perceptron, MLP) 进行逼近, 训练过程相对更复杂.
     为了进行比较, 本文实现了文献中的算法, 并在相同方程参数和相同环境下进行实验.
     本文在 HJB-LQ 和 Allen--Cahn 两个半线性方程上记录了 DeepBSDE 的训练过程.
     由于 DeepBSDE 的训练损失和本文 RFM 的终端残差并不是同一个优化目标,

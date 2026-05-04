@@ -56,7 +56,8 @@
     \begin{enumerate}
       \item 根据给定方程生成离散样本路径;
       \item 在所有时间层和路径点上构造随机特征, 用于近似 $Z_{k}$;
-      \item 根据方程类型选择线性最小二乘或非线性 Levenberg--Marquardt 方法求解参数;
+      \item 根据方程类型选择线性最小二乘或非线性 Levenberg--Marquardt 方法
+      (Levenberg--Marquardt method, LM method) 求解参数;
       \item 在独立测试路径上重新推进终端值, 计算测试残差.
     \end{enumerate}
 
@@ -180,7 +181,7 @@
       \lVert A\vartheta-B\rVert_2^2+\lambda_{\mathrm{r}}\lVert R\vartheta\rVert_2^2,
       \label{eq:llstsq}
     \end{equation}
-    其中 $\lambda_{\mathrm{r}}>0$ 为 ridge 正则化参数,
+    其中 $\lambda_{\mathrm{r}}>0$ 为岭正则化 (ridge regularization) 参数,
     \begin{equation}
       R =
       \begin{bmatrix}
@@ -193,7 +194,7 @@
     这样做可以避免把 $y_{0}$ 人为向零偏移, 同时抑制病态线性系统给出的过大 $\alpha$.
 
     实际计算时, 设未知量个数为 $p=1 + dH$.
-    当样本数 $S \ge p$ 时, 直接求解 primal ridge 系统
+    当样本数 $S \ge p$ 时, 直接求解原始岭正则化系统
     \begin{equation}
       \left(A^{\operatorname{T}}A+\lambda_{\mathrm{r}}R^{\operatorname{T}}R\right)\vartheta
       = A^{\operatorname{T}}B.
@@ -220,7 +221,7 @@
       \min_{\theta} \frac{1}{2}\lVert r(\theta) \rVert_{2}^{2}.
     \end{equation*}
 
-    本文实验中对半线性方程采用 Levenberg--Marquardt 方法.
+    本文实验中对半线性方程采用 LM 方法.
     每次迭代都围绕当前参数执行以下流程:
     \begin{enumerate}
       \item 根据当前参数构造 $Z_{k}^{(i)} = \alpha H_{k}^{(i)}$;
@@ -281,7 +282,7 @@
       \label{eq:nlls}
     \end{equation}
 
-    本文采用 Levenberg--Marquardt 方法求解 \eqref{eq:nlls}.
+    本文采用 LM 方法求解 \eqref{eq:nlls}.
     在第 $m$ 次迭代中, 将残差在当前参数 $\theta^{(m)}$ 处线性化:
     \begin{equation}
       r(\theta^{(m)}+\delta) \approx r(\theta^{(m)}) + J(\theta^{(m)})\delta,
@@ -362,7 +363,7 @@
     为了避免只在固定训练路径上评价模型, 本文在训练完成后还会重新采样独立测试路径.
     对测试路径仍然使用相同的随机特征参数和输出层参数,
     并按照与训练阶段一致的离散格式推进终端值.
-    由此得到的测试误差记为
+    由此得到的测试误差用均方根误差 (Root Mean Square Error, RMSE) 表示, 记为
     \begin{equation*}
       \operatorname{RMSE}_{\text{test}}
       =

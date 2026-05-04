@@ -4,11 +4,12 @@
   \section{研究背景与意义}\label{sec:background}
     偏微分方程 (Partial Differential Equations, PDEs) 是处理各种物理, 金融问题的重要手段.
     近年来计算机硬件和计算科学的发展使得低维的简单问题基本可以快速求解.
-    但是由于传统的有限元方法在解决高维度问题时网格数量呈指数增长, 时间复杂度随之爆炸,
+    但是由于传统的有限元方法 (Finite Element Method, FEM) 在解决高维度问题时网格数量呈指数增长, 时间复杂度随之爆炸,
     出现了人们常说的维度诅咒 (curse of dimensionality) 现象, 因此需要找到更高效的方法求解高维 PDEs.
-    蒙特卡洛采样通过避免全空间的网格生成解决了时间复杂度问题, 而前馈神经网络则解决了在蒙特卡洛采样下编码边界条件与优化解函数的问题.
+    蒙特卡洛采样 (Monte Carlo sampling, MC sampling) 通过避免全空间的网格生成解决了时间复杂度问题,
+    而前馈神经网络 (Feedforward Neural Networks, FNNs) 则解决了在蒙特卡洛采样下编码边界条件与优化解函数的问题.
     随着深度学习的发展, 已经有很多研究开始使用此方法求解高维 PDEs.
-    本文则提出了一种改进方法, 使用随机特征法代替神经网络, 实现降低维度和线性化的目的.
+    本文则提出了一种改进方法, 使用随机特征法 (Random Feature Method, RFM) 代替神经网络, 实现降低维度和线性化的目的.
 
   \section{抛物型方程的基本类型}\label{sec:ppde}
     抛物型方程是一类重要的偏微分方程, 其典型形式为
@@ -18,7 +19,7 @@
     \end{equation}
     其中 $\mathcal{L}$ 为关于空间变量的二阶线性椭圆算子.
     该类方程通常用于描述随时间演化的扩散过程, 例如热传导, 概率密度演化以及金融衍生品定价等问题.
-    为了方便与 BSDE 对齐, 我们将椭圆算子拆分得到如下形式:
+    为了方便与倒向随机微分方程 (Backward Stochastic Differential Equations, BSDEs) 对齐, 我们将椭圆算子拆分得到如下形式:
     \begin{equation}
       \begin{aligned}
         \frac{\partial u}{\partial t}(t, x)
@@ -40,21 +41,47 @@
       下面列举了常见的线性抛物型方程:
       \begin{enumerate}
         \item
+        在本文的统一半线性抛物型方程框架下, 热方程对应的随机过程为标准 $d$ 维布朗运动,
+        即漂移项为零, 扩散系数为单位矩阵. 因此有
+        \begin{equation*}
+          \mu(t, x) = 0,\qquad
+          \sigma(t, x) = I_{d},\qquad
+          f(t, x, u, z) = 0.
+        \end{equation*}
+        代入统一形式后得到
+        \begin{equation*}
+          \frac{\partial u}{\partial t}(t,x)
+          + \frac{1}{2}\Delta u(t,x)
+          =0,
+          \qquad
+          u(T,x)=g(x).
+        \end{equation*}
         热方程是最经典的线性抛物型偏微分方程之一, 最初来源于热传导问题,
         也广泛用于描述粒子扩散, 浓度传播以及随机扰动在空间中的扩散过程.
         从概率角度看, 热方程与布朗运动具有直接联系, 其解可以表示为布朗运动终端函数的期望.
         因此, 热方程不仅是扩散模型的基础方程, 也是检验随机方法求解线性抛物型 PDE 的标准基准问题.
         在高维情形下, 热方程的维度对应空间变量的维数, 即 $x\in\mathbb{R}^d$ 中的 $d$.
-        在本文的统一半线性抛物型方程框架下, 热方程对应的随机过程为标准 $d$ 维布朗运动, 即漂移项为零, 扩散系数为单位矩阵.
-        因此有
-        \begin{equation*}
-          \sigma(t, x) = I_{d},\qquad
-          \mu(t, x) = 0,\qquad
-          f(t, x, u, z) = 0.
-        \end{equation*}
         该算例主要用于验证随机特征法在纯扩散线性问题上的基本逼近能力.
 
         \item
+        在统一框架下, 多资产 Black--Scholes 方程对应
+        \begin{equation*}
+          \mu(t, x) = r\,x,\qquad
+          \sigma(t, x) = \operatorname{diag}(x)\, \Sigma^{1/2},\qquad
+          f(t, x, u, z) = -r\,u.
+        \end{equation*}
+        代入统一形式后得到
+        \begin{equation*}
+          \frac{\partial u}{\partial t}(t,x)
+          + \frac{1}{2}\operatorname{Tr}\!\big(
+            \operatorname{diag}(x)\Sigma\operatorname{diag}(x)\nabla_x^2 u(t,x)
+          \big)
+          + \langle r x,\nabla_x u(t,x)\rangle
+          - r u(t,x)
+          =0,
+          \qquad
+          u(T,x)=g(x).
+        \end{equation*}
         Black--Scholes 方程来源于金融衍生品定价理论, 是数学金融中最具有代表性的线性抛物型方程之一.
         Black 和 Scholes\cite{scholesPricingOptionsCorporate} 在期权定价研究中将期权价格视为标的资产价格与时间的函数,
         并通过无套利思想和动态对冲方法推导出相应的定价方程;
@@ -64,12 +91,6 @@
         因而 Black--Scholes 方程自然成为高维 PDE 方法中的典型应用算例.
         设 $x=(x_{1},\ldots,x_{d})$ 表示 $d$ 个资产价格, $r$ 表示无风险利率, $\Sigma$ 表示资产收益率的协方差矩阵.
         在风险中性测度下, 资产价格通常服从几何布朗运动, 其漂移项为 $r x$, 扩散项与当前资产价格成正比.
-        因此, 在本文的统一框架下, 多资产 Black--Scholes 方程对应
-        \begin{equation*}
-          \sigma(t, x) = \operatorname{diag}(x)\, \Sigma^{1/2},\qquad
-          \mu(t, x) = r\,x,\qquad
-          f(t, x, u, z) = -r\,u.
-        \end{equation*}
         其中 $-r u$ 项表示未来收益在无风险利率下的折现效应.
         该算例用于检验本文方法在具有乘性扩散, 非零漂移和折现项的高维金融定价问题上的表现.
 
@@ -101,12 +122,35 @@
       下面列举了常见的半线性抛物型方程:
       \begin{enumerate}
         \item
+        本文采用线性二次型高斯控制问题对应的 Hamilton--Jacobi--Bellman 方程
+        (Hamilton--Jacobi--Bellman equation, HJB equation).
+        在统一半线性抛物型方程框架下, 取
+        \begin{equation*}
+          \mu(t, x) = 0,\qquad
+          \sigma(t, x) = \sqrt{2} I_{d},
+        \end{equation*}
+        此时
+        \begin{equation*}
+          z = \sigma^{\operatorname T} \nabla_{x} u = \sqrt{2} \nabla_{x} u.
+        \end{equation*}
+        若控制强度参数为 $\lambda>0$, 生成元取为
+        \begin{equation*}
+          f(t, x, y, z) = - \frac{\lambda}{2} \lVert z \rVert^{2},
+        \end{equation*}
+        则得到具体方程
+        \begin{equation*}
+          \frac{\partial u}{\partial t}(t, x)
+          + \Delta u(t, x)
+          - \lambda \lVert \nabla_{x} u(t, x) \rVert^{2}
+          = 0,
+          \qquad
+          u(T, x) = g(x).
+        \end{equation*}
         Hamilton--Jacobi--Bellman 方程来源于动态规划和随机最优控制理论.
         在最优控制问题中, 解函数通常表示从当前状态出发所能达到的最优代价, 因而也称为值函数.
         当状态变量维数较高时, HJB 方程的维度等于控制系统的状态空间维度, 传统网格方法会迅速受到维数灾难的限制.
         因此, HJB 方程是检验高维 PDE 方法的重要非线性算例.
-        本文采用线性二次型高斯控制问题对应的 HJB 方程.
-        设状态变量 $X_{t}\in\mathbb{R}^{d}$ 满足受控随机微分方程
+        从控制问题角度看, 可设状态变量 $X_{t}\in\mathbb{R}^{d}$ 满足受控随机微分方程
         \begin{equation*}
           \dif X_{t} = 2\sqrt{\lambda}\, m_{t} \dif t + \sqrt{2} \dif W_{t},
         \end{equation*}
@@ -116,52 +160,33 @@
           J(\{m_{t}\}_{0 \leq t \leq T}) =
           \mathbb{E}\left[ \int_{0}^{T} \lVert m_t\rVert^{2} \dif t + g(X_{T})\right].
         \end{equation*}
-        由动态规划原理可得到对应的 HJB 方程
+        由动态规划原理可得到上面的 HJB 方程.
+        该算例主要用于检验本文方法处理梯度型非线性项的能力.
+
+        \item
+        在统一半线性抛物型方程框架下, Allen--Cahn 方程可取
+        \begin{equation*}
+          \mu(t, x) = 0,\qquad
+          \sigma(t, x) = \sqrt{2} I_{d},
+        \end{equation*}
+        并令
+        \begin{equation*}
+          f(t, x, y, z) = y - y^{3}.
+        \end{equation*}
+        代入统一形式后得到终端值问题
         \begin{equation*}
           \frac{\partial u}{\partial t}(t, x)
           + \Delta u(t, x)
-          - \lambda \lVert \nabla_{x} u(t, x) \rVert^{2}
+          + u(t, x) - u^{3}(t, x)
           = 0,
           \qquad
           u(T, x) = g(x).
         \end{equation*}
-        在本文的统一半线性抛物型方程框架下, 取
-        \begin{equation*}
-          \mu(t, x) = 0,\qquad
-          \sigma(t, x) = \sqrt{2} I_{d}.
-        \end{equation*}
-        此时
-        \begin{equation*}
-          z = \sigma^{\operatorname T} \nabla_{x} u = \sqrt{2} \nabla_{x} u,
-        \end{equation*}
-        因而非线性项可以写为
-        \begin{equation*}
-          f(t, x, y, z) = - \frac{\lambda}{2} \lVert z \rVert^{2}.
-        \end{equation*}
-        实验中可取
-        \begin{equation*}
-          d = 100, \qquad T = 1, \qquad x_{0} = 0, \qquad \lambda = 1,
-        \end{equation*}
-        终端条件取
-        \begin{equation*}
-          g(x) = \log \left(\frac{1+\lVert x \rVert^{2}}{2}\right).
-        \end{equation*}
-        对于该例, 可利用指数变换得到参考表达式
-        \begin{equation*}
-          u(t,x) = - \frac{1}{\lambda} \log \mathbb{E}
-          \left[
-            \exp \big(- \lambda g(x + \sqrt{2} W_{T - t}) \big)
-          \right],
-        \end{equation*}
-        因而可以通过高精度 Monte Carlo 方法计算参考值.
-        该算例主要用于检验本文方法处理梯度型非线性项的能力.
-
-        \item
         Allen--Cahn 方程是一类典型的非线性反应--扩散方程, 常用于描述相分离, 界面演化以及有序--无序转变等物理现象.
         其核心特点是同时包含扩散项和双势阱型反应项.
         扩散项刻画空间传播或平滑效应, 非线性反应项刻画系统向不同稳定相的演化趋势.
         与 HJB 方程不同, Allen--Cahn 方程的非线性主要依赖于解函数 $u$ 本身, 而不是梯度.
-        一个常用的 Allen--Cahn 方程形式为
+        对应的正向时间形式可写为
         \begin{equation*}
           \frac{\partial v}{\partial s}(s, x) = \Delta v(s,x) + v(s,x) - v^3(s,x),
           \qquad
@@ -171,47 +196,24 @@
         \begin{equation*}
           u(t, x) = v(T-t, x),
         \end{equation*}
-        则方程可改写为
+        对给定初始点 $x_0$, 需要近似的目标量为
         \begin{equation*}
-          \frac{\partial u}{\partial t}(t, x)
-          + \Delta u(t, x)
-          + u(t, x) - u^{3}(t, x)
-          = 0,
-          \qquad
-          u(T, x) = g(x).
+          u(0, x_0),
         \end{equation*}
-        在统一半线性抛物型方程框架下, 取
-        \begin{equation*}
-          \mu(t, x) = 0,\qquad
-          \sigma(t, x) = \sqrt{2} I_{d},
-        \end{equation*}
-        并令
-        \begin{equation*}
-          f(t, x, y, z) = y - y^{3}.
-        \end{equation*}
-        实验中可取
-        \begin{equation*}
-          d = 100, \qquad T = 0.3, \qquad x_{0} = 0,
-        \end{equation*}
-        终端条件取
-        \begin{equation*}
-          g(x) = \frac{1}{2 + 0.4\lVert x \rVert^{2}}.
-        \end{equation*}
-        本文求解的目标量为
-        \begin{equation*}
-          u(0, 0),
-        \end{equation*}
-        它对应原始正向时间方程中 $v(T, 0)$ 的值.
-        由于该方程一般没有简单闭式解, 可采用文献中的高精度数值结果或大规模 Monte Carlo 类方法作为参考.
+        它对应原始正向时间方程中 $v(T, x_0)$ 的值.
         该算例主要用于检验本文方法对反应型非线性项的处理能力.
 
         \item
-        带违约风险的非线性 Black--Scholes 方程是金融衍生品定价中的一个重要扩展模型.
-        经典 Black--Scholes 方程假设市场不存在违约风险, 此时方程是线性的.
-        但在实际金融市场中, 合约发行方可能发生违约, 合约持有人只能获得部分价值补偿.
-        若违约强度依赖于当前合约价值, 则定价方程中会出现关于 $u$ 的非线性项.
-        设 $x=(x_{1}, \ldots, x_{d})$ 表示 $d$ 个标的资产价格, 在风险中性测度下资产价格可建模为几何布朗运动.
-        一类典型的带违约风险 Black--Scholes 方程可写为
+        在统一框架下, 带违约风险的非线性 Black--Scholes 方程可对应
+        \begin{equation*}
+          \mu(t, x)= \bar{\mu}x, \qquad
+          \sigma(t, x) = \bar{\sigma} \operatorname{diag}(x),
+        \end{equation*}
+        以及
+        \begin{equation*}
+          f(t, x, y, z) = - (1 - \delta) Q(y) y - R y.
+        \end{equation*}
+        代入统一形式后得到
         \begin{equation*}
           \frac{\partial u}{\partial t}(t, x)
           + \bar{\mu} x \cdot \nabla_{x} u(t, x)
@@ -222,34 +224,16 @@
           - R u(t, x)
           =0.
         \end{equation*}
+        带违约风险的非线性 Black--Scholes 方程是金融衍生品定价中的一个重要扩展模型.
+        经典 Black--Scholes 方程假设市场不存在违约风险, 此时方程是线性的.
+        但在实际金融市场中, 合约发行方可能发生违约, 合约持有人只能获得部分价值补偿.
+        若违约强度依赖于当前合约价值, 则定价方程中会出现关于 $u$ 的非线性项.
+        设 $x=(x_{1}, \ldots, x_{d})$ 表示 $d$ 个标的资产价格, 在风险中性测度下资产价格可建模为几何布朗运动.
         其中 $R$ 为无风险利率, $\delta \in [0,1)$ 表示违约后的回收比例, $Q(u)$ 表示与当前合约价值有关的违约强度.
-        在统一框架下, 该方程可对应
-        \begin{equation*}
-          \mu(t, x)= \bar{\mu}x, \qquad
-          \sigma(t, x) = \bar{\sigma} \operatorname{diag}(x),
-        \end{equation*}
-        以及
-        \begin{equation*}
-          f(t, x, y, z) = - (1 - \delta) Q(y) y - R y.
-        \end{equation*}
         该方程展示了金融定价模型中非线性项的一个典型来源: 市场风险因素或信用风险因素会使得原本线性的定价方程变为非线性.
 
         \item
-        Fisher--KPP 方程是另一类经典的非线性反应--扩散方程, 最初用于描述种群扩散和有利基因传播等问题.
-        其典型特点是反应项具有 Logistic 增长结构: 当解较小时近似线性增长, 当解接近饱和值时增长受到抑制.
-        因此, 该方程常被用来刻画带有扩散机制的传播前沿问题.
-        一个典型形式为
-        \begin{equation*}
-          \frac{\partial v}{\partial s}(s, x) = \Delta v(s, x) + v(s, x)(1 - v(s, x)).
-        \end{equation*}
-        通过同样的时间反向变换 $u(t, x) = v(T - t, x)$, 可以写成终端值问题
-        \begin{equation*}
-          \frac{\partial u}{\partial t}(t, x)
-          + \Delta u(t, x)
-          + u(t, x)(1 - u(t, x))
-          =0.
-        \end{equation*}
-        在统一框架下, 可取
+        在统一框架下, Fisher--KPP 方程可取
         \begin{equation*}
           \mu(t, x) = 0,\qquad
           \sigma(t, x) = \sqrt{2} I_{d},
@@ -258,6 +242,21 @@
         \begin{equation*}
           f(t, x, y, z) = y(1 - y).
         \end{equation*}
+        代入统一形式后得到终端值问题
+        \begin{equation*}
+          \frac{\partial u}{\partial t}(t, x)
+          + \Delta u(t, x)
+          + u(t, x)(1 - u(t, x))
+          =0.
+        \end{equation*}
+        Fisher--KPP 方程是另一类经典的非线性反应--扩散方程, 最初用于描述种群扩散和有利基因传播等问题.
+        其典型特点是反应项具有 Logistic 增长结构: 当解较小时近似线性增长, 当解接近饱和值时增长受到抑制.
+        因此, 该方程常被用来刻画带有扩散机制的传播前沿问题.
+        对应的正向时间形式为
+        \begin{equation*}
+          \frac{\partial v}{\partial s}(s, x) = \Delta v(s, x) + v(s, x)(1 - v(s, x)).
+        \end{equation*}
+        通过同样的时间反向变换 $u(t, x) = v(T - t, x)$, 可以得到上面的终端值问题.
         与 Allen--Cahn 方程类似, Fisher--KPP 方程也是反应--扩散型方程,
         但其非线性项对应的是 Logistic 型增长, 而不是双势阱结构.
       \end{enumerate}
