@@ -432,41 +432,42 @@
         \label{fig:seed_stability}
       \end{figure}
 
-  \section{与 DeepBSDE 方法的对比}\label{sec:numerical_deepbsde}
+  \section{Deep BSDE 对比实验}\label{sec:numerical_deepbsde}
     Han 等\cite{hanSolvingHighdimensionalPartial2018}提出了一种基于神经网络求解高维抛物型方程的方法,
-    后文暂称为深度倒向随机微分方程方法 (Deep Backward Stochastic Differential Equation method, Deep BSDE method).
+    即第\ref{subsec:deepbsde_intro}节介绍的 Deep BSDE 对比方法.
     该方法同样先将方程转化为 BSDE, 再拟合其中的梯度项.
-    不同的是, Deep BSDE 使用标准多层感知机 (Multilayer Perceptron, MLP) 进行逼近, 训练过程相对更复杂.
-    为了进行比较, 本文实现了文献中的算法, 并在相同方程参数和相同环境下进行实验.
-    本文在 HJB-LQ 和 Allen--Cahn 两个半线性方程上记录了 DeepBSDE 的训练过程.
-    由于 DeepBSDE 的训练损失和本文 RFM 的终端残差并不是同一个优化目标,
+    与本文方法不同, Deep BSDE 使用标准多层感知机 (Multilayer Perceptron, MLP) 近似梯度项,
+    需要通过迭代训练更新网络参数.
+    为了进行比较, 本文实现了文献中的算法, 并在相同方程参数和计算环境下进行实验.
+    本文在 HJB-LQ 和 Allen--Cahn 两个半线性方程上记录了 Deep BSDE 的训练过程.
+    由于 Deep BSDE 的训练损失和本文 RFM 的终端残差并不是同一个优化目标,
     因此这里不直接比较损失数值, 只比较初值相对误差随时间的变化.
 
     \begin{table}
       \centering
-      \caption{RFM 与 DeepBSDE 在半线性方程上的结果对比}
+      \caption{本文方法与 Deep BSDE 对比方法在半线性方程上的结果}
       \label{tab:deepbsde_compare}
       \begin{tabular}{llcccc}
         \toprule
         方程 & 方法 & 时间 / s & $y_0$ & 参考值 & 相对误差 \\
         \midrule
-        HJB-LQ & RFM & 3.378 & 4.590000 & 4.590162 & $0.0035\%$ \\
-        HJB-LQ & DeepBSDE & 15.221 & 4.586627 & 4.590162 & $0.077\%$ \\
-        Allen--Cahn & RFM & 3.149 & 0.053131 & 0.052785 & $0.656\%$ \\
-        Allen--Cahn & DeepBSDE & 29.192 & 0.052846 & 0.052785 & $0.116\%$ \\
+        HJB-LQ & 本文方法 (RFM) & 3.378 & 4.590000 & 4.590162 & $0.0035\%$ \\
+        HJB-LQ & 对比方法 (Deep BSDE) & 15.221 & 4.586627 & 4.590162 & $0.077\%$ \\
+        Allen--Cahn & 本文方法 (RFM) & 3.149 & 0.053131 & 0.052785 & $0.656\%$ \\
+        Allen--Cahn & 对比方法 (Deep BSDE) & 29.192 & 0.052846 & 0.052785 & $0.116\%$ \\
         \bottomrule
       \end{tabular}
     \end{table}
 
-    在 HJB-LQ 方程上, RFM 在更短时间内得到更小的初值相对误差.
-    在 Allen--Cahn 方程上, DeepBSDE 经过更长时间训练后初值相对误差略小,
-    而 RFM 的运行时间更短.
+    在 HJB-LQ 方程上, 本文方法在更短时间内得到更小的初值相对误差.
+    在 Allen--Cahn 方程上, Deep BSDE 对比方法经过更长时间训练后初值相对误差略小,
+    而本文方法的运行时间更短.
     图~\ref{fig:deepbsde_rfm_comparison} 展示了初值相对误差随时间变化的过程.
 
     \begin{figure}[ht]
       \centering
       \includegraphics[width=0.90\textwidth]{deepbsde-rfm-comparison}
-      \caption{RFM 与 DeepBSDE 的初值相对误差对比}
+      \caption{本文方法与 Deep BSDE 对比方法的初值相对误差}
       \label{fig:deepbsde_rfm_comparison}
     \end{figure}
 
@@ -477,4 +478,4 @@
     样本数实验说明, 训练残差过小并不一定代表泛化良好, 因而独立测试残差是必要的观察指标.
     维度实验显示, 当前实现在线性方程上的时间增长较慢, 半线性方程的运行时间随维度增长更快;
     同时, 高维下仍需要同时观察相对误差和测试残差, 例如 Heat 方程在 $d=300$ 时出现了较明显的精度退化.
-    与 DeepBSDE 的对比表明, 在本文两个半线性算例上, 随机特征方法可以用较少训练时间得到接近参考值的初值.
+    与 Deep BSDE 对比方法的实验表明, 在本文两个半线性算例上, 随机特征方法可以用较少训练时间得到接近参考值的初值.
