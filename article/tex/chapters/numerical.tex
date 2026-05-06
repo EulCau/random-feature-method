@@ -3,9 +3,8 @@
 \chapter{数值实验}\label{ch:numerical}
   本章通过两个线性方程和两个半线性方程测试前文方法.
   线性方程选取 Black--Scholes 方程和热方程, 主要观察线性最小二乘求解器的精度;
-  半线性方程选取线性二次型 Hamilton--Jacobi--Bellman 方程
-  (Hamilton--Jacobi--Bellman Linear-Quadratic equation, HJB-LQ equation) 和 Allen--Cahn 方程,
-  用于观察 Levenberg--Marquardt 方法 (Levenberg--Marquardt method, LM method) 在高维 BSDE 离散系统中的效果.
+  半线性方程选取线性二次型 HJB 方程和 Allen--Cahn 方程,
+  用于观察 LM 方法在高维 BSDE 离散系统中的效果.
   这些算例与高维 PDE 学习型算法文献中常用的测试问题一致,
   便于和已有 Deep BSDE 及随机特征方法相关结果进行对照\cite{hanSolvingHighdimensionalPartial2018,chenBridgingTraditionalMachine2022}.
 
@@ -16,6 +15,42 @@
     对线性方程, 终端值 $Y_N$ 关于 $y_0$ 和输出层参数 $\alpha$ 保持线性,
     所以可以直接求解带岭正则化 (ridge regularization) 的最小二乘问题.
     对半线性方程, 终端残差关于参数不再是线性的, 本文采用 LM 方法求解相应的非线性最小二乘问题.
+
+    本文实现中, 随机特征函数取为
+    \begin{equation}
+      H_k^{(i)}
+      =
+      \tanh\!\left(
+        x_k^{(i)} A + t_k b + c
+      \right),
+      \label{eq:numerical_inner_parameter_sampling}
+    \end{equation}
+    其中 $A\in\mathbb{R}^{d\times H}$,
+    $b,c\in\mathbb{R}^{1\times H}$ 为生成后固定的内层参数.
+    在程序实现中, 各分量按
+    \begin{equation}
+      A_{mh}\sim \mathcal{N}\!\left(0,\frac{1}{d}\right),
+      \qquad
+      b_h\sim \mathcal{N}(0,1),
+      \qquad
+      c_h\sim \mathcal{N}(0,1)
+      \label{eq:numerical_inner_parameter_distribution}
+    \end{equation}
+    独立采样, 并由同一个实验随机种子派生出不同子种子,
+    分别用于生成 $A$, $b$ 和 $c$.
+    采样后这些内层参数在训练和测试阶段都保持不变,
+    只求解输出层系数 $\alpha$.
+    这种设置与随机特征方法固定内层参数的思想一致.
+    其中 $A$ 的标准差取为 $1/\sqrt d$,
+    是为了使 $x_k^{(i)}A$ 的量级在维度增大时仍保持相对稳定:
+    若 $x$ 的各分量量级相近, 则每个特征输入中的空间部分方差约与
+    $\lVert x\rVert^2/d$ 同阶, 不会因为 $d$ 增大而直接放大.
+    这样可以减少 $\tanh$ 输入过大而落入饱和区间的情况.
+    时间权重 $b$ 和偏置 $c$ 采用标准正态分布,
+    用于在不同时间层和不同随机平移下生成多样的特征函数.
+    需要说明的是, 这种采样方式不是唯一选择,
+    特征宽度和随机种子仍会影响最终结果,
+    因而后文还会单独考察 $H$ 和随机种子对数值结果的影响.
 
     本章统一报告训练样本上的终端残差均方根误差 (Root Mean Square Error, RMSE) 和独立测试样本上的终端残差 RMSE\@.
     前者反映模型在固定样本路径上的拟合程度, 后者用于观察参数是否只适应了训练路径.
@@ -99,7 +134,7 @@
       \label{eq:numerical_bsm_forward}
     \end{equation}
     该算例没有类似一维 Black--Scholes 公式的简单闭式解,
-    本文采用附录~\ref{ch:refval} 第\ref{sec:ref_bsm}节 中的控制变量 Monte Carlo 参考值.
+    本文采用附录~\ref{ch:refval} 第\ref{sec:ref_bsm}节中的控制变量 Monte Carlo 参考值.
 
     Heat 算例在统一框架下取
     \begin{equation}
@@ -204,7 +239,7 @@
       \right],
       \label{eq:numerical_hjblq_y0}
     \end{equation}
-    数值参考值由附录~\ref{ch:refval} 第\ref{sec:ref_hjb}节 中的一维积分计算.
+    数值参考值由附录~\ref{ch:refval} 第\ref{sec:ref_hjb}节中的一维积分计算.
 
     Allen--Cahn 方程在统一框架下取
     \begin{equation}
@@ -230,7 +265,7 @@
       \label{eq:numerical_allencahn_terminal}
     \end{equation}
     状态过程为 $X_t=\sqrt{2}W_t$.
-    该方程没有简单闭式解析解, 本文采用附录~\ref{ch:refval} 第\ref{sec:ref_allencahn}节 中的径向有限差分参考值.
+    该方程没有简单闭式解析解, 本文采用附录~\ref{ch:refval} 第\ref{sec:ref_allencahn}节中的径向有限差分参考值.
 
     \begin{table}
       \centering
@@ -470,7 +505,7 @@
     \end{table}
 
     在本文实现和参数设置下, RFM 在两个半线性算例中均具有更短的运行时间.
-    其中 HJB-LQ 算例同时获得更小的初值误差, 而 Allen–Cahn 算例中 Deep BSDE 在更长训练时间下取得更小误差.
+    其中 HJB-LQ 算例同时获得更小的初值误差, 而 Allen--Cahn 算例中 Deep BSDE 在更长训练时间下取得更小误差.
     因此, 本文实验说明 RFM 在部分 BSDE 离散问题上具有较高计算效率, 但其精度优势依赖具体方程和参数设置.
     图~\ref{fig:deepbsde_rfm_comparison} 展示了初值相对误差随时间变化的过程.
 

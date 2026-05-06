@@ -1,11 +1,11 @@
 % !TEX root = ../main.tex
 
 \ustcsetup{
-  keywords  = {高维偏微分方程, 随机特征法, 蒙特卡洛方法, 随机微分方程, 最小二乘法},
+  keywords  = {高维偏微分方程, 随机特征法, 蒙特卡洛方法, 倒向随机微分方程, 最小二乘法},
   keywords* = {High-dimensional PDEs,
                Random feature method,
                Monte Carlo method,
-               Stochastic differential equations,
+               Backward stochastic differential equations,
                Least-squares method},
 }
 
@@ -17,15 +17,15 @@
   其核心思想是利用随机特征映射将隐式定义的核函数转化为特征函数的数学期望, 并通过有限样本平均进行近似,
   从而避免显式构造高维 Gram 矩阵, 将问题转化为低维最小二乘问题.
   本文提出一种结合随机特征法与蒙特卡洛采样 (Monte Carlo sampling, MC sampling) 的数值方法,
-  用于高效求解高维线性与半线性抛物型 PDEs.
+  用于求解高维线性与半线性抛物型 PDEs.
   该方法利用随机采样处理高维空间积分, 同时借助随机特征表示降低函数逼近复杂度, 在计算效率与精度之间取得平衡.
-  首先将方程转化为随机微分方程 (Stochastic Differential Equations, SDEs), 并确定待求解的目标点.
+  首先将方程转化为相应的倒向随机微分方程 (Backward Stochastic Differential Equations, BSDEs), 并确定待求解的目标点.
   然后从目标点出发进行蒙特卡洛采样, 并学习解函数在路径点上的梯度及目标点处的函数值, 其中梯度项采用随机特征映射进行逼近.
   在线性方程中, 终端匹配问题可化为带正则化的线性最小二乘问题;
-  在半线性方程中，本文将终端残差写成非线性最小二乘形式，并采用 Levenberg–Marquardt (LM) 方法求解.
+  在半线性方程中, 本文将终端残差写成非线性最小二乘形式, 并采用 Levenberg--Marquardt (LM) 方法求解.
   数值实验包括线性的热方程, Black--Scholes 方程,
   以及半线性的 Hamilton--Jacobi--Bellman 方程 (HJB equation) 和 Allen--Cahn 方程.
-  实验结果表明该方法具有较高效率.
+  实验结果表明, 该方法在所测试的高维算例中可以用较短时间得到接近参考值的初值.
 \end{abstract}
 
 \begin{abstract*}
@@ -43,20 +43,21 @@
   This avoids the explicit construction of high-dimensional Gram matrices
   and reduces the problem to a low-dimensional least-squares formulation.
   In this work, a numerical method combining the Random Feature Method with Monte Carlo sampling
-  is proposed for efficiently solving high-dimensional linear and semilinear parabolic PDEs.
+  is proposed for solving high-dimensional linear and semilinear parabolic PDEs.
   The method leverages random sampling to handle high-dimensional integrals,
   while using random feature representations to reduce the complexity of function approximation,
   achieving a balance between computational efficiency and accuracy.
-  The PDE is first reformulated as a system of stochastic differential equations (SDEs),
+  The PDE is first reformulated as the corresponding backward stochastic differential equation (BSDE),
   and a target point is specified for evaluation.
   Monte Carlo sampling is then performed starting from the target point,
   and both the gradient of the solution along sampled paths and the function value at the target point are learned.
   The gradient term is approximated using random feature mappings.
   In linear equations, the terminal matching problem can be formulated
   as a linear least squares problem with regularization;
-  In semilinear equations, this paper expresses the terminal residual in a nonlinear least squares form
-  and employs the Levenberg–Marquardt (LM) method for solving it.
+  In semilinear equations, this paper expresses the terminal residual in a nonlinear least-squares form
+  and employs the Levenberg--Marquardt (LM) method for solving it.
   Numerical experiments on the linear heat equation, the Black--Scholes equation,
-  with the semilinear HJB equation, and the Allen--Cahn equation
-  demonstrate the effectiveness and efficiency of the proposed method.
+  the semilinear HJB equation, and the Allen--Cahn equation
+  show that the proposed method can produce initial values close to reference values
+  within short running times on the tested high-dimensional examples.
 \end{abstract*}
