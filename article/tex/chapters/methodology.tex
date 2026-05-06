@@ -11,8 +11,8 @@
          + \langle \mu(t, x), \nabla u(t, x) \rangle \\
         &+ f\!\big( t, x, u(t,x), \sigma^{\operatorname{T}}(t, x) \nabla u(t, x) \big)
         = 0,
-        \quad (t,x) \in [0,T) \times \mathbb{R}^{d},
       \end{aligned} \\
+      (t,x) \in [0,T) \times \mathbb{R}^{d}, \\
       u(T, x) = g(x), \quad x \in \mathbb{R}^{d}.
     \end{gathered}
     \label{eq:ppdeg}
@@ -38,6 +38,7 @@
     \label{eq:bsde}
   \end{equation}
   并满足终端条件 $Y_{T}=g(X_{T})$.
+  这种以 BSDE 表示抛物型 PDE 并在样本路径上求解的思路, 也是 Deep BSDE 等高维 PDE 算法的基础\cite{hanSolvingHighdimensionalPartial2018,eAlgorithmsSolvingHigh2022}.
   从 \eqref{eq:ppdeg} 到 \eqref{eq:bsde} 的推导见附录~\ref{ch:derivation} 第\ref{sec:pde2bsde}节.
 
   取时间剖分 $0 = t_{0} < t_{1} < \cdots < t_{N} = T$, 其中 $\Delta t = T/N$,
@@ -124,13 +125,13 @@
     先考虑线性生成元
     \begin{equation}
       f\!( t, \boldsymbol{x}, y, \boldsymbol{z})
-      = \mathcal{L}(t, \boldsymbol{x}) y
-      + \langle \mathcal{M}(t, \boldsymbol{x}), \boldsymbol{z} \rangle
-      + \mathcal{N}(t, \boldsymbol{x}).
+      = l(t, \boldsymbol{x}) y
+      + \langle \boldsymbol{m}(t, \boldsymbol{x}), \boldsymbol{z} \rangle
+      + n(t, \boldsymbol{x}).
       \label{eq:linearf}
     \end{equation}
-    其中 $\langle \mathcal{M}, \boldsymbol{z} \rangle$ 可以并入漂移项处理,
-    因此后文只考虑 $\mathcal{M}\equiv 0$ 的情形.
+    其中 $\langle \boldsymbol{m}, \boldsymbol{z} \rangle$ 可以并入漂移项处理,
+    因此后文只考虑 $\boldsymbol{m} \equiv \mathbf{0}$ 的情形.
 
     对每条样本路径 $i$, 用随机特征映射逼近梯度项
     \begin{equation}
@@ -143,9 +144,9 @@
     代入 \eqref{eq:dbsde} 后得到离散迭代
     \begin{equation}
       y_{k + 1}^{(i)}
-      = \big( 1 - \Delta t\, \mathcal{L}(t_{k}, x_{k}^{(i)}) \big) y_{k}^{(i)}
+      = \big( 1 - \Delta t\, l(t_{k}, x_{k}^{(i)}) \big) y_{k}^{(i)}
       + (\Delta W_{k}^{(i)})^{\operatorname{T}} \alpha H_{k}^{(i)}
-      - \Delta t\, \mathcal{N}(t_{k}, x_{k}^{(i)}).
+      - \Delta t\, n(t_{k}, x_{k}^{(i)}).
       \label{eq:ldbsde}
     \end{equation}
     由于上式关于 $y_{0}$ 和 $\alpha$ 是线性的, 终端值 $y_{N}^{(i)}$ 也必然是它们的仿射函数.
@@ -167,7 +168,7 @@
         \operatorname{vec}(\alpha)
       \end{bmatrix},
       \qquad
-      A_{i,\cdot} =
+      \Phi_{i,\cdot} =
       \begin{bmatrix}
         \beta_i & \operatorname{vec}(\Gamma_i)^{\operatorname{T}}
       \end{bmatrix},
@@ -178,7 +179,7 @@
     则线性方程最终求解
     \begin{equation}
       \min_{\vartheta}
-      \lVert A\vartheta-B\rVert_2^2+\lambda_{\mathrm{r}}\lVert R\vartheta\rVert_2^2,
+      \lVert \Phi \vartheta - B\rVert_2^2+\lambda_{\mathrm{r}}\lVert R\vartheta\rVert_2^2,
       \label{eq:llstsq}
     \end{equation}
     其中 $\lambda_{\mathrm{r}}>0$ 为岭正则化 (ridge regularization) 参数,
@@ -196,19 +197,21 @@
     实际计算时, 设未知量个数为 $p=1 + dH$.
     当样本数 $S \ge p$ 时, 直接求解原始岭正则化系统
     \begin{equation}
-      \left(A^{\operatorname{T}}A+\lambda_{\mathrm{r}}R^{\operatorname{T}}R\right)\vartheta
-      = A^{\operatorname{T}}B.
+      \left(\Phi^{\operatorname{T}}\Phi+\lambda_{\mathrm{r}}R^{\operatorname{T}}R\right)\vartheta
+      = \Phi^{\operatorname{T}}B.
       \label{eq:primal}
     \end{equation}
     当 $S < p$ 时, 使用对偶形式降低线性系统规模.
     由于当前实现的对偶形式主要用于欠定情形, 其正则化写为
     \begin{equation}
       \vartheta =
-      A^{\operatorname{T}} \left(AA^{\operatorname{T}}+\lambda_{\mathrm{r}}I_S\right)^{-1}B.
+      \Phi^{\operatorname{T}} \left(\Phi\Phi^{\operatorname{T}}+\lambda_{\mathrm{r}}I_S\right)^{-1}B.
       \label{eq:dual}
     \end{equation}
-    线性情形的优势在于不需要迭代更新随机特征参数,
-    每次实验只需求解一个最小二乘系统即可.
+    这种情形下系统欠定, 并不能得到较好的结果.
+    此处仅作为程序鲁棒性的扩展, 不在这种情形下实验和分析.
+
+    线性情形的优势在于不需要迭代更新随机特征参数, 每次实验只需求解一个最小二乘系统即可.
 
   \section{半线性方程的求解}\label{sec:nonlinear}
     对半线性方程, 终端值关于参数不再保持线性, 因而不能直接写成单个最小二乘系统.
@@ -343,21 +346,17 @@
     因而第 $i$ 条路径对应的雅可比行向量就是
     \begin{equation}
       J_{i}(\theta) = S_{N}^{(i)}
-      = (\prod_{j = 0}^{N - 1} A_{j}^{(i)}) S_{0}^{(i)} +
-      \sum_{k=0}^{N-1} ( \prod_{j =k + 1}^{N - 1} A_j^{(i)}) B_{k}^{(i)}.
+      = (\prod_{j = 0}^{N - 1} \Phi_{j}^{(i)}) S_{0}^{(i)} +
+      \sum_{k=0}^{N-1} ( \prod_{j =k + 1}^{N - 1} \Phi_j^{(i)}) B_{k}^{(i)}.
       \label{eq:jacobian4i}
     \end{equation}
     上述灵敏度递推及其由来见附录~\ref{ch:derivation} 第\ref{sec:semilinearder}节.
 
     这与线性方程中系数矩阵的推导形式类似,
-    区别在于此处 $A_{k}^{(i)}$ 和 $B_{k}^{(i)}$ 依赖当前迭代步中的 $y_{k}^{(i)}$ 和 $\alpha$,
+    区别在于此处 $\Phi_{k}^{(i)}$ 和 $B_{k}^{(i)}$ 依赖当前迭代步中的 $y_{k}^{(i)}$ 和 $\alpha$,
     因而需要在每一次迭代中重新计算.
     但随机特征结构使待优化参数始终只出现在输出层,
     从而显著降低了优化问题的规模.
-
-    第\ref{ch:methodology}章已经给出了线性方程与半线性方程对应的离散化模型和优化问题.
-    为了便于后续实验分析, 本章从算法执行流程的角度总结本文方法, 重点说明样本路径生成,
-    随机特征构造, 参数求解与测试评估之间的关系.
 
   \section{测试阶段与误差评估}\label{sec:test&eval}
     为了避免只在固定训练路径上评价模型, 本文在训练完成后还会重新采样独立测试路径.

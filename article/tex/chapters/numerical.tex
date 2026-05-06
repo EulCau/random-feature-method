@@ -6,6 +6,8 @@
   半线性方程选取线性二次型 Hamilton--Jacobi--Bellman 方程
   (Hamilton--Jacobi--Bellman Linear-Quadratic equation, HJB-LQ equation) 和 Allen--Cahn 方程,
   用于观察 Levenberg--Marquardt 方法 (Levenberg--Marquardt method, LM method) 在高维 BSDE 离散系统中的效果.
+  这些算例与高维 PDE 学习型算法文献中常用的测试问题一致,
+  便于和已有 Deep BSDE 及随机特征方法相关结果进行对照\cite{hanSolvingHighdimensionalPartial2018,chenBridgingTraditionalMachine2022}.
 
   \section{实验设置}\label{sec:numerical_setup}
     每个算例都先生成样本路径
@@ -37,6 +39,9 @@
 
     本章还大量使用了方程初值的参考真实值, 其具体计算方法和误差或置信区间均见附录~\ref{ch:refval}.
 
+    实验在 5060ti 16G GPU 上完成, 使用 C++/libtorch, 数据类型为 float32.
+    运行时间包括样本路径生成, 随机特征构造, 线性系统求解和测试误差计算.
+
   \section{线性方程}\label{sec:numerical_linear}
     本节考虑生成元关于 $(y,z)$ 为线性的方程.
     对这类问题, 离散 BSDE 的终端值可以写成
@@ -53,6 +58,8 @@
     不需要再做外层非线性迭代.
 
     Black--Scholes 算例采用多资产算术平均看涨期权.
+    Black--Scholes 模型最初用于欧式期权定价\cite{scholesPricingOptionsCorporate},
+    多资产形式则常用于检验高维金融定价算法的可扩展性\cite{zhaoQuantuminspiredVariationalAlgorithms2024}.
     为避免与统一框架中的扩散系数函数 $\sigma(t,x)$ 混淆, 这里记常数波动率为 $\sigma_{\mathrm{BS}}$.
     统一框架下取
     \begin{equation}
@@ -91,7 +98,8 @@
       \qquad m=1,\ldots,d,
       \label{eq:numerical_bsm_forward}
     \end{equation}
-    该算例没有类似一维 Black--Scholes 公式的简单闭式解, 本文采用附录~\ref{sec:ref_bsm} 中的控制变量 Monte Carlo 参考值.
+    该算例没有类似一维 Black--Scholes 公式的简单闭式解,
+    本文采用附录~\ref{ch:refval} 第\ref{sec:ref_bsm}节 中的控制变量 Monte Carlo 参考值.
 
     Heat 算例在统一框架下取
     \begin{equation}
@@ -148,6 +156,8 @@
   \section{半线性方程}\label{sec:numerical_nonlinear}
     HJB-LQ 方程的非线性来自梯度项, Allen--Cahn 方程的非线性来自反应项.
     这两个算例分别对应 $z$ 型非线性和 $y$ 型非线性.
+    二者也出现在 Deep BSDE 方法的高维数值实验中\cite{hanSolvingHighdimensionalPartial2018},
+    因而适合用于观察本文随机特征方法在半线性问题上的表现.
 
     HJB-LQ 方程在统一框架下取
     \begin{equation}
@@ -194,7 +204,7 @@
       \right],
       \label{eq:numerical_hjblq_y0}
     \end{equation}
-    数值参考值由附录~\ref{sec:ref_hjb} 中的一维积分计算.
+    数值参考值由附录~\ref{ch:refval} 第\ref{sec:ref_hjb}节 中的一维积分计算.
 
     Allen--Cahn 方程在统一框架下取
     \begin{equation}
@@ -220,7 +230,7 @@
       \label{eq:numerical_allencahn_terminal}
     \end{equation}
     状态过程为 $X_t=\sqrt{2}W_t$.
-    该方程没有简单闭式解析解, 本文采用附录~\ref{sec:ref_allencahn} 中的径向有限差分参考值.
+    该方程没有简单闭式解析解, 本文采用附录~\ref{ch:refval} 第\ref{sec:ref_allencahn}节 中的径向有限差分参考值.
 
     \begin{table}
       \centering
@@ -459,9 +469,9 @@
       \end{tabular}
     \end{table}
 
-    在 HJB-LQ 方程上, 本文方法在更短时间内得到更小的初值相对误差.
-    在 Allen--Cahn 方程上, Deep BSDE 对比方法经过更长时间训练后初值相对误差略小,
-    而本文方法的运行时间更短.
+    在本文实现和参数设置下, RFM 在两个半线性算例中均具有更短的运行时间.
+    其中 HJB-LQ 算例同时获得更小的初值误差, 而 Allen–Cahn 算例中 Deep BSDE 在更长训练时间下取得更小误差.
+    因此, 本文实验说明 RFM 在部分 BSDE 离散问题上具有较高计算效率, 但其精度优势依赖具体方程和参数设置.
     图~\ref{fig:deepbsde_rfm_comparison} 展示了初值相对误差随时间变化的过程.
 
     \begin{figure}[ht]

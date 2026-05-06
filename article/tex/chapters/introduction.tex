@@ -2,12 +2,14 @@
 
 \chapter{引言}\label{ch:introduction}
   \section{研究背景与意义}\label{sec:background}
-    偏微分方程 (Partial Differential Equations, PDEs) 是处理各种物理, 金融问题的重要手段.
+    偏微分方程 (Partial Differential Equations, PDEs) 是处理各种物理, 金融和控制问题的重要工具.
     近年来计算机硬件和计算科学的发展使得低维的简单问题基本可以快速求解.
     但是由于传统的有限元方法 (Finite Element Method, FEM) 在解决高维度问题时网格数量呈指数增长, 时间复杂度随之爆炸,
     出现了人们常说的维度诅咒 (curse of dimensionality) 现象, 因此需要找到更高效的方法求解高维 PDEs.
-    蒙特卡洛采样 (Monte Carlo sampling, MC sampling) 通过避免全空间的网格生成解决了时间复杂度问题,
-    而前馈神经网络 (Feedforward Neural Networks, FNNs) 则解决了在蒙特卡洛采样下编码边界条件与优化解函数的问题.
+    这一困难也是近年来高维 PDE 数值算法研究的主要出发点之一\cite{hanSolvingHighdimensionalPartial2018,eAlgorithmsSolvingHigh2022}.
+    蒙特卡洛采样 (Monte Carlo sampling, MC sampling) 通过随机路径或随机配置点避免全空间网格生成,
+    而神经网络等函数逼近工具则为高维样本点上的未知函数表示提供了新的选择.
+    在深度 Ritz, PINN 及相关神经网络方法中, 随机采样和拟蒙特卡洛采样也常被用于近似高维积分型损失\cite{kuoQUASIMONTECARLOMETHODS2011,chenQuasiMonteCarloSampling2021,huTacklingCurseDimensionality2024}.
     近年来, 机器学习 (Machine Learning, ML) 在高维函数逼近中的表现引起了科学计算和计算数学领域的关注.
     E\cite{eMachineLearningComputational2020} 在相关综述中指出,
     传统有限差分方法 (Finite Difference Method, FDM), FEM 和谱方法 (Spectral Method, SM)
@@ -22,7 +24,7 @@
   \section{抛物型方程的基本类型}\label{sec:ppde}
     抛物型方程是一类重要的偏微分方程, 其典型形式为
     \begin{equation}
-      \frac{\partial u}{\partial t} = \mathcal{L} u + f,
+      \frac{\partial u}{\partial t} + \mathcal{L} u + f = 0,
       \label{eq:ppde0}
     \end{equation}
     其中 $\mathcal{L}$ 为关于空间变量的二阶线性椭圆算子.
@@ -79,17 +81,16 @@
           f(t, x, u, z) = -r\,u.
         \end{equation*}
         代入统一形式后得到
-        \begin{equation*}
+        \begin{gather*}
           \frac{\partial u}{\partial t}(t,x)
           + \frac{1}{2}\operatorname{Tr}\!\big(
-            \operatorname{diag}(x)\Sigma\operatorname{diag}(x)\nabla_x^2 u(t,x)
+          \operatorname{diag}(x)\Sigma\operatorname{diag}(x)\nabla_x^2 u(t,x)
           \big)
           + \langle r x,\nabla_x u(t,x)\rangle
           - r u(t,x)
-          =0,
-          \qquad
-          u(T,x)=g(x).
-        \end{equation*}
+          = 0, \\
+          u(T,x) = g(x).
+        \end{gather*}
         Black--Scholes 方程来源于金融衍生品定价理论, 是数学金融中最具有代表性的线性抛物型方程之一.
         Black 和 Scholes\cite{scholesPricingOptionsCorporate} 在期权定价研究中将期权价格视为标的资产价格与时间的函数,
         并通过无套利思想和动态对冲方法推导出相应的定价方程;
@@ -97,6 +98,7 @@
         即把期权价值写成股票价格和时间的函数, 并通过构造对冲组合得到定价微分方程.
         在多资产情形下, 若期权收益依赖于多个标的资产, 则 PDE 的空间维度等于资产数量,
         因而 Black--Scholes 方程自然成为高维 PDE 方法中的典型应用算例.
+        近年来, 多资产 Black--Scholes 方程也常被用于测试面向高维金融定价问题的变分或学习型算法\cite{zhaoQuantuminspiredVariationalAlgorithms2024}.
         设 $x=(x_{1},\ldots,x_{d})$ 表示 $d$ 个资产价格, $r$ 表示无风险利率, $\Sigma$ 表示资产收益率的协方差矩阵.
         在风险中性测度下, 资产价格通常服从几何布朗运动, 其漂移项为 $r x$, 扩散项与当前资产价格成正比.
         其中 $-r u$ 项表示未来收益在无风险利率下的折现效应.
@@ -104,22 +106,19 @@
 
         \item
         Ornstein--Uhlenbeck 方程对应的随机过程是一类典型的均值回复过程,
-        最早常用于描述带阻尼的随机运动, 后来也广泛出现在统计物理, 金融数学和随机控制等领域.
+        常用于描述带阻尼的随机运动, 也广泛出现在统计物理, 金融数学和随机控制等领域.
         与布朗运动不同, Ornstein--Uhlenbeck 过程的漂移项会将状态变量拉回长期均值附近,
         因而适合描述具有稳定中心或长期均衡水平的随机系统.
         在高维情形下, 其维度同样对应状态变量的空间维数.
 
-        \item
         线性反应--扩散方程用于描述扩散过程与局部反应过程同时存在的现象.
         其中扩散项刻画物质, 能量或信息在空间中的传播, 反应项刻画局部增长, 衰减或外部源项作用.
         这类方程在化学反应, 生物种群动力学, 热源扩散以及物理场演化问题中都有广泛应用.
-        在本文中考虑的线性反应--扩散方程仍然采用标准扩散过程作为其随机过程部分, 即漂移项为零, 扩散系数为单位矩阵.
-        与热方程不同的是, 方程中额外加入了关于解函数 $u$ 的线性反应项以及可能依赖于时间和空间的外部源项 $c(t,x)$.
       \end{enumerate}
 
       尽管部分方程在物理建模中通常定义于低维空间 (如三维), 但在金融建模, 多因子随机过程等问题中,
       其状态变量维度可以显著增加, 因此常被用作高维数值算法的基准问题.
-      由于前两者已经能包含大部分线性方程的形式, 且后面还有非线性方程的实验,
+      由于前两者已经能覆盖纯扩散型和金融乘性扩散型两类典型情形, 且后面还有非线性方程的实验,
       本论文将仅对热方程和 Black--Scholes 方程进行数值实验.
 
     \subsection{半线性抛物型方程}\label{subsec:slppde}
@@ -158,6 +157,7 @@
         在最优控制问题中, 解函数通常表示从当前状态出发所能达到的最优代价, 因而也称为值函数.
         当状态变量维数较高时, HJB 方程的维度等于控制系统的状态空间维度, 传统网格方法会迅速受到维数灾难的限制.
         因此, HJB 方程是检验高维 PDE 方法的重要非线性算例.
+        例如 Deep BSDE 方法和高维 PINN 方法都将 HJB 方程作为代表性测试问题\cite{hanSolvingHighdimensionalPartial2018,huTacklingCurseDimensionality2024}.
         从控制问题角度看, 可设状态变量 $X_{t}\in\mathbb{R}^{d}$ 满足受控随机微分方程
         \begin{equation*}
           \dif X_{t} = 2\sqrt{\lambda}\, m_{t} \dif t + \sqrt{2} \dif W_{t},
@@ -209,6 +209,7 @@
           u(0, x_0),
         \end{equation*}
         它对应原始正向时间方程中 $v(T, x_0)$ 的值.
+        在高维 PDE 数值算法文献中, Allen--Cahn 方程也常作为反应型非线性问题的基准算例\cite{hanSolvingHighdimensionalPartial2018,eAlgorithmsSolvingHigh2022}.
         该算例主要用于检验本文方法对反应型非线性项的处理能力.
 
         \item
@@ -238,6 +239,7 @@
         若违约强度依赖于当前合约价值, 则定价方程中会出现关于 $u$ 的非线性项.
         设 $x=(x_{1}, \ldots, x_{d})$ 表示 $d$ 个标的资产价格, 在风险中性测度下资产价格可建模为几何布朗运动.
         其中 $R$ 为无风险利率, $\delta \in [0,1)$ 表示违约后的回收比例, $Q(u)$ 表示与当前合约价值有关的违约强度.
+        在 Deep BSDE 的数值实验中, 非线性 Black--Scholes 方程也被用来展示金融定价问题中非线性项带来的高维求解困难\cite{hanSolvingHighdimensionalPartial2018}.
         该方程展示了金融定价模型中非线性项的一个典型来源: 市场风险因素或信用风险因素会使得原本线性的定价方程变为非线性.
 
         \item
@@ -257,7 +259,7 @@
           + u(t, x)(1 - u(t, x))
           =0.
         \end{equation*}
-        Fisher--KPP 方程是另一类经典的非线性反应--扩散方程, 最初用于描述种群扩散和有利基因传播等问题.
+        Fisher--KPP 方程是另一类经典的非线性反应--扩散方程, 常用于描述种群扩散和有利基因传播等问题.
         其典型特点是反应项具有 Logistic 增长结构: 当解较小时近似线性增长, 当解接近饱和值时增长受到抑制.
         因此, 该方程常被用来刻画带有扩散机制的传播前沿问题.
         对应的正向时间形式为
@@ -270,47 +272,74 @@
       \end{enumerate}
 
   \section{随机特征方法}\label{sec:rfm}
-    通常的神经网络通过多层线性变换与非线性激活函数的叠加来逼近目标函数, 这会导致需要求解一个非线性的非凸优化问题.
-    随机特征法的核心思想是将内层参数随机初始化并固定, 仅对输出层参数进行优化,
-    从而将原问题转化为一个凸优化问题, 在平方损失函数下进一步退化为最小二乘问题.
-    这种方法通过减少需要优化的参数自由度来显著简化训练过程, 以牺牲一定的表达能力为代价换取更高的计算效率与稳定性.
-    由于内层参数固定, 随机特征法本质上可以视为对核方法的一种近似,
-    即通过随机特征映射将核函数表示为特征函数的数学期望, 并利用有限样本平均进行近似.
+    随机特征法的基本思想是将两层神经网络中的内层参数随机生成并固定,
+    只求解输出层的线性系数.
+    与普通神经网络需要同时训练多层权重不同, 这种处理把函数逼近问题化为关于输出层参数的优化问题,
+    在平方损失下通常可以进一步写成最小二乘问题.
+    因此, 随机特征方法和极限学习机 (Extreme Learning Machine, ELM) 等线性化浅层网络方法
+    都可以看作在表达能力和求解复杂度之间作出的折中\cite{chenBridgingTraditionalMachine2022,wangExtremeLearningMachineBased2023,maoSolvingHighDimensionalPDEs2026}.
+    从核方法角度看, 随机特征也可以理解为用随机 Monte Carlo 估计替代精确核计算,
+    其收敛和方差性质会影响实际近似效果\cite{reidVarianceReducingCouplingsRandom2024}.
 
-    在实际应用中, 随机特征的分布及尺度参数会显著影响逼近能力.
-    通过合理选择这些参数可以使特征函数张成更丰富的函数空间, 从而提高数值求解的精度.
-    因此, 其在保持较低优化复杂度的同时, 为高维函数逼近提供了一种有效的替代方案.
-    特别地, 由于其线性结构, 随机特征法在基于最小二乘的偏微分方程数值方法中具有天然优势.
-
-    除高维问题外, 随机特征方法也可以用于常规低维 PDE 的数值近似.
-    在低维情形中, FDM, FEM 和 SM 等方法已经形成了较成熟的理论和实现框架.
-    这些方法通常先对空间区域进行网格剖分, 或选取一组确定性的局部基函数,
-    再结合时间推进格式或变分形式得到有限维代数系统.
-    与此不同, 随机特征方法直接选取一组由随机参数确定的全局特征函数,
-    并将解函数近似为
+    在常规低维 PDE 问题中, RFM 通常以配置点残差最小化的形式使用.
+    以边值问题
+    \begin{equation*}
+      \mathcal{L}u(x)=f(x),\quad x\in\Omega,\qquad
+      \mathcal{B}u(x)=g(x),\quad x\in\partial\Omega
+    \end{equation*}
+    为例, 传统 FDM, FEM 和 SM 等方法通常需要先构造网格或选取确定性基函数,
+    再由离散方程得到有限维代数系统.
+    RFM 则直接用一组固定的随机特征函数表示未知解,
+    例如
     \begin{equation*}
       u_H(x) = \sum_{j=1}^{H} \alpha_j \phi_j(x),
+      \qquad
+      \phi_j(x)=\sigma(a_j\cdot x+b_j),
     \end{equation*}
-    其中 $\phi_j$ 表示固定的随机特征函数, $\alpha_j$ 为待求的线性系数.
-    对稳态椭圆方程, 可以在区域内部采样配置点并要求 PDE 残差尽可能小,
-    同时在边界采样点上加入边界条件残差.
-    对抛物型方程, 可以在时间和空间上共同采样,
-    也可以在给定时间层上分别构造随机特征近似.
-    当方程和边界条件关于 $u_H$ 是线性的时,
-    最终得到的参数求解问题通常就是线性最小二乘问题或带正则化的线性最小二乘问题.
+    其中 $a_j,b_j$ 随机生成后保持不变, $\alpha_j$ 为待求的输出层系数.
+    在区域内部配置点上要求 $\mathcal{L}u_H-f$ 尽可能小,
+    在边界配置点上要求 $\mathcal{B}u_H-g$ 尽可能小,
+    就得到形如
+    \begin{equation*}
+      \sum_{x_i\in C_I}
+      \lambda_I\left|\mathcal{L}u_H(x_i)-f(x_i)\right|^2
+      +
+      \sum_{x_j\in C_B}
+      \lambda_B\left|\mathcal{B}u_H(x_j)-g(x_j)\right|^2
+    \end{equation*}
+    的损失函数.
+    Chen 等\cite{chenBridgingTraditionalMachine2022} 将这种随机特征表示, 配置点方法和边界条件惩罚结合起来,
+    作为一种连接传统 PDE 数值方法和机器学习方法的求解框架.
+    由于 PDE 残差和边界条件可以在同一个最小二乘目标中处理,
+    该方法不必为特征函数单独构造满足边界条件的形式,
+    在复杂区域上具有较好的使用灵活性.
+    在实际计算中, 文献\cite{chenBridgingTraditionalMachine2022} 还引入了分片单位分解, 多尺度表示和权重重标定等技巧,
+    用于改善局部尺度变化和不同残差项量级不一致带来的数值问题.
 
-    因此, 随机特征方法可以看作一种无网格 (mesh-free) 的残差最小化方法.
-    它不要求规则网格, 形式上也较容易推广到高维输入.
-    但其数值效果依赖于特征函数的选取, 特征宽度, 采样点数量以及线性系统的条件数.
-    在低维光滑问题上, 传统网格方法往往仍然更加稳定和高效;
-    随机特征方法的作用更多体现在提供一种统一的函数逼近方式,
-    尤其适合与随机采样和最小二乘求解结合.
-    在本文采用的 BSDE 离散框架中, 随机特征并不直接近似 $u(t,x)$,
-    而是用于近似每个时间层上的梯度相关变量 $Z_k$.
-    这样既保留了 BSDE 路径采样避免高维网格的特点,
-    又利用固定随机特征带来的线性输出层结构,
-    使线性方程可以直接归结为最小二乘系统,
-    半线性方程也只需在输出层参数上进行非线性迭代.
+    上述低维 RFM 方法说明, 随机特征的优势主要来自两个方面:
+    一是用固定特征函数避免对内层参数进行非凸训练,
+    二是利用配置点或采样点把 PDE 求解转化为最小二乘型问题.
+    但在高维抛物型方程中, 若仍直接在整个时空区域内布置配置点,
+    采样覆盖和边界处理都会迅速变得困难.
+    另一方面, 本文关心的是给定初始点处的函数值 $u(0,x_0)$,
+    并不需要在整个高维区域上恢复完整的解函数.
+    因此, 本文不直接用随机特征近似 $u(t,x)$,
+    而是先将抛物型 PDE 转化为 BSDE,
+    再沿由正向随机过程生成的样本路径近似每个时间层上的梯度相关变量 $Z_k$.
+    在这一框架下, 随机特征的输入不再是全区域配置点,
+    而是时间层和样本路径上的状态点,
+    近似形式写为
+    \begin{equation*}
+      Z_k^{(i)} \approx \alpha H_k^{(i)}.
+    \end{equation*}
+    这样既保留了 RFM 固定内层参数, 只求解输出层参数的结构,
+    又利用 BSDE 路径采样避免在高维空间中构造网格.
+    在线性方程中, 终端匹配可以化为线性最小二乘系统;
+    在半线性方程中, 由于终端残差关于参数不再线性,
+    本文进一步采用 LM 方法求解相应的非线性最小二乘问题.
+    近来的线性化网络实验也指出, 当特征宽度增加时,
+    相关最小二乘系统的条件数可能成为影响精度和可扩展性的主要因素之一\cite{maoSolvingHighDimensionalPDEs2026},
+    因而后文数值实验也会同时观察特征宽度, 样本数和测试残差对结果的影响.
 
     \subsection{对比方法: Deep BSDE 方法}\label{subsec:deepbsde_intro}
       深度倒向随机微分方程方法 (Deep Backward Stochastic Differential Equation method, Deep BSDE method)

@@ -20,8 +20,9 @@
   用于高效求解高维线性与半线性抛物型 PDEs.
   该方法利用随机采样处理高维空间积分, 同时借助随机特征表示降低函数逼近复杂度, 在计算效率与精度之间取得平衡.
   首先将方程转化为随机微分方程 (Stochastic Differential Equations, SDEs), 并确定待求解的目标点.
-  然后从目标点出发进行蒙特卡洛采样, 并学习解函数在路径点上的梯度及目标点处的函数值.
-  其中梯度项采用随机特征映射进行逼近, 训练过程使用最小二乘法以提高计算效率.
+  然后从目标点出发进行蒙特卡洛采样, 并学习解函数在路径点上的梯度及目标点处的函数值, 其中梯度项采用随机特征映射进行逼近.
+  在线性方程中, 终端匹配问题可化为带正则化的线性最小二乘问题;
+  在半线性方程中，本文将终端残差写成非线性最小二乘形式，并采用 Levenberg–Marquardt (LM) 方法求解.
   数值实验包括线性的热方程, Black--Scholes 方程,
   以及半线性的 Hamilton--Jacobi--Bellman 方程 (HJB equation) 和 Allen--Cahn 方程.
   实验结果表明该方法具有较高效率.
@@ -50,8 +51,11 @@
   and a target point is specified for evaluation.
   Monte Carlo sampling is then performed starting from the target point,
   and both the gradient of the solution along sampled paths and the function value at the target point are learned.
-  The gradient term is approximated using random feature mappings,
-  and the training process employs least-squares optimization to further improve efficiency.
+  The gradient term is approximated using random feature mappings.
+  In linear equations, the terminal matching problem can be formulated
+  as a linear least squares problem with regularization;
+  In semilinear equations, this paper expresses the terminal residual in a nonlinear least squares form
+  and employs the Levenberg–Marquardt (LM) method for solving it.
   Numerical experiments on the linear heat equation, the Black--Scholes equation,
   with the semilinear HJB equation, and the Allen--Cahn equation
   demonstrate the effectiveness and efficiency of the proposed method.
