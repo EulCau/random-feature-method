@@ -93,8 +93,8 @@
     不需要再做外层非线性迭代.
 
     Black--Scholes 算例采用多资产算术平均看涨期权.
-    Black--Scholes 模型最初用于欧式期权定价\cite{scholesPricingOptionsCorporate},
-    多资产形式则常用于检验高维金融定价算法的可扩展性\cite{zhaoQuantuminspiredVariationalAlgorithms2024}.
+    Black--Scholes 模型最初针对欧式期权定价提出,
+    而多资产形式则常用于检验高维金融定价算法的可扩展性\cite{scholesPricingOptionsCorporate,zhaoQuantuminspiredVariationalAlgorithms2024}.
     为避免与统一框架中的扩散系数函数 $\sigma(t,x)$ 混淆, 这里记常数波动率为 $\sigma_{\mathrm{BS}}$.
     统一框架下取
     \begin{equation}
@@ -191,8 +191,8 @@
   \section{半线性方程}\label{sec:numerical_nonlinear}
     HJB-LQ 方程的非线性来自梯度项, Allen--Cahn 方程的非线性来自反应项.
     这两个算例分别对应 $z$ 型非线性和 $y$ 型非线性.
-    二者也出现在 Deep BSDE 方法的高维数值实验中\cite{hanSolvingHighdimensionalPartial2018},
-    因而适合用于观察本文随机特征方法在半线性问题上的表现.
+    这两个算例也都出现在 Deep BSDE 方法的高维数值实验中,
+    因而适合用于观察本文随机特征方法在半线性问题上的表现\cite{hanSolvingHighdimensionalPartial2018}.
 
     HJB-LQ 方程在统一框架下取
     \begin{equation}
@@ -478,8 +478,8 @@
       \end{figure}
 
   \section{Deep BSDE 对比实验}\label{sec:numerical_deepbsde}
-    Han 等\cite{hanSolvingHighdimensionalPartial2018}提出了一种基于神经网络求解高维抛物型方程的方法,
-    即第\ref{subsec:deepbsde_intro}节介绍的 Deep BSDE 对比方法.
+    第\ref{subsec:deepbsde_intro}节介绍的 Deep BSDE 对比方法,
+    属于一类基于神经网络求解高维抛物型方程的代表性做法\cite{hanSolvingHighdimensionalPartial2018}.
     该方法同样先将方程转化为 BSDE, 再拟合其中的梯度项.
     与本文方法不同, Deep BSDE 使用标准多层感知机 (Multilayer Perceptron, MLP) 近似梯度项,
     需要通过迭代训练更新网络参数.

@@ -9,13 +9,17 @@
     这一困难也是近年来高维 PDE 数值算法研究的主要出发点之一\cite{hanSolvingHighdimensionalPartial2018,eAlgorithmsSolvingHigh2022}.
     蒙特卡洛采样 (Monte Carlo sampling, MC sampling) 通过随机路径或随机配置点避免全空间网格生成,
     而神经网络等函数逼近工具则为高维样本点上的未知函数表示提供了新的选择.
-    在深度 Ritz, PINN 及相关神经网络方法中, 随机采样和拟蒙特卡洛采样也常被用于近似高维积分型损失\cite{kuoQUASIMONTECARLOMETHODS2011,chenQuasiMonteCarloSampling2021,huTacklingCurseDimensionality2024}.
+    近年来, 围绕高维或无网格 PDE 求解, 已经发展出 Deep BSDE, Deep Ritz, DGM, PINN, 弱对抗网络等多类神经网络方法,
+    也有工作讨论了利用深度网络处理复杂几何区域上的 PDE 问题\cite{eDeepRitzMethod2018,sirignanoDGMDeepLearning2018,raissiPhysicsinformedNeuralNetworks2019,bergUnifiedDeepArtificial2018,zangWeakAdversarialNetworks2020}.
+    在这些方法中, 随机采样和拟蒙特卡洛采样常被用于近似高维积分型损失并避免显式网格构造\cite{kuoQUASIMONTECARLOMETHODS2011,chenQuasiMonteCarloSampling2021,huTacklingCurseDimensionality2024}.
+    与 PINN 相关的软件实现也逐渐成熟, 例如 DeepXDE 对多类深度学习微分方程方法进行了统一封装\cite{luDeepXDEDeepLearning2021}.
     近年来, 机器学习 (Machine Learning, ML) 在高维函数逼近中的表现引起了科学计算和计算数学领域的关注.
-    E\cite{eMachineLearningComputational2020} 在相关综述中指出,
+    相关综述指出,
     传统有限差分方法 (Finite Difference Method, FDM), FEM 和谱方法 (Spectral Method, SM)
     已经能够常规处理三维空间加时间的问题,
     稀疏网格方法可以进一步将可处理维度提高到约 $8$ 到 $10$ 维,
-    但对于上百维 PDE, 传统网格型方法仍然难以直接应用.
+    但对于上百维 PDE, 传统网格型方法仍然难以直接应用\cite{eMachineLearningComputational2020}.
+    对于更一般的高维 fully nonlinear PDE, 还常需借助二阶 BSDE 等更复杂的随机表示框架, 求解难度会进一步增加\cite{beckMachineLearningApproximation2019}.
     因此, 利用深度学习或其他随机化函数逼近方法求解高维 PDE,
     成为近几年高维数值计算中的一个重要方向.
     本文则在 BSDE 求解框架下使用随机特征法 (Random Feature Method, RFM) 代替常规神经网络,
@@ -93,10 +97,10 @@
           u(T,x) = g(x).
         \end{gather*}
         Black--Scholes 方程来源于金融衍生品定价理论, 是数学金融中最具有代表性的线性抛物型方程之一.
-        Black 和 Scholes\cite{scholesPricingOptionsCorporate} 在期权定价研究中将期权价格视为标的资产价格与时间的函数,
-        并通过无套利思想和动态对冲方法推导出相应的定价方程;
-        在经典单资产情形下, 该模型给出了欧式期权的封闭形式定价公式,
-        即把期权价值写成股票价格和时间的函数, 并通过构造对冲组合得到定价微分方程.
+        该模型将期权价格视为标的资产价格与时间的函数, 并通过无套利思想和动态对冲方法推导出相应的定价方程;
+        在经典单资产情形下, 它还给出了欧式期权的封闭形式定价公式\cite{scholesPricingOptionsCorporate}.
+        对低维 Black--Scholes 方程, 高阶有限差分等传统离散方法仍然可以取得较高精度;
+        但当收益依赖多个标的资产时, PDE 的空间维度会随资产数量增加而迅速升高\cite{huHighOrderMethod2018}.
         在多资产情形下, 若期权收益依赖于多个标的资产, 则 PDE 的空间维度等于资产数量,
         因而 Black--Scholes 方程自然成为高维 PDE 方法中的典型应用算例.
         近年来, 多资产 Black--Scholes 方程也常被用于测试面向高维金融定价问题的变分或学习型算法\cite{zhaoQuantuminspiredVariationalAlgorithms2024}.
@@ -309,13 +313,13 @@
       \lambda_B\left|\mathcal{B}u_H(x_j)-g(x_j)\right|^2
     \end{equation*}
     的损失函数.
-    Chen 等\cite{chenBridgingTraditionalMachine2022} 将这种随机特征表示, 配置点方法和边界条件惩罚结合起来,
-    作为一种连接传统 PDE 数值方法和机器学习方法的求解框架.
+    这种随机特征表示, 配置点方法和边界条件惩罚可以被统一到同一个求解框架中,
+    从而在传统 PDE 数值方法和机器学习方法之间建立联系\cite{chenBridgingTraditionalMachine2022}.
     由于 PDE 残差和边界条件可以在同一个最小二乘目标中处理,
     该方法不必为特征函数单独构造满足边界条件的形式,
     在复杂区域上具有较好的使用灵活性.
-    在实际计算中, 文献\cite{chenBridgingTraditionalMachine2022} 还引入了分片单位分解, 多尺度表示和权重重标定等技巧,
-    用于改善局部尺度变化和不同残差项量级不一致带来的数值问题.
+    在实际计算中, 还可以进一步引入分片单位分解, 多尺度表示和权重重标定等技巧,
+    用于改善局部尺度变化和不同残差项量级不一致带来的数值问题\cite{chenBridgingTraditionalMachine2022}.
 
     上述低维 RFM 方法说明, 随机特征的优势主要来自两个方面:
     一是用固定特征函数避免对内层参数进行非凸训练,
@@ -339,15 +343,16 @@
     在半线性方程中, 由于终端残差关于参数不再线性,
     本文进一步采用 LM 方法求解相应的非线性最小二乘问题.
     近来的线性化网络实验也指出, 当特征宽度增加时,
-    相关最小二乘系统的条件数可能成为影响精度和可扩展性的主要因素之一\cite{maoSolvingHighDimensionalPDEs2026},
-    因而后文数值实验也会同时观察特征宽度, 样本数和测试残差对结果的影响.
+    相关最小二乘系统的条件数可能成为影响精度和可扩展性的主要因素之一.
+    因而后文数值实验也会同时观察特征宽度, 样本数和测试残差对结果的影响\cite{maoSolvingHighDimensionalPDEs2026}.
 
     \subsection{对比方法: Deep BSDE 方法}\label{subsec:deepbsde_intro}
       深度倒向随机微分方程方法 (Deep Backward Stochastic Differential Equation method, Deep BSDE method)
       是本文数值实验中采用的对比方法.
-      Han, Jentzen 和 E\cite{hanSolvingHighdimensionalPartial2018} 从半线性抛物型 PDE 的 BSDE 表示出发,
-      沿正向随机过程生成样本路径, 并用神经网络近似每个离散时间层上的梯度项
-      $\sigma^{\operatorname T}(t_k,X_{t_k})\nabla u(t_k,X_{t_k})$.
+      从半线性抛物型 PDE 的 BSDE 表示出发,
+      可以沿正向随机过程生成样本路径, 并用神经网络近似每个离散时间层上的梯度项
+      $\sigma^{\operatorname T}(t_k,X_{t_k})\nabla u(t_k,X_{t_k})$;
+      这正是 Deep BSDE 方法的基本思路\cite{eDeepLearningBasedNumerical2017,hanSolvingHighdimensionalPartial2018}.
       初值 $Y_0$ 与各时间层神经网络参数共同作为待优化变量,
       通过最小化终端误差的平方损失来训练模型, 其中终端误差为
       \begin{equation*}
@@ -359,10 +364,11 @@
       倒向过程中的 $Z_t$ 则由神经网络给出.
       由于整个算法只需要在样本路径上计算, 不需要在高维空间中构造网格,
       因而可以用于传统网格方法难以直接处理的高维问题.
-      文献\cite{hanSolvingHighdimensionalPartial2018} 在非线性 Black--Scholes 方程, HJB 方程和 Allen--Cahn 方程上的实验表明,
-      这种框架能够在较高维度下给出有效的数值近似.
-      这与 E\cite{eMachineLearningComputational2020} 对机器学习和计算数学关系的讨论是一致的:
+      在非线性 Black--Scholes 方程, HJB 方程和 Allen--Cahn 方程上的数值实验表明,
+      这种框架能够在较高维度下给出有效的数值近似\cite{hanSolvingHighdimensionalPartial2018}.
+      这与关于机器学习和计算数学关系的综述性讨论是一致:
       对高维 PDE 而言, 困难的核心逐渐从网格离散转向高维函数表示和随机优化.
+      这一点已有较为系统的总结\cite{eMachineLearningComputational2020}.
 
       与本文采用的随机特征方法相比, Deep BSDE 方法需要优化的参数更多.
       在常见实现中, 每个时间层都需要用一个神经网络近似梯度函数,
