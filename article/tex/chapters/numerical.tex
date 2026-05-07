@@ -56,7 +56,7 @@
     前者反映模型在固定样本路径上的拟合程度, 后者用于观察参数是否只适应了训练路径.
     除特别说明外, 标准配置见表~\ref{tab:numerical_config}.
 
-    \begin{table}
+    \begin{table}[htbp]
       \centering
       \caption{主要实验配置}
       \label{tab:numerical_config}
@@ -170,7 +170,7 @@
     \end{equation}
     因而在上述参数下 $Y_0=(d/(d+2))^{d/2}$.
 
-    \begin{table}
+    \begin{table}[htbp]
       \centering
       \caption{线性方程主要结果}
       \label{tab:linear_main_results}
@@ -267,7 +267,7 @@
     状态过程为 $X_t=\sqrt{2}W_t$.
     该方程没有简单闭式解析解, 本文采用附录~\ref{ch:refval} 第\ref{sec:ref_allencahn}节中的径向有限差分参考值.
 
-    \begin{table}
+    \begin{table}[htbp]
       \centering
       \caption{半线性方程主要结果}
       \label{tab:nonlinear_main_results}
@@ -285,7 +285,7 @@
     HJB-LQ 的相对误差约为 $0.0035\%$,
     Allen--Cahn 的相对误差约为 $0.66\%$.
 
-    \begin{table}
+    \begin{table}[htbp]
       \centering
       \caption{半线性方程的 LM 迭代结果}
       \label{tab:nonlinear_iteration_results}
@@ -302,7 +302,7 @@
     图~\ref{fig:nonlinear_residual_history} 给出了半线性求解器的残差下降过程.
     横轴为 LM 接受步编号, 纵轴为训练终端残差 RMSE\@.
 
-    \begin{figure}[ht]
+    \begin{figure}[htbp]
       \centering
       \includegraphics[width=0.82\textwidth]{nonlinear-lm-residual}
       \caption{半线性方程的 LM 迭代残差下降}
@@ -314,7 +314,7 @@
       样本数会影响训练路径对真实分布的代表性.
       表~\ref{tab:sample_size_results} 固定 $d=100$, $H=50$, 只改变训练样本数 $S$.
 
-      \begin{table}
+      \begin{table}[htbp]
         \centering
         \caption{样本数变化结果}
         \label{tab:sample_size_results}
@@ -346,7 +346,7 @@
       因此后续分析主要参考独立测试残差和初值相对误差.
       图~\ref{fig:sample_size_generalization} 给出了测试/训练比值和初值相对误差的对比.
 
-      \begin{figure}[ht]
+      \begin{figure}[htbp]
         \centering
         \includegraphics[width=0.88\textwidth]{sample-size-generalization}
         \caption{样本数对泛化比值和初值相对误差的影响}
@@ -363,7 +363,7 @@
       样本路径数量, 随机特征的有效线性无关程度以及最小二乘系统的条件数都会共同影响结果.
       图~\ref{fig:hidden_dim_generalization} 展示了测试残差和初值相对误差随 $H$ 变化的情况.
 
-      \begin{figure}[ht]
+      \begin{figure}[htbp]
         \centering
         \includegraphics[width=0.88\textwidth]{hidden-dim-generalization}
         \caption{随机特征宽度对测试残差和初值相对误差的影响}
@@ -384,7 +384,7 @@
       其中 $t_j$ 表示该维度下三次运行的平均时间.
       表~\ref{tab:dimension_average_results} 列出了不同维度下的平均时间和相邻维度的局部阶.
 
-      \begin{table}
+      \begin{table}[htbp]
         \centering
         \caption{维度变化的平均结果}
         \label{tab:dimension_average_results}
@@ -427,7 +427,7 @@
       图~\ref{fig:dimension_scaling_combined} 右图给出了不同维度, 不同随机种子下的初值相对误差.
       图中的误差大多仍然较小, 说明方法在较高维度下仍能给出有效初值.
 
-      \begin{figure}[ht]
+      \begin{figure}[htbp]
         \centering
         \begin{subfigure}{0.49\textwidth}
           \centering
@@ -451,7 +451,7 @@
       表~\ref{tab:seed_stability} 使用标准配置下的三个种子,
       报告 $y_0$ 均值, 样本标准差和平均测试残差.
 
-      \begin{table}
+      \begin{table}[htbp]
         \centering
         \caption{随机种子稳定性结果}
         \label{tab:seed_stability}
@@ -470,7 +470,7 @@
       四个方程的 $y_0$ 波动都小于主要数值量级.
       图~\ref{fig:seed_stability} 给出每个随机种子下的初值相对误差.
 
-      \begin{figure}[ht]
+      \begin{figure}[htbp]
         \centering
         \includegraphics[width=0.78\textwidth]{seed-stability}
         \caption{不同随机种子下的初值相对误差}
@@ -488,7 +488,7 @@
     由于 Deep BSDE 的训练损失和本文 RFM 的终端残差并不是同一个优化目标,
     因此这里不直接比较损失数值, 只比较初值相对误差随时间的变化.
 
-    \begin{table}
+    \begin{table}[htbp]
       \centering
       \caption{本文方法与 Deep BSDE 对比方法在半线性方程上的结果}
       \label{tab:deepbsde_compare}
@@ -509,7 +509,7 @@
     因此, 本文实验说明 RFM 在部分 BSDE 离散问题上具有较高计算效率, 但其精度优势依赖具体方程和参数设置.
     图~\ref{fig:deepbsde_rfm_comparison} 展示了初值相对误差随时间变化的过程.
 
-    \begin{figure}[ht]
+    \begin{figure}[htbp]
       \centering
       \includegraphics[width=0.90\textwidth]{deepbsde-rfm-comparison}
       \caption{本文方法与 Deep BSDE 对比方法的初值相对误差}

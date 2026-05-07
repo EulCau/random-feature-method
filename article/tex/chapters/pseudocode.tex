@@ -6,7 +6,7 @@
   而是统一使用“路径采样, 特征构造, 参数求解, 测试评估”的算法表述.
 
   \section{线性方程求解流程}\label{sec:app_linear_method}
-    \begin{algorithm}[ht]
+    \begin{algorithm}[htbp]
       \SetAlgoLined
       \KwData{训练路径, 布朗增量, 随机特征, 线性方程离散系数, 岭正则化参数 $\lambda_{\mathrm{r}}$}
       \KwResult{$y_{0}$, $\alpha$}
@@ -32,18 +32,18 @@
       用于仅对 $\alpha$ 正则化\;
       \eIf{$S\ge p$}{
         求解原始岭正则化系统
-        \begin{equation*}
+        $
           \left(A^{\top}A+\lambda_{\mathrm{r}}R^{\top}R\right)\vartheta
           =
           A^{\top}B
-        \end{equation*}
+        $
         得到参数 $\theta$\;
       }{
         求解对偶岭正则化系统
-        \begin{equation*}
+        $
           \vartheta = A^{\top}
           \left(AA^{\top} + \lambda_{\mathrm{r}} I_S\right)^{-1}B\;
-        \end{equation*}
+        $
         得到参数 $\theta$\;
       }
       解包 $\theta$ 得到参数 $y_{0}$ 与 $\alpha$\;
@@ -55,7 +55,7 @@
     \newpage
 
   \section{半线性方程求解流程}\label{sec:app_semilinear_method}
-    \begin{algorithm}[ht]
+    \begin{algorithm}[htbp]
       \SetAlgoLined
       \KwData{训练路径, 布朗增量, 随机特征, 初始参数 $\theta^{(0)}$, 初始阻尼参数 $\lambda^{(0)}$}
       \KwResult{$y_{0}$, $\alpha$}
@@ -89,7 +89,7 @@
     \newpage
 
   \section{测试误差评估流程}\label{sec:app_test_method}
-    \begin{algorithm}[ht]
+    \begin{algorithm}[htbp]
       \SetAlgoLined
       \KwData{训练得到的 $y_{0}$, $\alpha$}
       \KwResult{独立测试样本上的终端残差 RMSE}
