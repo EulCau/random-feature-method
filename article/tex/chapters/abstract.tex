@@ -22,14 +22,14 @@
   首先将方程转化为相应的倒向随机微分方程 (Backward Stochastic Differential Equations, BSDEs), 并确定待求解的目标点.
   然后从目标点出发进行蒙特卡洛采样, 并学习解函数在路径点上的梯度及目标点处的函数值, 其中梯度项采用随机特征映射进行逼近.
   在线性方程中, 终端匹配问题可化为带正则化的线性最小二乘问题;
-  在半线性方程中, 本文将终端残差写成非线性最小二乘形式, 并采用 Levenberg--Marquardt (LM) 方法求解.
-  数值实验包括线性的热方程, Black--Scholes 方程,
-  以及半线性的 Hamilton--Jacobi--Bellman 方程 (HJB equation) 和 Allen--Cahn 方程.
+  在半线性方程中, 本文将终端残差写成非线性最小二乘形式, 并采用 Levenberg-Marquardt (LM) 方法求解.
+  数值实验包括线性的热方程, Black-Scholes 方程,
+  以及半线性的 Hamilton-Jacobi-Bellman 方程 (HJB equation) 和 Allen-Cahn 方程.
   实验结果表明, 该方法在所测试的高维算例中可以用较短时间得到接近参考值的初值.
 \end{abstract}
 
 \begin{abstract*}
-  High-dimensional partial differential equations (PDEs) arise in a wide range of applications,
+  High-dimensional partial differential equations (PDEs) arise in a range of applications,
   including finance, quantum physics, and control theory.
   However, the curse of dimensionality causes the computational complexity of traditional numerical methods
   to grow exponentially with respect to the dimension, severely limiting their applicability.
@@ -55,9 +55,9 @@
   In linear equations, the terminal matching problem can be formulated
   as a linear least squares problem with regularization;
   In semilinear equations, this paper expresses the terminal residual in a nonlinear least-squares form
-  and employs the Levenberg--Marquardt (LM) method for solving it.
-  Numerical experiments on the linear heat equation, the Black--Scholes equation,
-  the semilinear HJB equation, and the Allen--Cahn equation
+  and employs the Levenberg-Marquardt (LM) method for solving it.
+  Numerical experiments on the linear heat equation, the Black-Scholes equation,
+  the semilinear HJB equation, and the Allen-Cahn equation
   show that the proposed method can produce initial values close to reference values
   within short running times on the tested high-dimensional examples.
 \end{abstract*}
