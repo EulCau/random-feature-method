@@ -66,14 +66,17 @@
     第三步则是两类方程的主要差异所在.
     在线性情形下, 末端匹配可以直接化为一个最小二乘系统;
     在半线性情形下, 则需要通过迭代方式不断修正参数.
-    本文实验的统一框架见算法~\ref{alg:general}.
+    本文实验的统一框架如下算法~\ref{alg:general}.
 
     \begin{algorithm}[ht]
       \SetAlgoLined
+      \SetKwFor{ParFor}{(Parallel) for}{do}{end}
       \KwData{方程参数, 时间剖分数 $N$, 样本数 $S$, 随机特征宽度 $H$}
       \KwResult{训练得到的 $y_{0}$, $\alpha$, 以及训练与测试误差}
       生成训练样本路径 $\{X_{k}^{(i)}, \Delta W_k^{(i)}\}$\;
-      构造训练阶段的随机特征 $\{H_{k}^{(i)}\}$\;
+      \ParFor{$k=0,\dots,N-1$}{
+        构造第 $k$ 个时间层上的随机特征 $\{H_{k}^{(i)}\}_{i=1}^{S}$\;
+      }
       \eIf{方程为线性}{
         调用算法~\ref{alg:linear} 求解 $y_0$ 和 $\alpha$\;
       }{
@@ -127,53 +130,7 @@
       \item 求解最小二乘问题得到 $y_{0}$ 与 $\alpha$;
       \item 用求得的参数回代, 计算训练样本上的终端残差.
     \end{enumerate}
-    线性方程中参数求解的具体流程见算法~\ref{alg:linear}.
-
-    \begin{algorithm}[ht]
-      \SetAlgoLined
-      \KwData{训练路径, 布朗增量, 随机特征, 线性方程离散系数, 岭正则化参数 $\lambda_{\mathrm{r}}$}
-      \KwResult{$y_{0}$, $\alpha$}
-      对每条路径计算终端表达式中的系数 $\beta_{i}$, $\Gamma_{i}$, $\eta_{i}$\;
-      将所有路径拼接为设计矩阵 $\Phi$ 与观测向量 $B$\;
-      令参数向量
-      \begin{equation*}
-        \vartheta =
-        \begin{bmatrix}
-          y_{0} \\
-          \operatorname{vec}(\alpha)
-        \end{bmatrix},
-      \end{equation*}
-      并记 $p = 1 + dH$\;
-      构造
-      \begin{equation*}
-        R =
-        \begin{bmatrix}
-          0 & 0 \\
-          0 & I_{dH}
-        \end{bmatrix},
-      \end{equation*}
-      用于仅对 $\alpha$ 正则化\;
-      \eIf{$S\ge p$}{
-        求解原始岭正则化系统
-        \begin{equation*}
-          \left(\Phi^{\top}\Phi+\lambda_{\mathrm{r}}R^{\top}R\right)\vartheta
-          =
-          \Phi^{\top}B,
-        \end{equation*}
-        得到参数 $\theta$\;
-      }{
-        求解对偶岭正则化系统
-        \begin{equation*}
-          \vartheta = \Phi^{\top}
-          \left(\Phi\Phi^{\top} + \lambda_{\mathrm{r}} I_S\right)^{-1}B,
-        \end{equation*}
-        得到参数 $\theta$\;
-      }
-      解包 $\theta$ 得到参数 $y_{0}$ 与 $\alpha$\;
-      返回 $y_{0}$ 与 $\alpha$\;
-      \caption{线性方程的求解流程}
-      \label{alg:linear}
-    \end{algorithm}
+    线性方程中参数求解的具体流程见附录~\ref{ch:pseudocode} 算法~\ref{alg:linear}.
 
     线性流程的特点在于参数只需求解一次, 不需要额外的外层迭代.
     因此实验中线性部分主要用于观察样本数, 特征宽度以及维度变化对最小二乘近似效果的影响.
@@ -294,38 +251,7 @@
     这一步骤会持续进行, 直到终端残差足够小, 参数更新足够小, 或达到最大迭代次数.
     因而半线性实验的核心并不在于单次前向传播本身,
     而在于“前向残差评估 + 雅可比构造 + 阻尼更新”这一循环是否稳定.
-    半线性方程的 LM 迭代流程见算法~\ref{alg:semilinear}.
-
-    \begin{algorithm}[ht]
-      \SetAlgoLined
-      \KwData{训练路径, 布朗增量, 随机特征, 初始参数 $\theta^{(0)}$, 初始阻尼参数 $\lambda^{(0)}$}
-      \KwResult{$y_{0}$, $\alpha$}
-      令 $m \leftarrow 0$\;
-      \While{未满足停止准则}{
-        根据当前参数 $\theta^{(m)}$ 构造所有 $Z_{k}^{(i)}$\;
-        前向推进离散 BSDE, 计算终端残差向量 $r(\theta^{(m)})$\;
-        计算雅可比矩阵 $J(\theta^{(m)})$\;
-        求解阻尼子问题
-        \begin{equation*}
-          \bigl(J^{\top} J + \lambda^{(m)} I\bigr)\delta^{(m)}
-          =
-          -J^{\top} r,
-        \end{equation*}
-        令试探参数 $\theta_{\mathrm{trial}} = \theta^{(m)} + \delta^{(m)}$\;
-        计算试探参数对应的目标函数值\;
-        \eIf{目标函数下降}{
-          接受该步, 令 $\theta^{(m + 1)} = \theta_{\mathrm{trial}}$\;
-          适当减小阻尼参数 $\lambda^{(m)}$\;
-          $m \leftarrow m + 1$\;
-        }{
-          拒绝该步并增大阻尼参数, 重新计算当前迭代的试探步\;
-        }
-      }
-      从最终参数向量中拆分出 $y_{0}$ 与 $\alpha$\;
-      返回 $y_{0}$ 与 $\alpha$\;
-      \caption{半线性方程的 LM 求解流程}
-      \label{alg:semilinear}
-    \end{algorithm}
+    半线性方程的 LM 迭代流程见附录~\ref{ch:pseudocode} 算法~\ref{alg:semilinear}.
 
     对一般半线性生成元 $f(t, \boldsymbol{x}, y, \boldsymbol{z})$,
     仍采用相同的随机特征近似
@@ -463,32 +389,7 @@
         \bigr)^{2}
       }.
     \end{equation*}
-    测试误差的具体评估流程见算法~\ref{alg:test}.
-
-    \begin{algorithm}[ht]
-      \SetAlgoLined
-      \KwData{训练得到的 $y_{0}$, $\alpha$}
-      \KwResult{独立测试样本上的终端残差 RMSE}
-      重新生成独立测试路径 $\{X_{k}^{(i)}, \Delta W_{k}^{(i)}\}$\;
-      在测试路径上构造随机特征 $\{H_{k}^{(i)}\}$\;
-      用固定参数 $\alpha$ 构造 $Z_{k}^{(i)} = \alpha H_{k}^{(i)}$\;
-      沿测试路径前向推进离散 BSDE, 得到所有终端值 $Y_{N}^{(i)}$\;
-      计算
-      \begin{equation*}
-        \operatorname{RMSE}_{\text{test}}
-        =
-        \sqrt{
-          \frac{1}{S}
-          \sum_{i = 1}^{S}
-          \bigl(
-            Y_{N}^{(i)} - g(X_{N}^{(i)})
-          \bigr)^{2}
-        },
-      \end{equation*}
-      返回测试 RMSE\;
-      \caption{测试误差评估流程}
-      \label{alg:test}
-    \end{algorithm}
+    测试误差的具体评估流程见附录~\ref{ch:pseudocode} 算法~\ref{alg:test}.
 
     若训练误差下降而测试误差没有同步下降, 则说明随机特征近似可能更偏向于拟合当前训练路径;
     反之, 若两者同时下降, 则说明该参数设置具有更稳定的泛化效果.

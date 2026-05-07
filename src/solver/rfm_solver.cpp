@@ -273,7 +273,6 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
         B.device().type() == device.type(),
         "A, B must be on ", device_.type(), ", but got ", A.device().type(), " & ", B.device().type())
 
-
     return {A, B};
 }
 
