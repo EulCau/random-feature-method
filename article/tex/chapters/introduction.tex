@@ -346,36 +346,36 @@
     相关最小二乘系统的条件数可能成为影响精度和可扩展性的主要因素之一.
     因而后文数值实验也会同时观察特征宽度, 样本数和测试残差对结果的影响\cite{maoSolvingHighDimensionalPDEs2026}.
 
-    \subsection{对比方法: Deep BSDE 方法}\label{subsec:deepbsde_intro}
-      深度倒向随机微分方程方法 (Deep Backward Stochastic Differential Equation method, Deep BSDE method)
-      是本文数值实验中采用的对比方法.
-      从半线性抛物型 PDE 的 BSDE 表示出发,
-      可以沿正向随机过程生成样本路径, 并用神经网络近似每个离散时间层上的梯度项
-      $\sigma^{\operatorname T}(t_k,X_{t_k})\nabla u(t_k,X_{t_k})$;
-      这正是 Deep BSDE 方法的基本思路\cite{eDeepLearningBasedNumerical2017,hanSolvingHighdimensionalPartial2018}.
-      初值 $Y_0$ 与各时间层神经网络参数共同作为待优化变量,
-      通过最小化终端误差的平方损失来训练模型, 其中终端误差为
-      \begin{equation*}
-        Y_N - g(X_N).
-      \end{equation*}
+  \section{深度倒向随机微分方程方法}\label{sec:deepbsde_intro}
+    深度倒向随机微分方程方法 (Deep Backward Stochastic Differential Equation method, Deep BSDE method)
+    是本文数值实验中采用的对比方法.
+    从半线性抛物型 PDE 的 BSDE 表示出发,
+    可以沿正向随机过程生成样本路径, 并用神经网络近似每个离散时间层上的梯度项
+    $\sigma^{\operatorname T}(t_k,X_{t_k})\nabla u(t_k,X_{t_k})$;
+    这正是 Deep BSDE 方法的基本思路\cite{eDeepLearningBasedNumerical2017,hanSolvingHighdimensionalPartial2018}.
+    初值 $Y_0$ 与各时间层神经网络参数共同作为待优化变量,
+    通过最小化终端误差的平方损失来训练模型, 其中终端误差为
+    \begin{equation*}
+      Y_N - g(X_N).
+    \end{equation*}
 
-      该方法的特点是把 PDE 的离散求解写成沿随机路径传播的优化问题.
-      其中, 正向过程 $X_t$ 由给定的漂移项 $\mu$ 和扩散项 $\sigma$ 生成,
-      倒向过程中的 $Z_t$ 则由神经网络给出.
-      由于整个算法只需要在样本路径上计算, 不需要在高维空间中构造网格,
-      因而可以用于传统网格方法难以直接处理的高维问题.
-      在非线性 Black--Scholes 方程, HJB 方程和 Allen--Cahn 方程上的数值实验表明,
-      这种框架能够在较高维度下给出有效的数值近似\cite{hanSolvingHighdimensionalPartial2018}.
-      这与关于机器学习和计算数学关系的综述性讨论是一致:
-      对高维 PDE 而言, 困难的核心逐渐从网格离散转向高维函数表示和随机优化.
-      这一点已有较为系统的总结\cite{eMachineLearningComputational2020}.
+    该方法的特点是把 PDE 的离散求解写成沿随机路径传播的优化问题.
+    其中, 正向过程 $X_t$ 由给定的漂移项 $\mu$ 和扩散项 $\sigma$ 生成,
+    倒向过程中的 $Z_t$ 则由神经网络给出.
+    由于整个算法只需要在样本路径上计算, 不需要在高维空间中构造网格,
+    因而可以用于传统网格方法难以直接处理的高维问题.
+    在非线性 Black--Scholes 方程, HJB 方程和 Allen--Cahn 方程上的数值实验表明,
+    这种框架能够在较高维度下给出有效的数值近似\cite{hanSolvingHighdimensionalPartial2018}.
+    这与关于机器学习和计算数学关系的综述性讨论是一致:
+    对高维 PDE 而言, 困难的核心逐渐从网格离散转向高维函数表示和随机优化.
+    这一点已有较为系统的总结\cite{eMachineLearningComputational2020}.
 
-      与本文采用的随机特征方法相比, Deep BSDE 方法需要优化的参数更多.
-      在常见实现中, 每个时间层都需要用一个神经网络近似梯度函数,
-      因此参数量会随时间剖分数和网络规模增加.
-      训练过程需要对全部网络参数进行反向传播,
-      对网络宽度, 学习率, 初始化和训练轮数等超参数也较为敏感.
-      因此, 本文仅将 Deep BSDE 作为对比方法, 用于检验随机特征方法在相同 BSDE 离散框架下的计算效率与初值误差表现.
+    与本文采用的随机特征方法相比, Deep BSDE 方法需要优化的参数更多.
+    在常见实现中, 每个时间层都需要用一个神经网络近似梯度函数,
+    因此参数量会随时间剖分数和网络规模增加.
+    训练过程需要对全部网络参数进行反向传播,
+    对网络宽度, 学习率, 初始化和训练轮数等超参数也较为敏感.
+    因此, 本文仅将 Deep BSDE 作为对比方法, 用于检验随机特征方法在相同 BSDE 离散框架下的计算效率与初值误差表现.
 
   \section{本文主要工作与章节安排}\label{sec:work}
     本文围绕 BSDE 离散框架下的随机特征方法展开, 目标是在不构造高维空间网格的前提下,
