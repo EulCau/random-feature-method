@@ -3,10 +3,47 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <tuple>
 #include <utility>
+#include <vector>
 #include "linear_least_squares_solver.h"
 #include "nonlinear_solver_utils.h"
 #include "rff.h"
+
+namespace
+{
+
+[[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> split_linear_solution(
+    const torch::Tensor& x,
+    const int64_t dim,
+    const int64_t hidden_dim,
+    const float rmse)
+{
+    const auto x_matrix = x.reshape({-1, 1}).contiguous();
+    const auto y0 = x_matrix.index({0, 0}).clone();
+    const auto alpha = x_matrix.index({
+        torch::indexing::Slice(1, torch::indexing::None),
+        0
+    }).reshape({dim, hidden_dim}).contiguous();
+
+    return {y0, alpha, rmse};
+}
+
+[[nodiscard]] std::pair<torch::Tensor, torch::Tensor> reduce_linear_qr_libtorch(
+    const torch::Tensor& A,
+    const torch::Tensor& B)
+{
+    TORCH_CHECK(A.dim() == 2, "A must be 2D, got ", A.sizes());
+    TORCH_CHECK(B.dim() == 2, "B must be 2D, got ", B.sizes());
+    TORCH_CHECK(A.size(0) == B.size(0), "A and B row mismatch: A=", A.sizes(), ", B=", B.sizes());
+    TORCH_CHECK(A.size(0) >= A.size(1), "QR reduction requires rows >= cols, got ", A.sizes());
+
+    const auto [Q, R] = torch::linalg_qr(A.contiguous(), "reduced");
+    const auto rhs = torch::matmul(Q.transpose(0, 1).contiguous(), B.contiguous());
+    return {R.contiguous(), rhs.contiguous()};
+}
+
+} // namespace
 
 RFMSolver::RFMSolver(
     const Config& config, const std::shared_ptr<Equation> &eq,
@@ -188,9 +225,15 @@ float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& alpha) const
 
 std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear() const
 {
-    const auto [A, B] = compute_linear_coef();
     auto options = linear_solver_options_;
     options.ridge_lambda = config_.solver_config.initial_lambda;
+
+    if (options.solver_type == LinearSolverType::BatchedQR)
+    {
+        return solve_linear_batched_qr(options);
+    }
+
+    const auto [A, B] = compute_linear_coef();
 
     const auto result = solve_linear_least_squares(
         A,
@@ -218,19 +261,63 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear(const
 std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_coef() const
 {
     const int64_t S = config_.solver_config.sample_size;
+    const int64_t batch_size = linear_solver_options_.qr_batch_size > 0
+        ? linear_solver_options_.qr_batch_size
+        : S;
+
+    if (batch_size >= S)
+    {
+        return compute_linear_coef_batch(0, S);
+    }
+
+    std::vector<torch::Tensor> A_batches;
+    std::vector<torch::Tensor> B_batches;
+    A_batches.reserve((S + batch_size - 1) / batch_size);
+    B_batches.reserve(A_batches.capacity());
+
+    for (int64_t row_begin = 0; row_begin < S; row_begin += batch_size)
+    {
+        const int64_t row_end = std::min(row_begin + batch_size, S);
+        const auto [A_batch, B_batch] = compute_linear_coef_batch(row_begin, row_end);
+        A_batches.push_back(A_batch);
+        B_batches.push_back(B_batch);
+    }
+
+    return {
+        torch::cat(A_batches, 0).contiguous(),
+        torch::cat(B_batches, 0).contiguous()
+    };
+}
+
+std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_coef_batch(
+    const int64_t row_begin,
+    const int64_t row_end
+) const
+{
+    const int64_t S = config_.solver_config.sample_size;
     const int64_t T = config_.eqn_config.num_time_intervals;
     const int64_t D = equation_->dim();
     const int64_t Hdim = config_.solver_config.hidden_dim;
     const float dt = equation_->delta_t();
+    const int64_t batch_size = row_end - row_begin;
+
+    TORCH_CHECK(0 <= row_begin && row_begin < row_end && row_end <= S,
+        "invalid linear coefficient row range [", row_begin, ", ", row_end, ") for S=", S);
 
     auto device = L_.device();
 
-    // 压缩到紧凑形状
-    const auto L = L_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
-    const auto M = M_.squeeze(2).contiguous();                // (S, T, D)
-    const auto N = N_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
-    const auto H = H_.squeeze(-1).contiguous();               // (S, T, H)
-    const auto dW = dw_.permute({0, 2, 1}).contiguous();      // (S, T, D)
+    const auto rows = torch::indexing::Slice(row_begin, row_end);
+
+    const auto L = L_.index({rows, torch::indexing::Slice(), torch::indexing::Slice(), torch::indexing::Slice()})
+        .squeeze(-1).squeeze(-1).contiguous();                // (B, T)
+    const auto M = M_.index({rows, torch::indexing::Slice(), torch::indexing::Slice(), torch::indexing::Slice()})
+        .squeeze(2).contiguous();                             // (B, T, D)
+    const auto N = N_.index({rows, torch::indexing::Slice(), torch::indexing::Slice(), torch::indexing::Slice()})
+        .squeeze(-1).squeeze(-1).contiguous();                // (B, T)
+    const auto H = H_.index({rows, torch::indexing::Slice(), torch::indexing::Slice(), torch::indexing::Slice()})
+        .squeeze(-1).contiguous();                            // (B, T, H)
+    const auto dW = dw_.index({rows, torch::indexing::Slice(), torch::indexing::Slice()})
+        .permute({0, 2, 1}).contiguous();                     // (B, T, D)
 
     // 线性递推中的三块
     const auto a  = 1.0f - dt * L;      // (S, T)
@@ -256,7 +343,7 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
     }
 
     // 矩阵第一块: y0 系数
-    auto coef_y0 = a.prod(1, true); // (S, 1)
+    auto coef_y0 = a.prod(1, true); // (B, 1)
 
     // 矩阵第二块: alpha 系数
     // weighted_xi: (S, T, D)
@@ -264,20 +351,32 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
 
     // coef_alpha[s] = weighted_xi[s]^T @ H[s] -> (D, H)
     auto coef_alpha = torch::bmm(
-        weighted_xi.transpose(1, 2).contiguous(), // (S, D, T)
-        H                                          // (S, T, H)
-    );                                             // (S, D, H)
+        weighted_xi.transpose(1, 2).contiguous(), // (B, D, T)
+        H                                          // (B, T, H)
+    );                                             // (B, D, H)
 
-    coef_alpha = coef_alpha.reshape({S, D * Hdim}); // (S, D*H)
+    coef_alpha = coef_alpha.reshape({batch_size, D * Hdim}); // (B, D*H)
 
     // 拼接设计矩阵
-    const auto A = torch::cat({coef_y0, coef_alpha}, 1).contiguous(); // (S, 1 + D*H)
+    const auto A = torch::cat({coef_y0, coef_alpha}, 1).contiguous(); // (B, 1 + D*H)
 
     // 右端项
-    const auto constant_part = (weights * c).sum(1, true); // (S, 1)
-    const auto g_XN = equation_->g(t_end_, x_end_).reshape({S, 1}).to(device);
+    const auto constant_part = (weights * c).sum(1, true); // (B, 1)
+    const auto t_end = t_end_.index({
+        rows,
+        torch::indexing::Slice(),
+        torch::indexing::Slice(),
+        torch::indexing::Slice()
+    }).contiguous();
+    const auto x_end = x_end_.index({
+        rows,
+        torch::indexing::Slice(),
+        torch::indexing::Slice(),
+        torch::indexing::Slice()
+    }).contiguous();
+    const auto g_XN = equation_->g(t_end, x_end).reshape({batch_size, 1}).to(device);
 
-    const auto B = g_XN - constant_part; // (S, 1)
+    const auto B = g_XN - constant_part; // (B, 1)
 
     TORCH_CHECK(
         A.device().type() == device.type() &&
@@ -285,6 +384,81 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
         "A, B must be on ", device_.type(), ", but got ", A.device().type(), " & ", B.device().type())
 
     return {A, B};
+}
+
+std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_batched_qr(
+    const LinearSolverOptions& options
+) const
+{
+    const int64_t S = config_.solver_config.sample_size;
+    const int64_t D = config_.eqn_config.dimension;
+    const int64_t Hdim = config_.solver_config.hidden_dim;
+    const int64_t parameter_count = 1 + D * Hdim;
+
+    TORCH_CHECK(options.qr_batch_size > 0, "qr_batch_size must be positive");
+
+    bool initialized = false;
+    int64_t pending_rows = 0;
+    std::vector<torch::Tensor> pending_A;
+    std::vector<torch::Tensor> pending_B;
+    torch::Tensor R;
+    torch::Tensor rhs;
+
+    for (int64_t row_begin = 0; row_begin < S; row_begin += options.qr_batch_size)
+    {
+        const int64_t row_end = std::min(row_begin + options.qr_batch_size, S);
+        const auto [A_batch, B_batch] = compute_linear_coef_batch(row_begin, row_end);
+
+        if (!initialized)
+        {
+            pending_A.push_back(A_batch);
+            pending_B.push_back(B_batch);
+            pending_rows += A_batch.size(0);
+
+            if (pending_rows < parameter_count)
+            {
+                continue;
+            }
+
+            const auto A_init = torch::cat(pending_A, 0).contiguous();
+            const auto B_init = torch::cat(pending_B, 0).contiguous();
+            std::tie(R, rhs) = reduce_linear_qr_libtorch(
+                A_init,
+                B_init
+            );
+            rhs = rhs.reshape({parameter_count, 1}).contiguous();
+            initialized = true;
+            pending_A.clear();
+            pending_B.clear();
+            continue;
+        }
+
+        const auto stacked_A = torch::cat({R, A_batch}, 0).contiguous();
+        const auto stacked_B = torch::cat({rhs, B_batch}, 0).contiguous();
+        std::tie(R, rhs) = reduce_linear_qr_libtorch(
+            stacked_A,
+            stacked_B
+        );
+        rhs = rhs.reshape({parameter_count, 1}).contiguous();
+    }
+
+    TORCH_CHECK(initialized, "sample_size must be at least 1 + dimension * hidden_dim for batched QR");
+
+    const auto x = torch::linalg_solve_triangular(R, rhs, true).reshape({parameter_count, 1});
+
+    double squared_error_sum = 0.0;
+    int64_t residual_count = 0;
+    for (int64_t row_begin = 0; row_begin < S; row_begin += options.qr_batch_size)
+    {
+        const int64_t row_end = std::min(row_begin + options.qr_batch_size, S);
+        const auto [A_batch, B_batch] = compute_linear_coef_batch(row_begin, row_end);
+        const auto residual = torch::matmul(A_batch, x) - B_batch;
+        squared_error_sum += residual.pow(2).sum().template item<double>();
+        residual_count += residual.numel();
+    }
+
+    const float rmse = static_cast<float>(std::sqrt(squared_error_sum / static_cast<double>(residual_count)));
+    return split_linear_solution(x, D, Hdim, rmse);
 }
 
 std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_levenberg_marquardt(

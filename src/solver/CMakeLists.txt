@@ -1,4 +1,3 @@
-add_subdirectory(utils)
 add_subdirectory(linear)
 add_subdirectory(nonlinear)
 
@@ -20,5 +19,4 @@ target_link_libraries(
     rff
     solver_linear
     solver_nonlinear
-    solver_utils
     ${TORCH_LIBRARIES})

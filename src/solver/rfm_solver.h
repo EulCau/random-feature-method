@@ -54,6 +54,13 @@ protected:
 
     [[nodiscard]] std::pair<const torch::Tensor, const torch::Tensor> compute_linear_coef() const;
 
+    [[nodiscard]] std::pair<const torch::Tensor, const torch::Tensor> compute_linear_coef_batch(
+        int64_t row_begin,
+        int64_t row_end) const;
+
+    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_linear_batched_qr(
+        const LinearSolverOptions& options) const;
+
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_nonlinear_levenberg_marquardt(
         const torch::Tensor & y0, const torch::Tensor & alpha, float lambda, bool output_log) const;
 

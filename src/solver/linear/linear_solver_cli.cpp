@@ -56,26 +56,6 @@ int64_t read_positive_int64(const std::string& prompt, const int64_t default_val
     return default_value;
 }
 
-solver_utils::QRMethod get_qr_method_selection()
-{
-    const int qr_choice = read_choice(
-        "Select QR method: [1] Householder [2] Givens, or press Enter for 1: ",
-        1
-    );
-
-    if (qr_choice == 2)
-    {
-        return solver_utils::QRMethod::Givens;
-    }
-
-    if (qr_choice != 1)
-    {
-        std::cerr << "Unknown QR method, fallback to Householder.\n";
-    }
-
-    return solver_utils::QRMethod::Householder;
-}
-
 } // namespace
 
 LinearSolverOptions get_linear_solver_options_from_terminal(
@@ -95,12 +75,10 @@ LinearSolverOptions get_linear_solver_options_from_terminal(
     if (solver_choice == 2)
     {
         options.solver_type = LinearSolverType::QR;
-        options.qr_method = get_qr_method_selection();
     }
     else if (solver_choice == 3)
     {
         options.solver_type = LinearSolverType::BatchedQR;
-        options.qr_method = get_qr_method_selection();
         options.qr_batch_size = read_positive_int64(
             "Enter batched QR batch size, or press Enter for "
                 + std::to_string(default_qr_batch_size) + ": ",

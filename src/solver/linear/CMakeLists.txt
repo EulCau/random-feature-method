@@ -12,5 +12,4 @@ target_include_directories(
 target_link_libraries(
     solver_linear
     PUBLIC
-    solver_utils
     ${TORCH_LIBRARIES})
