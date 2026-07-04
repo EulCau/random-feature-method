@@ -63,8 +63,8 @@ QRDecomposition householder_qr(const torch::Tensor& A)
     const int64_t m = A.size(0);
     const int64_t n = A.size(1);
     const int64_t steps = std::min(m, n);
-    auto R = A.contiguous().clone();
-    auto Q = torch::eye(m, torch::TensorOptions().dtype(A.dtype()).device(A.device()));
+    const auto R = A.contiguous().clone();
+    const auto Q = torch::eye(m, torch::TensorOptions().dtype(A.dtype()).device(A.device()));
 
     for (int64_t k = 0; k < steps; ++k)
     {
@@ -73,8 +73,7 @@ QRDecomposition householder_qr(const torch::Tensor& A)
             k
         }).contiguous();
         const auto norm_x_tensor = torch::linalg_norm(x);
-        const double norm_x = norm_x_tensor.item<double>();
-        if (norm_x == 0.0)
+        if (norm_x_tensor.item<double>() == 0.0)
         {
             continue;
         }
@@ -83,7 +82,7 @@ QRDecomposition householder_qr(const torch::Tensor& A)
         e1.index_put_({0}, 1.0);
         const double sign = x.index({0}).item<double>() >= 0.0 ? 1.0 : -1.0;
         auto v = x + sign * norm_x_tensor * e1;
-        const double norm_v = torch::linalg_norm(v).item<double>();
+        const auto norm_v = torch::linalg_norm(v).item<double>();
         if (norm_v == 0.0)
         {
             continue;
@@ -98,7 +97,7 @@ QRDecomposition householder_qr(const torch::Tensor& A)
             v.reshape({-1, 1}),
             torch::matmul(v.reshape({1, -1}), R_sub)
         );
-        R_sub.sub_(R_update);
+        (void)R_sub.sub_(R_update);
 
         auto Q_sub = Q.index({
             torch::indexing::Slice(),
@@ -108,7 +107,7 @@ QRDecomposition householder_qr(const torch::Tensor& A)
             torch::matmul(Q_sub, v.reshape({-1, 1})),
             v.reshape({1, -1})
         );
-        Q_sub.sub_(Q_update);
+        (void)Q_sub.sub_(Q_update);
     }
 
     return {Q.contiguous(), R.contiguous()};
@@ -127,8 +126,8 @@ QRDecomposition givens_qr(const torch::Tensor& A)
     {
         for (int64_t i = m - 1; i > j; --i)
         {
-            const double a = R.index({i - 1, j}).item<double>();
-            const double b = R.index({i, j}).item<double>();
+            const auto a = R.index({i - 1, j}).item<double>();
+            const auto b = R.index({i, j}).item<double>();
             if (b == 0.0)
             {
                 continue;
@@ -187,11 +186,11 @@ QRLeastSquaresReduction reduce_least_squares_qr(
     const auto [Q, R_full] = qr_decompose(A, method);
     const auto transformed_rhs = torch::matmul(Q.transpose(0, 1).contiguous(), b_matrix);
 
-    auto R = R_full.index({
+    const auto R = R_full.index({
         torch::indexing::Slice(0, n),
         torch::indexing::Slice()
     }).contiguous();
-    auto rhs = transformed_rhs.index({
+    const auto rhs = transformed_rhs.index({
         torch::indexing::Slice(0, n),
         torch::indexing::Slice()
     }).contiguous();
@@ -220,36 +219,36 @@ QRLeastSquaresReduction batched_reduce_least_squares_qr(
     std::vector<torch::Tensor> pending_A;
     std::vector<torch::Tensor> pending_b;
 
-    for (const auto& batch : batches)
+    for (const auto&[A, b] : batches)
     {
-        check_qr_input(batch.A);
+        check_qr_input(A);
         TORCH_CHECK(
-            batch.A.size(1) == n,
-            "all A batches must have ", n, " columns, got ", batch.A.sizes()
+            A.size(1) == n,
+            "all A batches must have ", n, " columns, got ", A.sizes()
         );
         TORCH_CHECK(
-            batch.b.dim() == first_b.dim(),
+            b.dim() == first_b.dim(),
             "all b batches must have the same rank as the first batch"
         );
         TORCH_CHECK(
-            batch.b.size(0) == batch.A.size(0),
-            "A and b row mismatch: A=", batch.A.sizes(), ", b=", batch.b.sizes()
+            b.size(0) == A.size(0),
+            "A and b row mismatch: A=", A.sizes(), ", b=", b.sizes()
         );
         TORCH_CHECK(
-            batch.A.device() == first_A.device() && batch.b.device() == first_A.device(),
+            A.device() == first_A.device() && b.device() == first_A.device(),
             "all batches must be on the same device"
         );
         TORCH_CHECK(
-            batch.A.dtype() == first_A.dtype() && batch.b.dtype() == first_A.dtype(),
+            A.dtype() == first_A.dtype() && b.dtype() == first_A.dtype(),
             "all batches must have the same dtype"
         );
         if (!input_was_vector)
         {
-            TORCH_CHECK(batch.b.size(1) == rhs_cols, "all b batches must have ", rhs_cols, " columns");
+            TORCH_CHECK(b.size(1) == rhs_cols, "all b batches must have ", rhs_cols, " columns");
         }
 
-        const auto batch_A = batch.A.contiguous();
-        const auto batch_b = rhs_as_matrix(batch.b);
+        const auto batch_A = A.contiguous();
+        const auto batch_b = rhs_as_matrix(b);
 
         if (!initialized)
         {
@@ -264,9 +263,9 @@ QRLeastSquaresReduction batched_reduce_least_squares_qr(
 
             const auto A_init = torch::cat(pending_A, 0).contiguous();
             const auto b_init = torch::cat(pending_b, 0).contiguous();
-            auto reduction = reduce_least_squares_qr(A_init, b_init, method);
-            R = reduction.R;
-            rhs = rhs_as_matrix(reduction.rhs);
+            auto [R_, rhs_] = reduce_least_squares_qr(A_init, b_init, method);
+            R = R_;
+            rhs = rhs_as_matrix(rhs_);
             initialized = true;
             pending_A.clear();
             pending_b.clear();
@@ -275,9 +274,9 @@ QRLeastSquaresReduction batched_reduce_least_squares_qr(
 
         const auto stacked_A = torch::cat({R, batch_A}, 0).contiguous();
         const auto stacked_b = torch::cat({rhs, batch_b}, 0).contiguous();
-        auto reduction = reduce_least_squares_qr(stacked_A, stacked_b, method);
-        R = reduction.R;
-        rhs = rhs_as_matrix(reduction.rhs);
+        auto [R_, rhs_] = reduce_least_squares_qr(stacked_A, stacked_b, method);
+        R = R_;
+        rhs = rhs_as_matrix(rhs_);
     }
 
     TORCH_CHECK(
