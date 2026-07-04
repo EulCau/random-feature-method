@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iostream>
 #include <utility>
+#include <vector>
 #include "rff.h"
 #include "utils/linear_solve_result.h"
 #include "utils/nonlinear_solver_utils.h"
@@ -103,10 +104,12 @@ RFMSolver& RFMSolver::options(
 
 RFMSolver& RFMSolver::linear_options(
     const LinearSolverType solver_type,
-    const solver_utils::QRMethod qr_method)
+    const solver_utils::QRMethod qr_method,
+    const int64_t qr_batch_size)
 {
     linear_solver_type_ = solver_type;
     qr_method_ = qr_method;
+    qr_batch_size_ = qr_batch_size;
     return *this;
 }
 
@@ -206,9 +209,35 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear() const
         );
     }
 
-    TORCH_CHECK(linear_solver_type_ == LinearSolverType::QR, "unknown linear solver type");
+    torch::Tensor X;
+    if (linear_solver_type_ == LinearSolverType::QR)
+    {
+        X = solver_utils::solve_least_squares_qr(A, B, qr_method_);
+    }
+    else
+    {
+        TORCH_CHECK(linear_solver_type_ == LinearSolverType::BatchedQR, "unknown linear solver type");
+        TORCH_CHECK(qr_batch_size_ > 0, "qr_batch_size must be positive");
 
-    const auto X = solver_utils::solve_least_squares_qr(A, B, qr_method_);
+        std::vector<solver_utils::LeastSquaresBatch> batches;
+        batches.reserve((A.size(0) + qr_batch_size_ - 1) / qr_batch_size_);
+        for (int64_t row_begin = 0; row_begin < A.size(0); row_begin += qr_batch_size_)
+        {
+            const int64_t row_end = std::min(row_begin + qr_batch_size_, A.size(0));
+            batches.push_back({
+                A.index({
+                    torch::indexing::Slice(row_begin, row_end),
+                    torch::indexing::Slice()
+                }).contiguous(),
+                B.index({
+                    torch::indexing::Slice(row_begin, row_end),
+                    torch::indexing::Slice()
+                }).contiguous()
+            });
+        }
+        X = solver_utils::solve_batched_least_squares_qr(batches, qr_method_);
+    }
+
     const auto X_matrix = X.reshape({-1, 1}).contiguous();
 
     const auto y0 = X_matrix.index({0, 0}).clone();

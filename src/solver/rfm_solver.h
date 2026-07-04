@@ -9,7 +9,8 @@
 enum class LinearSolverType
 {
     RidgeDual,
-    QR
+    QR,
+    BatchedQR
 };
 
 class RFMSolver
@@ -31,7 +32,8 @@ public:
 
     RFMSolver& linear_options(
         LinearSolverType solver_type,
-        solver_utils::QRMethod qr_method
+        solver_utils::QRMethod qr_method,
+        int64_t qr_batch_size
     );
 
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve(bool output_log = false) const;
@@ -56,6 +58,7 @@ public:
     [[nodiscard]] float lambda() const { return lambda_; }
     [[nodiscard]] LinearSolverType linear_solver_type() const { return linear_solver_type_; }
     [[nodiscard]] solver_utils::QRMethod qr_method() const { return qr_method_; }
+    [[nodiscard]] int64_t qr_batch_size() const { return qr_batch_size_; }
 
 protected:
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_linear() const;
@@ -106,4 +109,5 @@ protected:
     float lambda_{};
     LinearSolverType linear_solver_type_{LinearSolverType::RidgeDual};
     solver_utils::QRMethod qr_method_{solver_utils::QRMethod::Householder};
+    int64_t qr_batch_size_{0};
 };
