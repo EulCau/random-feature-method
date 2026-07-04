@@ -1,20 +1,15 @@
-add_subdirectory(utils)
-
 add_library(
-    solver
+    solver_utils
     STATIC
-    rfm_solver.cpp)
+    nonlinear_solver_utils.cpp
+    qr_decomposition.cpp)
 
 target_include_directories(
-    solver
+    solver_utils
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(
-    solver
-    PUBLIC
-    config
-    equations
-    rff
     solver_utils
+    PUBLIC
     ${TORCH_LIBRARIES})
