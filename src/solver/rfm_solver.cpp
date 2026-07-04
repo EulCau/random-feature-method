@@ -4,7 +4,8 @@
 #include <iostream>
 #include <utility>
 #include "rff.h"
-#include "linear_solve_result.h"
+#include "utils/linear_solve_result.h"
+#include "utils/nonlinear_solver_utils.h"
 
 RFMSolver::RFMSolver(
     const Config& config, const std::shared_ptr<Equation> &eq,
@@ -281,7 +282,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
 {
     const int64_t max_iters = config_.solver_config.num_iterations;
 
-    torch::Tensor theta = pack_nonlinear_parameters(y0, alpha).detach().clone().to(device_);
+    torch::Tensor theta = solver_utils::pack_nonlinear_parameters(y0, alpha).detach().clone().to(device_);
     float damping = lambda;
     float final_error = 0.0f;
 
@@ -310,7 +311,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
 
         for (int64_t retry = 0; retry <= max_retries; ++retry)
         {
-            const auto delta = solve_lm_step(jacobian, residual, damping);
+            const auto delta = solver_utils::solve_lm_step(jacobian, residual, damping);
             const auto step_norm = delta.norm().item<float>();
 
             const auto trial_theta = (theta + delta).detach();
@@ -455,60 +456,9 @@ std::pair<torch::Tensor, torch::Tensor> RFMSolver::compute_nonlinear_terminal_re
 
     const auto theta_with_grad = theta.detach().clone().requires_grad_(true);
     const auto residual = compute_nonlinear_terminal_residual(theta_with_grad).reshape({-1});
-    auto jacobian = compute_nonlinear_jacobian(residual, theta_with_grad);
+    auto jacobian = solver_utils::compute_nonlinear_jacobian(residual, theta_with_grad);
 
     return {residual.reshape({-1, 1}).contiguous(), jacobian};
-}
-
-torch::Tensor RFMSolver::compute_nonlinear_jacobian(
-    const torch::Tensor& residual,
-    const torch::Tensor& theta
-)
-{
-    const int64_t num_residual = residual.numel();
-    const int64_t num_param = theta.numel();
-    auto jacobian = torch::zeros(
-        {num_residual, num_param},
-        theta.options().dtype(theta.dtype())
-    );
-
-    for (int64_t i = 0; i < num_residual; ++i)
-    {
-        auto grad_output = torch::zeros_like(residual);
-        grad_output.index_put_({i}, 1.0f);
-
-        auto grads = torch::autograd::grad(
-            {residual},
-            {theta},
-            {grad_output},
-            true,
-            false,
-            false
-        );
-
-        jacobian.index_put_({i}, grads[0].reshape({num_param}));
-    }
-
-    return jacobian.contiguous();
-}
-
-torch::Tensor RFMSolver::solve_lm_step(
-    const torch::Tensor& jacobian,
-    const torch::Tensor& residual,
-    const float lambda
-)
-{
-    TORCH_CHECK(lambda > 0.0f, "lambda must be positive");
-
-    const auto j_t = jacobian.transpose(0, 1).contiguous();
-    const auto system = torch::matmul(j_t, jacobian);
-    const auto rhs = -torch::matmul(j_t, residual.reshape({-1, 1}));
-    const auto identity = torch::eye(
-        system.size(0),
-        torch::TensorOptions().dtype(system.dtype()).device(system.device())
-    );
-
-    return torch::linalg_solve(system + lambda * identity, rhs).reshape({-1}).contiguous();
 }
 
 torch::Tensor RFMSolver::forward_nonlinear_terminal_y(
@@ -685,17 +635,6 @@ void RFMSolver::compute_H(const torch::Tensor& t, const torch::Tensor& x)
     );
 
     H_ = result;
-}
-
-torch::Tensor RFMSolver::pack_nonlinear_parameters(
-    const torch::Tensor& y0,
-    const torch::Tensor& alpha
-)
-{
-    return torch::cat({
-        y0.reshape({1}),
-        alpha.reshape({-1})
-    }).contiguous();
 }
 
 void RFMSolver::check_tx_shape(

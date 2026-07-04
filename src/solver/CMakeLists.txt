@@ -1,7 +1,8 @@
 add_library(
     solver
     STATIC
-    rfm_solver.cpp)
+    rfm_solver.cpp
+    utils/nonlinear_solver_utils.cpp)
 
 target_include_directories(
     solver

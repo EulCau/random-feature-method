@@ -11,7 +11,7 @@
 
 namespace
 {
-constexpr auto kDefaultConfigPath = "config/heat_d100.json";
+constexpr auto kDefaultConfigPath = "config/hjb_lq_d100.json";
 
 struct CommandLineOptions
 {

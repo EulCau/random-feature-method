@@ -59,12 +59,6 @@ protected:
     [[nodiscard]] std::pair<torch::Tensor, torch::Tensor> compute_nonlinear_terminal_residual_and_jacobian(
         const torch::Tensor& theta) const;
 
-    [[nodiscard]] static torch::Tensor compute_nonlinear_jacobian(
-        const torch::Tensor& residual, const torch::Tensor& theta);
-
-    [[nodiscard]] static torch::Tensor solve_lm_step(
-        const torch::Tensor& jacobian, const torch::Tensor& residual, float lambda);
-
     [[nodiscard]] torch::Tensor forward_nonlinear_terminal_y(
         const torch::Tensor& y0, const torch::Tensor& alpha) const;
 
@@ -75,9 +69,6 @@ protected:
     void compute_M(const torch::Tensor& t, const torch::Tensor& x);
     void compute_N(const torch::Tensor& t, const torch::Tensor& x);
     void compute_H(const torch::Tensor& t, const torch::Tensor& x);
-
-    [[nodiscard]] static torch::Tensor pack_nonlinear_parameters(
-        const torch::Tensor& y0, const torch::Tensor& alpha);
 
     void check_tx_shape(const torch::Tensor& t, const torch::Tensor& x) const;
 
