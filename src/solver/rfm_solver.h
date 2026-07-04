@@ -75,6 +75,12 @@ protected:
 
     [[nodiscard]] torch::Tensor compute_nonlinear_z(const torch::Tensor& alpha) const;
 
+    [[nodiscard]] std::pair<double, int64_t> test_batch(
+        const torch::Tensor& y0,
+        const torch::Tensor& alpha,
+        int64_t batch_size) const;
+
+    void compute_time_grid();
     void compute_txw();
     void compute_L(const torch::Tensor& t, const torch::Tensor& x);
     void compute_M(const torch::Tensor& t, const torch::Tensor& x);

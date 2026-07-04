@@ -94,16 +94,14 @@ RFMSolver::RFMSolver(
     torch::manual_seed(seed_);
     std::srand(static_cast<unsigned>(seed_));
 
-    compute_txw();
-
     if (is_linear_)
     {
-        compute_L(t_, x_);
-        compute_M(t_, x_);
-        compute_N(t_, x_);
+        compute_time_grid();
     }
     else
     {
+        compute_txw();
+
         const auto D = equation_->dim();
         const auto H = rff_.hidden_dim();
 
@@ -116,7 +114,10 @@ RFMSolver::RFMSolver(
             .device(device_)) * config_.solver_config.alpha_init_scale;
     }
 
-    compute_H(t_, x_);
+    if (!is_linear_)
+    {
+        compute_H(t_, x_);
+    }
 }
 
 /* Options
@@ -164,11 +165,38 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve(const bool outp
 
 float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& alpha) const
 {
-    using namespace torch::indexing;
-
     torch::NoGradGuard no_grad;
 
     const int64_t S = config_.solver_config.sample_size;
+    const int64_t batch_size = linear_solver_options_.qr_batch_size > 0
+        ? linear_solver_options_.qr_batch_size
+        : S;
+
+    double squared_error_sum = 0.0;
+    int64_t residual_count = 0;
+    for (int64_t row_begin = 0; row_begin < S; row_begin += batch_size)
+    {
+        const int64_t current_batch_size = std::min(batch_size, S - row_begin);
+        const auto [batch_squared_error, batch_count] = test_batch(
+            y0,
+            alpha,
+            current_batch_size
+        );
+        squared_error_sum += batch_squared_error;
+        residual_count += batch_count;
+    }
+
+    return static_cast<float>(std::sqrt(squared_error_sum / static_cast<double>(residual_count)));
+}
+
+std::pair<double, int64_t> RFMSolver::test_batch(
+    const torch::Tensor& y0,
+    const torch::Tensor& alpha,
+    const int64_t batch_size
+) const
+{
+    using namespace torch::indexing;
+
     const int64_t T = config_.eqn_config.num_time_intervals;
     const int64_t D = equation_->dim();
     const int64_t Hdim = rff_.hidden_dim();
@@ -179,7 +207,7 @@ float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& alpha) const
     const auto y0_eval = y0.to(device_).reshape({1});
     const auto alpha_eval = alpha.to(device_).reshape({D, Hdim}).contiguous();
 
-    const auto [dw_sample, x_sample] = equation_->sample(S);
+    const auto [dw_sample, x_sample] = equation_->sample(batch_size);
     const auto dw_eval = dw_sample.to(device_).contiguous();
     const auto x_all = x_sample.to(device_).permute({0, 2, 1}).contiguous();
 
@@ -195,10 +223,11 @@ float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& alpha) const
         Slice()
     }).unsqueeze(2).contiguous(); // (S, 1, 1, D)
 
-    check_tx_shape(t_, x_eval);
+    const auto t = t_.index({Slice(0, batch_size), Slice(), Slice(), Slice()}).contiguous();
+    const auto t_end = t_end_.index({Slice(0, batch_size), Slice(), Slice(), Slice()}).contiguous();
 
-    auto y = y0_eval.reshape({1, 1, 1, 1}).expand({S, 1, 1, 1});
-    const auto H_eval = rff_.phi(t_, x_eval);
+    auto y = y0_eval.reshape({1, 1, 1, 1}).expand({batch_size, 1, 1, 1});
+    const auto H_eval = rff_.phi(t, x_eval);
     const auto z_all = torch::matmul(
         H_eval.squeeze(-1).contiguous(),
         alpha_eval.transpose(0, 1)
@@ -207,7 +236,7 @@ float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& alpha) const
 
     for (int64_t k = 0; k < T; ++k)
     {
-        const auto t_k = t_.index({Slice(), Slice(k, k + 1), Slice(), Slice()});
+        const auto t_k = t.index({Slice(), Slice(k, k + 1), Slice(), Slice()});
         const auto x_k = x_eval.index({Slice(), Slice(k, k + 1), Slice(), Slice()});
         const auto z_k = z_all.index({Slice(), Slice(k, k + 1), Slice(), Slice()});
         const auto dw_k = dw_all.index({Slice(), Slice(k, k + 1), Slice(), Slice()});
@@ -223,13 +252,17 @@ float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& alpha) const
         y = y - dt * f_k + martingale;
     }
 
-    const auto g_terminal = equation_->g(t_end_, x_end_eval);
+    const auto g_terminal = equation_->g(t_end, x_end_eval);
     TORCH_CHECK(
         g_terminal.sizes() == y.sizes(),
         "equation_->g must return shape ", y.sizes(), ", but got ", g_terminal.sizes()
     );
 
-    return std::sqrt((y - g_terminal).pow(2).mean().item<float>());
+    const auto residual = y - g_terminal;
+    return {
+        residual.pow(2).sum().template item<double>(),
+        residual.numel()
+    };
 }
 
 std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear() const
@@ -244,7 +277,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear() const
 
     const auto [A, B] = compute_linear_coef();
 
-    const auto result = solve_linear_least_squares(
+    const auto [y0, alpha, rmse] = solve_linear_least_squares(
         A,
         B,
         config_.eqn_config.dimension,
@@ -252,7 +285,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear() const
         options
     );
 
-    return {result.y0, result.alpha, result.rmse};
+    return {y0, alpha, rmse};
 }
 
 std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear(const bool output_log) const
@@ -313,20 +346,38 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
     TORCH_CHECK(0 <= row_begin && row_begin < row_end && row_end <= S,
         "invalid linear coefficient row range [", row_begin, ", ", row_end, ") for S=", S);
 
-    auto device = L_.device();
+    const auto [dw_sample, x_sample] = equation_->sample(batch_size);
+    const auto dw_batch = dw_sample.to(device_).contiguous();
+    const auto x_all = x_sample.to(device_).permute({0, 2, 1}).contiguous(); // (B, T+1, D)
+    const auto x = x_all.index({
+        torch::indexing::Slice(),
+        torch::indexing::Slice(0, -1),
+        torch::indexing::Slice()
+    }).unsqueeze(2).contiguous(); // (B, T, 1, D)
+    const auto x_end = x_all.index({
+        torch::indexing::Slice(),
+        torch::indexing::Slice(-1, torch::indexing::None),
+        torch::indexing::Slice()
+    }).unsqueeze(2).contiguous(); // (B, 1, 1, D)
 
-    const auto rows = torch::indexing::Slice(row_begin, row_end);
+    const auto t = t_.index({
+        torch::indexing::Slice(0, batch_size),
+        torch::indexing::Slice(),
+        torch::indexing::Slice(),
+        torch::indexing::Slice()
+    }).contiguous();
+    const auto t_end = t_end_.index({
+        torch::indexing::Slice(0, batch_size),
+        torch::indexing::Slice(),
+        torch::indexing::Slice(),
+        torch::indexing::Slice()
+    }).contiguous();
 
-    const auto L = L_.index({rows, torch::indexing::Slice(), torch::indexing::Slice(), torch::indexing::Slice()})
-        .squeeze(-1).squeeze(-1).contiguous();                // (B, T)
-    const auto M = M_.index({rows, torch::indexing::Slice(), torch::indexing::Slice(), torch::indexing::Slice()})
-        .squeeze(2).contiguous();                             // (B, T, D)
-    const auto N = N_.index({rows, torch::indexing::Slice(), torch::indexing::Slice(), torch::indexing::Slice()})
-        .squeeze(-1).squeeze(-1).contiguous();                // (B, T)
-    const auto H = H_.index({rows, torch::indexing::Slice(), torch::indexing::Slice(), torch::indexing::Slice()})
-        .squeeze(-1).contiguous();                            // (B, T, H)
-    const auto dW = dw_.index({rows, torch::indexing::Slice(), torch::indexing::Slice()})
-        .permute({0, 2, 1}).contiguous();                     // (B, T, D)
+    const auto L = equation_->coef().L(t, x).squeeze(-1).squeeze(-1).contiguous(); // (B, T)
+    const auto M = equation_->coef().M(t, x).squeeze(2).contiguous();              // (B, T, D)
+    const auto N = equation_->coef().N(t, x).squeeze(-1).squeeze(-1).contiguous(); // (B, T)
+    const auto H = rff_.phi(t, x).squeeze(-1).contiguous();                       // (B, T, H)
+    const auto dW = dw_batch.permute({0, 2, 1}).contiguous();                     // (B, T, D)
 
     // 线性递推中的三块
     const auto a  = 1.0f - dt * L;      // (S, T)
@@ -371,25 +422,13 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
 
     // 右端项
     const auto constant_part = (weights * c).sum(1, true); // (B, 1)
-    const auto t_end = t_end_.index({
-        rows,
-        torch::indexing::Slice(),
-        torch::indexing::Slice(),
-        torch::indexing::Slice()
-    }).contiguous();
-    const auto x_end = x_end_.index({
-        rows,
-        torch::indexing::Slice(),
-        torch::indexing::Slice(),
-        torch::indexing::Slice()
-    }).contiguous();
-    const auto g_XN = equation_->g(t_end, x_end).reshape({batch_size, 1}).to(device);
+    const auto g_XN = equation_->g(t_end, x_end).reshape({batch_size, 1}).to(device_);
 
     const auto B = g_XN - constant_part; // (B, 1)
 
     TORCH_CHECK(
-        A.device().type() == device.type() &&
-        B.device().type() == device.type(),
+        A.device().type() == device_.type() &&
+        B.device().type() == device_.type(),
         "A, B must be on ", device_.type(), ", but got ", A.device().type(), " & ", B.device().type())
 
     return {A, B};
@@ -462,7 +501,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_batched_
         const int64_t row_end = std::min(row_begin + options.qr_batch_size, S);
         const auto [A_batch, B_batch] = compute_linear_coef_batch(row_begin, row_end);
         const auto residual = torch::matmul(A_batch, x) - B_batch;
-        squared_error_sum += residual.pow(2).sum().template item<double>();
+        squared_error_sum += residual.pow(2).sum().item<double>();
         residual_count += residual.numel();
     }
 
@@ -700,7 +739,7 @@ torch::Tensor RFMSolver::compute_nonlinear_z(const torch::Tensor& alpha) const
     return torch::matmul(features, alpha.transpose(0, 1)).unsqueeze(2).contiguous(); // (S, T, 1, D)
 }
 
-void RFMSolver::compute_txw()
+void RFMSolver::compute_time_grid()
 {
     const double total_time = config_.eqn_config.total_time;
     const int64_t T = config_.eqn_config.num_time_intervals;
@@ -714,6 +753,13 @@ void RFMSolver::compute_txw()
 
     const auto t_end_base = t_full.slice(0, T, T + 1).reshape({1, 1, 1, 1});
     t_end_ = t_end_base.expand({S, 1, 1, 1}).contiguous();
+}
+
+void RFMSolver::compute_txw()
+{
+    compute_time_grid();
+
+    const int64_t S = config_.solver_config.sample_size;
 
     const auto [fst, snd] = equation_->sample(S);
 
