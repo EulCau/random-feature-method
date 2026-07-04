@@ -4,6 +4,13 @@
 #include <random>
 #include "equation.h"
 #include "rff.h"
+#include "utils/qr_decomposition.h"
+
+enum class LinearSolverType
+{
+    RidgeDual,
+    QR
+};
 
 class RFMSolver
 {
@@ -20,6 +27,11 @@ public:
         const std::optional<torch::Tensor>& y0,
         const std::optional<torch::Tensor>& alpha,
         std::optional<float> lambda
+    );
+
+    RFMSolver& linear_options(
+        LinearSolverType solver_type,
+        solver_utils::QRMethod qr_method
     );
 
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve(bool output_log = false) const;
@@ -42,6 +54,8 @@ public:
     [[nodiscard]] const torch::Tensor& y0() const { return y0_; }
     [[nodiscard]] const torch::Tensor& alpha() const { return alpha_; }
     [[nodiscard]] float lambda() const { return lambda_; }
+    [[nodiscard]] LinearSolverType linear_solver_type() const { return linear_solver_type_; }
+    [[nodiscard]] solver_utils::QRMethod qr_method() const { return qr_method_; }
 
 protected:
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_linear() const;
@@ -90,4 +104,6 @@ protected:
     torch::Tensor y0_;
     torch::Tensor alpha_;
     float lambda_{};
+    LinearSolverType linear_solver_type_{LinearSolverType::RidgeDual};
+    solver_utils::QRMethod qr_method_{solver_utils::QRMethod::Householder};
 };

@@ -6,6 +6,7 @@
 #include "rff.h"
 #include "utils/linear_solve_result.h"
 #include "utils/nonlinear_solver_utils.h"
+#include "utils/qr_decomposition.h"
 
 RFMSolver::RFMSolver(
     const Config& config, const std::shared_ptr<Equation> &eq,
@@ -100,6 +101,15 @@ RFMSolver& RFMSolver::options(
     return *this;
 }
 
+RFMSolver& RFMSolver::linear_options(
+    const LinearSolverType solver_type,
+    const solver_utils::QRMethod qr_method)
+{
+    linear_solver_type_ = solver_type;
+    qr_method_ = qr_method;
+    return *this;
+}
+
 /* Solver
  * `Solver` directs linear and nonlinear problems to different main solver functions. */
 
@@ -183,14 +193,34 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear() const
 {
     const auto [A, B] = compute_linear_coef();
 
-    const auto result = solve_y0_alpha_ridge_dual(
-        A, B,
-        config_.eqn_config.dimension,
-        config_.solver_config.hidden_dim,
-        config_.solver_config.initial_lambda
-    );
+    const int64_t D = config_.eqn_config.dimension;
+    const int64_t Hdim = config_.solver_config.hidden_dim;
 
-    return result;
+    if (linear_solver_type_ == LinearSolverType::RidgeDual)
+    {
+        return solve_y0_alpha_ridge_dual(
+            A, B,
+            D,
+            Hdim,
+            config_.solver_config.initial_lambda
+        );
+    }
+
+    TORCH_CHECK(linear_solver_type_ == LinearSolverType::QR, "unknown linear solver type");
+
+    const auto X = solver_utils::solve_least_squares_qr(A, B, qr_method_);
+    const auto X_matrix = X.reshape({-1, 1}).contiguous();
+
+    const auto y0 = X_matrix.index({0, 0}).clone();
+    const auto alpha = X_matrix.index({
+        torch::indexing::Slice(1, torch::indexing::None),
+        0
+    }).reshape({D, Hdim}).contiguous();
+
+    const auto residual = torch::matmul(A.contiguous(), X_matrix) - B.contiguous();
+    const float rmse = std::sqrt(residual.pow(2).mean().template item<float>());
+
+    return {y0, alpha, rmse};
 }
 
 std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear(const bool output_log) const
