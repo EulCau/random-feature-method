@@ -2,6 +2,9 @@
 
 #include <torch/torch.h>
 
+#include <cmath>
+#include <tuple>
+
 inline std::tuple<torch::Tensor, torch::Tensor, float> solve_y0_alpha_ridge_dual(
     const torch::Tensor& A,          // (n, 1 + dim * hidden_dim)
     const torch::Tensor& B,          // (n, 1)
@@ -54,14 +57,12 @@ inline std::tuple<torch::Tensor, torch::Tensor, float> solve_y0_alpha_ridge_dual
         X = torch::matmul(At, Y).contiguous();               // (p, 1)
     }
 
-    // 拆分参数
-    const auto y0 = X.index({0, 0}).clone();                  // scalar
+    const auto y0 = X.index({0, 0}).clone();
     const auto alpha = X.index({
         torch::indexing::Slice(1, torch::indexing::None),
         0
     }).reshape({dim, hidden_dim}).contiguous();
 
-    // 计算 MSE loss
     const auto residual = torch::matmul(A_work, X) - B_work; // (n, 1)
     const auto mse_loss = std::sqrt(residual.pow(2).mean().item<float>());
 

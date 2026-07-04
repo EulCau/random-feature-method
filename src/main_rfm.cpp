@@ -1,6 +1,7 @@
 # include "rfm_solver.h"
 #include "config.h"
 #include "equation_factory.h"
+#include "linear_solver_cli.h"
 #include "register_all_eqn.h"
 #include <algorithm>
 #include <iostream>
@@ -18,13 +19,6 @@ struct CommandLineOptions
 {
     std::string config_path{kDefaultConfigPath};
     std::optional<uint64_t> seed;
-};
-
-struct LinearSolveSelection
-{
-    LinearSolverType solver_type{LinearSolverType::RidgeDual};
-    solver_utils::QRMethod qr_method{solver_utils::QRMethod::Householder};
-    int64_t qr_batch_size{0};
 };
 }
 
@@ -75,109 +69,6 @@ uint64_t parse_seed(const std::string& input)
     }
 
     return splitmix64(user_seed);
-}
-
-int read_choice(const std::string& prompt, const int default_choice)
-{
-    std::cout << prompt;
-
-    std::string input;
-    std::getline(std::cin, input);
-
-    if (input.empty())
-    {
-        return default_choice;
-    }
-
-    try
-    {
-        return std::stoi(input);
-    } catch (...)
-    {
-        std::cerr << "Invalid input, fallback to default choice " << default_choice << ".\n";
-        return default_choice;
-    }
-}
-
-int64_t read_positive_int64(const std::string& prompt, const int64_t default_value)
-{
-    std::cout << prompt;
-
-    std::string input;
-    std::getline(std::cin, input);
-
-    if (input.empty())
-    {
-        return default_value;
-    }
-
-    try
-    {
-        const int64_t value = std::stoll(input);
-        if (value > 0)
-        {
-            return value;
-        }
-    } catch (...)
-    {
-    }
-
-    std::cerr << "Invalid input, fallback to default value " << default_value << ".\n";
-    return default_value;
-}
-
-solver_utils::QRMethod get_qr_method_selection()
-{
-    const int qr_choice = read_choice(
-        "Select QR method: [1] Householder [2] Givens, or press Enter for 1: ",
-        1
-    );
-
-    if (qr_choice == 2)
-    {
-        return solver_utils::QRMethod::Givens;
-    }
-
-    if (qr_choice != 1)
-    {
-        std::cerr << "Unknown QR method, fallback to Householder.\n";
-    }
-
-    return solver_utils::QRMethod::Householder;
-}
-
-LinearSolveSelection get_linear_solve_selection(const int64_t default_qr_batch_size)
-{
-    LinearSolveSelection selection;
-    selection.qr_batch_size = default_qr_batch_size;
-
-    //TODO: Replace terminal-only solver selection with a configurable registry or factory.
-    const int solver_choice = read_choice(
-        "Select linear solver: [1] ridge dual [2] QR [3] batched QR, or press Enter for 1: ",
-        1
-    );
-
-    if (solver_choice == 2)
-    {
-        selection.solver_type = LinearSolverType::QR;
-        selection.qr_method = get_qr_method_selection();
-    }
-    else if (solver_choice == 3)
-    {
-        selection.solver_type = LinearSolverType::BatchedQR;
-        selection.qr_method = get_qr_method_selection();
-        selection.qr_batch_size = read_positive_int64(
-            "Enter batched QR batch size, or press Enter for "
-                + std::to_string(default_qr_batch_size) + ": ",
-            default_qr_batch_size
-        );
-    }
-    else if (solver_choice != 1)
-    {
-        std::cerr << "Unknown linear solver, fallback to ridge dual.\n";
-    }
-
-    return selection;
 }
 
 void print_usage(const char* program_name)
@@ -264,12 +155,11 @@ int main(const int argc, char* argv[])
             cfg.solver_config.sample_size,
             4 * parameter_count
         );
-        const auto selection = get_linear_solve_selection(default_qr_batch_size);
-        rfm_solver.linear_options(
-            selection.solver_type,
-            selection.qr_method,
-            selection.qr_batch_size
+        const auto linear_options = get_linear_solver_options_from_terminal(
+            default_qr_batch_size,
+            cfg.solver_config.initial_lambda
         );
+        rfm_solver.linear_options(linear_options);
     }
 
     if (torch::cuda::is_available()) torch::cuda::synchronize();

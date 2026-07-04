@@ -3,15 +3,8 @@
 #include <torch/torch.h>
 #include <random>
 #include "equation.h"
+#include "linear_solver_options.h"
 #include "rff.h"
-#include "utils/qr_decomposition.h"
-
-enum class LinearSolverType
-{
-    RidgeDual,
-    QR,
-    BatchedQR
-};
 
 class RFMSolver
 {
@@ -30,11 +23,7 @@ public:
         std::optional<float> lambda
     );
 
-    RFMSolver& linear_options(
-        LinearSolverType solver_type,
-        solver_utils::QRMethod qr_method,
-        int64_t qr_batch_size
-    );
+    RFMSolver& linear_options(const LinearSolverOptions& options);
 
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve(bool output_log = false) const;
     [[nodiscard]] float test(const torch::Tensor& y0, const torch::Tensor& alpha) const;
@@ -56,9 +45,7 @@ public:
     [[nodiscard]] const torch::Tensor& y0() const { return y0_; }
     [[nodiscard]] const torch::Tensor& alpha() const { return alpha_; }
     [[nodiscard]] float lambda() const { return lambda_; }
-    [[nodiscard]] LinearSolverType linear_solver_type() const { return linear_solver_type_; }
-    [[nodiscard]] solver_utils::QRMethod qr_method() const { return qr_method_; }
-    [[nodiscard]] int64_t qr_batch_size() const { return qr_batch_size_; }
+    [[nodiscard]] const LinearSolverOptions& linear_solver_options() const { return linear_solver_options_; }
 
 protected:
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_linear() const;
@@ -107,7 +94,5 @@ protected:
     torch::Tensor y0_;
     torch::Tensor alpha_;
     float lambda_{};
-    LinearSolverType linear_solver_type_{LinearSolverType::RidgeDual};
-    solver_utils::QRMethod qr_method_{solver_utils::QRMethod::Householder};
-    int64_t qr_batch_size_{0};
+    LinearSolverOptions linear_solver_options_;
 };

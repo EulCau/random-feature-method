@@ -1,14 +1,14 @@
 add_library(
-    solver_utils
+    solver_nonlinear
     STATIC
-    qr_decomposition.cpp)
+    nonlinear_solver_utils.cpp)
 
 target_include_directories(
-    solver_utils
+    solver_nonlinear
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(
-    solver_utils
+    solver_nonlinear
     PUBLIC
     ${TORCH_LIBRARIES})

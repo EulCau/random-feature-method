@@ -1,13 +1,12 @@
 #include "rfm_solver.h"
 
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <utility>
-#include <vector>
+#include "linear_least_squares_solver.h"
+#include "nonlinear_solver_utils.h"
 #include "rff.h"
-#include "utils/linear_solve_result.h"
-#include "utils/nonlinear_solver_utils.h"
-#include "utils/qr_decomposition.h"
 
 RFMSolver::RFMSolver(
     const Config& config, const std::shared_ptr<Equation> &eq,
@@ -102,14 +101,9 @@ RFMSolver& RFMSolver::options(
     return *this;
 }
 
-RFMSolver& RFMSolver::linear_options(
-    const LinearSolverType solver_type,
-    const solver_utils::QRMethod qr_method,
-    const int64_t qr_batch_size)
+RFMSolver& RFMSolver::linear_options(const LinearSolverOptions& options)
 {
-    linear_solver_type_ = solver_type;
-    qr_method_ = qr_method;
-    qr_batch_size_ = qr_batch_size;
+    linear_solver_options_ = options;
     return *this;
 }
 
@@ -195,61 +189,18 @@ float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& alpha) const
 std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear() const
 {
     const auto [A, B] = compute_linear_coef();
+    auto options = linear_solver_options_;
+    options.ridge_lambda = config_.solver_config.initial_lambda;
 
-    const int64_t D = config_.eqn_config.dimension;
-    const int64_t Hdim = config_.solver_config.hidden_dim;
+    const auto result = solve_linear_least_squares(
+        A,
+        B,
+        config_.eqn_config.dimension,
+        config_.solver_config.hidden_dim,
+        options
+    );
 
-    if (linear_solver_type_ == LinearSolverType::RidgeDual)
-    {
-        return solve_y0_alpha_ridge_dual(
-            A, B,
-            D,
-            Hdim,
-            config_.solver_config.initial_lambda
-        );
-    }
-
-    torch::Tensor X;
-    if (linear_solver_type_ == LinearSolverType::QR)
-    {
-        X = solver_utils::solve_least_squares_qr(A, B, qr_method_);
-    }
-    else
-    {
-        TORCH_CHECK(linear_solver_type_ == LinearSolverType::BatchedQR, "unknown linear solver type");
-        TORCH_CHECK(qr_batch_size_ > 0, "qr_batch_size must be positive");
-
-        std::vector<solver_utils::LeastSquaresBatch> batches;
-        batches.reserve((A.size(0) + qr_batch_size_ - 1) / qr_batch_size_);
-        for (int64_t row_begin = 0; row_begin < A.size(0); row_begin += qr_batch_size_)
-        {
-            const int64_t row_end = std::min(row_begin + qr_batch_size_, A.size(0));
-            batches.push_back({
-                A.index({
-                    torch::indexing::Slice(row_begin, row_end),
-                    torch::indexing::Slice()
-                }).contiguous(),
-                B.index({
-                    torch::indexing::Slice(row_begin, row_end),
-                    torch::indexing::Slice()
-                }).contiguous()
-            });
-        }
-        X = solver_utils::solve_batched_least_squares_qr(batches, qr_method_);
-    }
-
-    const auto X_matrix = X.reshape({-1, 1}).contiguous();
-
-    const auto y0 = X_matrix.index({0, 0}).clone();
-    const auto alpha = X_matrix.index({
-        torch::indexing::Slice(1, torch::indexing::None),
-        0
-    }).reshape({D, Hdim}).contiguous();
-
-    const auto residual = torch::matmul(A.contiguous(), X_matrix) - B.contiguous();
-    const float rmse = std::sqrt(residual.pow(2).mean().template item<float>());
-
-    return {y0, alpha, rmse};
+    return {result.y0, result.alpha, result.rmse};
 }
 
 std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear(const bool output_log) const

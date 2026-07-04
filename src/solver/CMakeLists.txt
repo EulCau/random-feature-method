@@ -1,4 +1,6 @@
 add_subdirectory(utils)
+add_subdirectory(linear)
+add_subdirectory(nonlinear)
 
 add_library(
     solver
@@ -16,5 +18,7 @@ target_link_libraries(
     config
     equations
     rff
+    solver_linear
+    solver_nonlinear
     solver_utils
     ${TORCH_LIBRARIES})

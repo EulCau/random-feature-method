@@ -1,14 +1,16 @@
 add_library(
-    solver_utils
+    solver_linear
     STATIC
-    qr_decomposition.cpp)
+    linear_least_squares_solver.cpp
+    linear_solver_cli.cpp)
 
 target_include_directories(
-    solver_utils
+    solver_linear
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(
-    solver_utils
+    solver_linear
     PUBLIC
+    solver_utils
     ${TORCH_LIBRARIES})
