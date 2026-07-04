@@ -54,8 +54,17 @@ namespace
     TORCH_CHECK(A.size(0) == B.size(0), "A and B row mismatch: A=", A.sizes(), ", B=", B.sizes());
     TORCH_CHECK(A.size(0) >= A.size(1), "QR reduction requires rows >= cols, got ", A.sizes());
 
-    const auto [Q, R] = torch::linalg_qr(A.contiguous(), "reduced");
-    const auto rhs = torch::matmul(Q.transpose(0, 1).contiguous(), B.contiguous());
+    const auto n = A.size(1);
+    const auto [qr_data, tau] = torch::geqrf(A.contiguous());
+    const auto R = qr_data.index({
+        torch::indexing::Slice(0, n),
+        torch::indexing::Slice()
+    }).triu().contiguous();
+    const auto transformed_rhs = torch::ormqr(qr_data, tau, B.contiguous(), true, true);
+    const auto rhs = transformed_rhs.index({
+        torch::indexing::Slice(0, n),
+        torch::indexing::Slice()
+    }).contiguous();
     return {R.contiguous(), rhs.contiguous()};
 }
 
