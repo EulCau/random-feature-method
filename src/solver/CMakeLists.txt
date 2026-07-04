@@ -2,7 +2,8 @@ add_library(
     solver
     STATIC
     rfm_solver.cpp
-    utils/nonlinear_solver_utils.cpp)
+    utils/nonlinear_solver_utils.cpp
+    utils/qr_decomposition.cpp)
 
 target_include_directories(
     solver
