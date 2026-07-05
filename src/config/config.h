@@ -24,6 +24,8 @@ struct NonlinearSolveOptions
     float error_tol;
     float step_tol;
     int64_t max_retries;
+    std::string step_solver;
+    int64_t batch_size;
 };
 
 struct SolverConfig

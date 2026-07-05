@@ -49,7 +49,9 @@ Config load_config(const std::string& json_path)
         nonlinear.at("lambda_increase").get<float>(),
         nonlinear.at("error_tol").get<float>(),
         nonlinear.at("step_tol").get<float>(),
-        nonlinear.at("max_retries").get<int64_t>()
+        nonlinear.at("max_retries").get<int64_t>(),
+        get_or<std::string>(nonlinear, "step_solver", "normal"),
+        get_or<int64_t>(nonlinear, "batch_size", solver.at("sample_size").get<int64_t>())
     };
 
     SolverConfig solver_cfg{

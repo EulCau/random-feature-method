@@ -70,6 +70,25 @@ protected:
     [[nodiscard]] std::pair<torch::Tensor, torch::Tensor> compute_nonlinear_terminal_residual_and_jacobian(
         const torch::Tensor& theta) const;
 
+    [[nodiscard]] torch::Tensor compute_nonlinear_terminal_residual_batch(
+        const torch::Tensor& theta,
+        int64_t row_begin,
+        int64_t row_end) const;
+
+    [[nodiscard]] std::pair<torch::Tensor, torch::Tensor> compute_nonlinear_terminal_residual_and_jacobian_batch(
+        const torch::Tensor& theta,
+        int64_t row_begin,
+        int64_t row_end) const;
+
+    [[nodiscard]] std::tuple<torch::Tensor, float, float> solve_nonlinear_lm_step_batched_qr(
+        const torch::Tensor& theta,
+        float lambda,
+        int64_t batch_size) const;
+
+    [[nodiscard]] std::pair<float, float> compute_nonlinear_loss_error_batched(
+        const torch::Tensor& theta,
+        int64_t batch_size) const;
+
     [[nodiscard]] torch::Tensor forward_nonlinear_terminal_y(
         const torch::Tensor& y0, const torch::Tensor& alpha) const;
 
