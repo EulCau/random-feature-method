@@ -32,7 +32,7 @@
       "lambda_increase": 3.0,
       "error_tol": 1e-4,
       "step_tol": 1e-4,
-      "max_retries": 20,
+      "max_retries": 5,
       "step_solver": "normal",
       "batch_size": 0
     }
