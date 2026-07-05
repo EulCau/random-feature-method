@@ -114,10 +114,6 @@ RFMSolver::RFMSolver(
             .device(device_)) * config_.solver_config.alpha_init_scale;
     }
 
-    if (!is_linear_)
-    {
-        compute_H(t_, x_);
-    }
 }
 
 /* Options
@@ -673,9 +669,9 @@ std::pair<torch::Tensor, torch::Tensor> RFMSolver::compute_nonlinear_terminal_re
             torch::indexing::Slice(1, torch::indexing::None)
         }).reshape({D, Hdim}).contiguous();
 
+        const auto H = rff_.phi(t_, x_).contiguous();
         auto [residual, jacobian] = equation_->terminal_residual_and_jacobian(
-            t_, t_end_, x_, x_end_, dw_, H_, y0, alpha
-        );
+            t_, t_end_, x_, x_end_, dw_, H, y0, alpha);
 
         TORCH_CHECK(residual.dim() == 2 && residual.size(1) == 1,
             "analytic residual must have shape (S, 1), but got ", residual.sizes());
@@ -735,7 +731,7 @@ torch::Tensor RFMSolver::forward_nonlinear_terminal_y(
 
 torch::Tensor RFMSolver::compute_nonlinear_z(const torch::Tensor& alpha) const
 {
-    const auto features = H_.squeeze(-1).contiguous(); // (S, T, H)
+    const auto features = rff_.phi(t_, x_).squeeze(-1).contiguous(); // (S, T, H)
     return torch::matmul(features, alpha.transpose(0, 1)).unsqueeze(2).contiguous(); // (S, T, 1, D)
 }
 
