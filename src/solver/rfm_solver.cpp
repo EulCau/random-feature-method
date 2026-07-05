@@ -260,7 +260,7 @@ std::pair<double, int64_t> RFMSolver::test_batch(
 
     const auto residual = y - g_terminal;
     return {
-        residual.pow(2).sum().template item<double>(),
+        residual.pow(2).sum().item<double>(),
         residual.numel()
     };
 }
@@ -505,7 +505,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_batched_
         residual_count += residual.numel();
     }
 
-    const float rmse = static_cast<float>(std::sqrt(squared_error_sum / static_cast<double>(residual_count)));
+    const auto rmse = static_cast<float>(std::sqrt(squared_error_sum / static_cast<double>(residual_count)));
     return split_linear_solution(x, D, Hdim, rmse);
 }
 

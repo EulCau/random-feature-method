@@ -26,7 +26,7 @@ namespace
     }).reshape({dim, hidden_dim}).contiguous();
 
     const auto residual = torch::matmul(A.contiguous(), X_matrix) - B.contiguous();
-    const float rmse = std::sqrt(residual.pow(2).mean().template item<float>());
+    const float rmse = std::sqrt(residual.pow(2).mean().item<float>());
 
     return {y0, alpha, rmse};
 }
