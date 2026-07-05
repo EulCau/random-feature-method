@@ -29,6 +29,20 @@ namespace
     return {y0, alpha, rmse};
 }
 
+[[nodiscard]] int64_t resolve_batch_size(
+    const int64_t configured_batch_size,
+    const int64_t dim,
+    const int64_t hidden_dim,
+    const char* name)
+{
+    TORCH_CHECK(configured_batch_size >= 0, name, " batch_size must be nonnegative");
+    if (configured_batch_size == 0)
+    {
+        return 4 * (1 + dim * hidden_dim);
+    }
+    return configured_batch_size;
+}
+
 [[nodiscard]] std::pair<torch::Tensor, torch::Tensor> reduce_linear_qr_libtorch(
     const torch::Tensor& A,
     const torch::Tensor& B)
@@ -146,7 +160,17 @@ RFMSolver& RFMSolver::options(
 
 RFMSolver& RFMSolver::linear_options(const LinearSolverOptions& options)
 {
-    linear_solver_options_ = options;
+    auto resolved_options = options;
+    if (resolved_options.solver_type == LinearSolverType::BatchedQR)
+    {
+        resolved_options.qr_batch_size = resolve_batch_size(
+            resolved_options.qr_batch_size,
+            equation_->dim(),
+            rff_.hidden_dim(),
+            "linear"
+        );
+    }
+    linear_solver_options_ = resolved_options;
     if (is_linear_ && linear_solver_options_.solver_type == LinearSolverType::BatchedQR)
     {
         clear_full_linear_cache();
@@ -550,6 +574,12 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
     torch::Tensor theta = solver_utils::pack_nonlinear_parameters(y0, alpha).detach().clone().to(device_);
     float damping = lambda;
     float final_error = 0.0f;
+    const int64_t nonlinear_batch_size = resolve_batch_size(
+        config_.solver_config.nonlinear.batch_size,
+        equation_->dim(),
+        rff_.hidden_dim(),
+        "nonlinear"
+    );
 
     for (int64_t iter = 0; iter < max_iters; ++iter)
     {
@@ -562,8 +592,9 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
             step_tol,
             max_retries,
             step_solver,
-            batch_size
+            configured_batch_size
         ] = config_.solver_config.nonlinear;
+        (void)configured_batch_size;
 
         torch::Tensor residual;
         torch::Tensor jacobian;
@@ -597,7 +628,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
                 std::tie(delta, curr_loss, curr_error) = solve_nonlinear_lm_step_batched_qr(
                     theta,
                     damping,
-                    batch_size
+                    nonlinear_batch_size
                 );
             }
             else
@@ -614,7 +645,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
             {
                 std::tie(trial_loss, trial_error) = compute_nonlinear_loss_error_batched(
                     trial_theta,
-                    batch_size
+                    nonlinear_batch_size
                 );
             }
             else
@@ -689,7 +720,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
     {
         std::tie(std::ignore, final_error) = compute_nonlinear_loss_error_batched(
             theta,
-            config_.solver_config.nonlinear.batch_size
+            nonlinear_batch_size
         );
     }
     else

@@ -52,12 +52,12 @@ Config load_config(const std::string& json_path)
         nonlinear.at("step_tol").get<float>(),
         nonlinear.at("max_retries").get<int64_t>(),
         get_or<std::string>(nonlinear, "step_solver", "normal"),
-        get_or<int64_t>(nonlinear, "batch_size", solver.at("sample_size").get<int64_t>())
+        get_or<int64_t>(nonlinear, "batch_size", int64_t{0})
     };
 
     LinearSolveOptions linear_cfg{
         get_or<std::string>(linear, "solver", "ridge_dual"),
-        get_or<int64_t>(linear, "batch_size", solver.at("sample_size").get<int64_t>()),
+        get_or<int64_t>(linear, "batch_size", int64_t{0}),
         get_or<double>(linear, "ridge_lambda", solver.at("initial_lambda").get<float>())
     };
 

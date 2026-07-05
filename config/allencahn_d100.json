@@ -23,7 +23,7 @@
     "alpha_init_scale": 0.001,
     "linear": {
       "solver": "ridge_dual",
-      "batch_size": 16384,
+      "batch_size": 0,
       "ridge_lambda": 0.010
     },
     "nonlinear": {
@@ -35,7 +35,7 @@
       "step_tol": 1e-4,
       "max_retries": 20,
       "step_solver": "normal",
-      "batch_size": 16384
+      "batch_size": 0
     }
   }
 }

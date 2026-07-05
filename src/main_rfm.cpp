@@ -20,10 +20,20 @@ struct CommandLineOptions
     std::optional<uint64_t> seed;
 };
 
-LinearSolverOptions get_linear_solver_options_from_config(const SolverConfig& config)
+int64_t default_batch_size(const int64_t dimension, const int64_t hidden_dim)
+{
+    return 4 * (1 + dimension * hidden_dim);
+}
+
+LinearSolverOptions get_linear_solver_options_from_config(
+    const SolverConfig& config,
+    const EqnConfig& eqn_config)
 {
     LinearSolverOptions options;
-    options.qr_batch_size = config.linear.batch_size;
+    TORCH_CHECK(config.linear.batch_size >= 0, "linear batch_size must be nonnegative");
+    options.qr_batch_size = config.linear.batch_size == 0
+        ? default_batch_size(eqn_config.dimension, config.hidden_dim)
+        : config.linear.batch_size;
     options.ridge_lambda = config.linear.ridge_lambda;
 
     //TODO: Replace string-based solver selection with a configurable registry or factory.
@@ -44,7 +54,6 @@ LinearSolverOptions get_linear_solver_options_from_config(const SolverConfig& co
         TORCH_CHECK(false, "unknown linear solver: ", config.linear.solver);
     }
 
-    TORCH_CHECK(options.qr_batch_size > 0, "linear batch_size must be positive");
     return options;
 }
 }
@@ -176,7 +185,10 @@ int main(const int argc, char* argv[])
 
     if (rfm_solver.is_linear())
     {
-        rfm_solver.linear_options(get_linear_solver_options_from_config(cfg.solver_config));
+        rfm_solver.linear_options(get_linear_solver_options_from_config(
+            cfg.solver_config,
+            cfg.eqn_config
+        ));
     }
 
     if (torch::cuda::is_available()) torch::cuda::synchronize();
