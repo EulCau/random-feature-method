@@ -19,6 +19,11 @@
     "hidden_dim": 50,
     "initial_lambda": 0.01,
     "alpha_init_scale": 0.001,
+    "linear": {
+      "solver": "ridge_dual",
+      "batch_size": 16384,
+      "ridge_lambda": 0.01
+    },
     "nonlinear": {
       "min_lambda": 1e-8,
       "max_lambda": 1e4,
@@ -26,7 +31,9 @@
       "lambda_increase": 3.0,
       "error_tol": 1e-4,
       "step_tol": 1e-4,
-      "max_retries": 20
+      "max_retries": 20,
+      "step_solver": "normal",
+      "batch_size": 16384
     }
   }
 }

@@ -28,6 +28,13 @@ struct NonlinearSolveOptions
     int64_t batch_size;
 };
 
+struct LinearSolveOptions
+{
+    std::string solver;
+    int64_t batch_size;
+    double ridge_lambda;
+};
+
 struct SolverConfig
 {
     bool use_linear_solver;
@@ -36,6 +43,7 @@ struct SolverConfig
     int64_t hidden_dim;
     float initial_lambda;
     float alpha_init_scale;
+    LinearSolveOptions linear;
     NonlinearSolveOptions nonlinear;
 };
 

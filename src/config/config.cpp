@@ -30,6 +30,7 @@ Config load_config(const std::string& json_path)
 
     const auto& eqn = j.at("eqn_config");
     const auto& solver = j.at("solver_config");
+    const auto linear = get_or<json>(solver, "linear", json::object());
     const auto& nonlinear = solver.at("nonlinear");
 
     EqnConfig eqn_cfg{
@@ -54,6 +55,12 @@ Config load_config(const std::string& json_path)
         get_or<int64_t>(nonlinear, "batch_size", solver.at("sample_size").get<int64_t>())
     };
 
+    LinearSolveOptions linear_cfg{
+        get_or<std::string>(linear, "solver", "ridge_dual"),
+        get_or<int64_t>(linear, "batch_size", solver.at("sample_size").get<int64_t>()),
+        get_or<double>(linear, "ridge_lambda", solver.at("initial_lambda").get<float>())
+    };
+
     SolverConfig solver_cfg{
         solver.at("use_linear_solver").get<bool>(),
         solver.at("num_iterations").get<int64_t>(),
@@ -61,6 +68,7 @@ Config load_config(const std::string& json_path)
         solver.at("hidden_dim").get<int64_t>(),
         solver.at("initial_lambda").get<float>(),
         solver.at("alpha_init_scale").get<float>(),
+        linear_cfg,
         nonlinear_cfg
     };
 

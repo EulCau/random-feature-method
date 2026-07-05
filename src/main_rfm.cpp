@@ -1,7 +1,6 @@
 # include "rfm_solver.h"
 #include "config.h"
 #include "equation_factory.h"
-#include "linear_solver_cli.h"
 #include "register_all_eqn.h"
 #include <algorithm>
 #include <iostream>
@@ -20,6 +19,34 @@ struct CommandLineOptions
     std::string config_path{kDefaultConfigPath};
     std::optional<uint64_t> seed;
 };
+
+LinearSolverOptions get_linear_solver_options_from_config(const SolverConfig& config)
+{
+    LinearSolverOptions options;
+    options.qr_batch_size = config.linear.batch_size;
+    options.ridge_lambda = config.linear.ridge_lambda;
+
+    //TODO: Replace string-based solver selection with a configurable registry or factory.
+    if (config.linear.solver == "ridge_dual")
+    {
+        options.solver_type = LinearSolverType::RidgeDual;
+    }
+    else if (config.linear.solver == "qr")
+    {
+        options.solver_type = LinearSolverType::QR;
+    }
+    else if (config.linear.solver == "batched_qr")
+    {
+        options.solver_type = LinearSolverType::BatchedQR;
+    }
+    else
+    {
+        TORCH_CHECK(false, "unknown linear solver: ", config.linear.solver);
+    }
+
+    TORCH_CHECK(options.qr_batch_size > 0, "linear batch_size must be positive");
+    return options;
+}
 }
 
 uint64_t splitmix64(uint64_t x)
@@ -149,17 +176,7 @@ int main(const int argc, char* argv[])
 
     if (rfm_solver.is_linear())
     {
-        const int64_t parameter_count =
-            1 + cfg.eqn_config.dimension * cfg.solver_config.hidden_dim;
-        const int64_t default_qr_batch_size = std::min(
-            cfg.solver_config.sample_size,
-            4 * parameter_count
-        );
-        const auto linear_options = get_linear_solver_options_from_terminal(
-            default_qr_batch_size,
-            cfg.solver_config.initial_lambda
-        );
-        rfm_solver.linear_options(linear_options);
+        rfm_solver.linear_options(get_linear_solver_options_from_config(cfg.solver_config));
     }
 
     if (torch::cuda::is_available()) torch::cuda::synchronize();
