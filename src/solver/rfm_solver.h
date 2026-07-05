@@ -89,6 +89,11 @@ protected:
         const torch::Tensor& theta,
         int64_t batch_size) const;
 
+    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+    sample_nonlinear_batch(
+        int64_t row_begin,
+        int64_t row_end) const;
+
     [[nodiscard]] torch::Tensor forward_nonlinear_terminal_y(
         const torch::Tensor& y0, const torch::Tensor& alpha) const;
 

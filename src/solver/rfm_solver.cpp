@@ -43,6 +43,14 @@ namespace
     return configured_batch_size;
 }
 
+[[nodiscard]] uint64_t splitmix64(uint64_t x)
+{
+    x += 0x9E3779B97F4A7C15ULL;
+    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    x = (x ^ (x >> 27)) * 0x94D049BB133111EBULL;
+    return x ^ (x >> 31);
+}
+
 [[nodiscard]] std::pair<torch::Tensor, torch::Tensor> reduce_linear_qr_libtorch(
     const torch::Tensor& A,
     const torch::Tensor& B)
@@ -114,7 +122,10 @@ RFMSolver::RFMSolver(
     }
     else
     {
-        compute_txw();
+        if (config_.solver_config.nonlinear.step_solver != "batched_qr")
+        {
+            compute_txw();
+        }
 
         const auto D = equation_->dim();
         const auto H = rff_.hidden_dim();
@@ -196,9 +207,20 @@ float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& alpha) const
     torch::NoGradGuard no_grad;
 
     const int64_t S = config_.solver_config.sample_size;
-    const int64_t batch_size = linear_solver_options_.qr_batch_size > 0
-        ? linear_solver_options_.qr_batch_size
-        : S;
+    int64_t batch_size = S;
+    if (is_linear_ && linear_solver_options_.qr_batch_size > 0)
+    {
+        batch_size = linear_solver_options_.qr_batch_size;
+    }
+    else if (!is_linear_ && config_.solver_config.nonlinear.step_solver == "batched_qr")
+    {
+        batch_size = resolve_batch_size(
+            config_.solver_config.nonlinear.batch_size,
+            equation_->dim(),
+            rff_.hidden_dim(),
+            "nonlinear"
+        );
+    }
 
     double squared_error_sum = 0.0;
     int64_t residual_count = 0;
@@ -251,8 +273,16 @@ std::pair<double, int64_t> RFMSolver::test_batch(
         Slice()
     }).unsqueeze(2).contiguous(); // (S, 1, 1, D)
 
-    const auto t = t_.index({Slice(0, batch_size), Slice(), Slice(), Slice()}).contiguous();
-    const auto t_end = t_end_.index({Slice(0, batch_size), Slice(), Slice(), Slice()}).contiguous();
+    const auto opts = torch::TensorOptions().dtype(torch::kFloat32).device(device_);
+    const auto t_full = torch::linspace(0, config_.eqn_config.total_time, T + 1, opts);
+    const auto t = t_full.slice(0, 0, T)
+        .reshape({1, T, 1, 1})
+        .expand({batch_size, T, 1, 1})
+        .contiguous();
+    const auto t_end = t_full.slice(0, T, T + 1)
+        .reshape({1, 1, 1, 1})
+        .expand({batch_size, 1, 1, 1})
+        .contiguous();
 
     auto y = y0_eval.reshape({1, 1, 1, 1}).expand({batch_size, 1, 1, 1});
     const auto H_eval = rff_.phi(t, x_eval);
@@ -767,6 +797,49 @@ torch::Tensor RFMSolver::compute_nonlinear_terminal_residual(
     return residual.reshape({S, 1}).contiguous();
 }
 
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+RFMSolver::sample_nonlinear_batch(
+    const int64_t row_begin,
+    const int64_t row_end
+) const
+{
+    using namespace torch::indexing;
+
+    const int64_t S = config_.solver_config.sample_size;
+    const int64_t T = config_.eqn_config.num_time_intervals;
+    const int64_t batch_size = row_end - row_begin;
+
+    TORCH_CHECK(0 <= row_begin && row_begin < row_end && row_end <= S,
+        "invalid nonlinear sample row range [", row_begin, ", ", row_end, ") for S=", S);
+
+    const uint64_t batch_seed = splitmix64(seed_ + static_cast<uint64_t>(row_begin));
+    torch::manual_seed(batch_seed);
+
+    const auto [dw_sample, x_sample] = equation_->sample(batch_size);
+    const auto dw = dw_sample.to(device_).contiguous();
+    const auto x_all = x_sample.to(device_).permute({0, 2, 1}).contiguous();
+    const auto x = x_all.index({Slice(), Slice(0, -1), Slice()})
+        .unsqueeze(2)
+        .contiguous();
+    const auto x_end = x_all.index({Slice(), Slice(-1, None), Slice()})
+        .unsqueeze(2)
+        .contiguous();
+
+    const auto opts = torch::TensorOptions().dtype(torch::kFloat32).device(device_);
+    const auto t_full = torch::linspace(0, config_.eqn_config.total_time, T + 1, opts);
+    const auto t = t_full.slice(0, 0, T)
+        .reshape({1, T, 1, 1})
+        .expand({batch_size, T, 1, 1})
+        .contiguous();
+    const auto t_end = t_full.slice(0, T, T + 1)
+        .reshape({1, 1, 1, 1})
+        .expand({batch_size, 1, 1, 1})
+        .contiguous();
+
+    check_tx_shape(t, x);
+    return {t, t_end, x, x_end, dw};
+}
+
 torch::Tensor RFMSolver::compute_nonlinear_terminal_residual_batch(
     const torch::Tensor& theta,
     const int64_t row_begin,
@@ -789,12 +862,7 @@ torch::Tensor RFMSolver::compute_nonlinear_terminal_residual_batch(
 
     const auto y0 = theta.index({0}).reshape({1});
     const auto alpha = theta.index({Slice(1, None)}).reshape({D, Hdim}).contiguous();
-    const auto rows = Slice(row_begin, row_end);
-    const auto t = t_.index({rows, Slice(), Slice(), Slice()}).contiguous();
-    const auto t_end = t_end_.index({rows, Slice(), Slice(), Slice()}).contiguous();
-    const auto x = x_.index({rows, Slice(), Slice(), Slice()}).contiguous();
-    const auto x_end = x_end_.index({rows, Slice(), Slice(), Slice()}).contiguous();
-    const auto dw = dw_.index({rows, Slice(), Slice()}).contiguous();
+    const auto [t, t_end, x, x_end, dw] = sample_nonlinear_batch(row_begin, row_end);
 
     auto y = y0.reshape({1, 1, 1, 1}).expand({batch_size, 1, 1, 1});
     const auto features = rff_.phi(t, x).squeeze(-1).contiguous(); // (B, T, H)
@@ -846,12 +914,7 @@ std::pair<torch::Tensor, torch::Tensor> RFMSolver::compute_nonlinear_terminal_re
 
     const auto y0 = theta.index({0}).reshape({1});
     const auto alpha = theta.index({Slice(1, None)}).reshape({D, Hdim}).contiguous();
-    const auto rows = Slice(row_begin, row_end);
-    const auto t = t_.index({rows, Slice(), Slice(), Slice()}).contiguous();
-    const auto t_end = t_end_.index({rows, Slice(), Slice(), Slice()}).contiguous();
-    const auto x = x_.index({rows, Slice(), Slice(), Slice()}).contiguous();
-    const auto x_end = x_end_.index({rows, Slice(), Slice(), Slice()}).contiguous();
-    const auto dw = dw_.index({rows, Slice(), Slice()}).contiguous();
+    const auto [t, t_end, x, x_end, dw] = sample_nonlinear_batch(row_begin, row_end);
     const auto H = rff_.phi(t, x).contiguous();
 
     auto [residual, jacobian] = equation_->terminal_residual_and_jacobian(
@@ -1097,13 +1160,13 @@ void RFMSolver::compute_L(const torch::Tensor &t, const torch::Tensor &x)
 
     TORCH_CHECK(
         result.dim() == 4 &&
-        result.size(0) == config_.solver_config.sample_size &&
-        result.size(1) == config_.eqn_config.num_time_intervals &&
+        result.size(0) == x.size(0) &&
+        result.size(1) == x.size(1) &&
         result.size(2) == 1 &&
         result.size(3) == 1,
         "Invalid shape for L(t, x). Expected (",
-        config_.solver_config.sample_size, ", ",
-        config_.eqn_config.num_time_intervals, ", 1, 1), but got ",
+        x.size(0), ", ",
+        x.size(1), ", 1, 1), but got ",
         result.sizes()
     );
 
@@ -1143,8 +1206,8 @@ void RFMSolver::compute_N(const torch::Tensor& t, const torch::Tensor& x)
 
     TORCH_CHECK(
         result.dim() == 4 &&
-        result.size(0) == config_.solver_config.sample_size &&
-        result.size(1) == config_.eqn_config.num_time_intervals &&
+        result.size(0) == x.size(0) &&
+        result.size(1) == x.size(1) &&
         result.size(2) == 1 &&
         result.size(3) == 1,
         "Invalid shape for N(t, x). Expected (",
@@ -1223,12 +1286,12 @@ void RFMSolver::check_tx_shape(
         );
 
     TORCH_CHECK(
-        x.size(0) == config_.solver_config.sample_size &&
+        x.size(0) > 0 &&
         x.size(1) == config_.eqn_config.num_time_intervals &&
         x.size(2) == 1 &&
         x.size(3) == config_.eqn_config.dimension,
         "Invalid shape for x. Expected (",
-        config_.solver_config.sample_size, ", ",
+        "positive batch size, ",
         config_.eqn_config.num_time_intervals,
         ", 1, ", config_.eqn_config.dimension,
         "), but got ", x.sizes()
