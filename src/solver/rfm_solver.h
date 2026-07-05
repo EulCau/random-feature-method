@@ -82,6 +82,8 @@ protected:
 
     void compute_time_grid();
     void compute_txw();
+    void prepare_full_linear_cache();
+    void clear_full_linear_cache();
     void compute_L(const torch::Tensor& t, const torch::Tensor& x);
     void compute_M(const torch::Tensor& t, const torch::Tensor& x);
     void compute_N(const torch::Tensor& t, const torch::Tensor& x);

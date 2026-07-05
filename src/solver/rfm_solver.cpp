@@ -147,6 +147,14 @@ RFMSolver& RFMSolver::options(
 RFMSolver& RFMSolver::linear_options(const LinearSolverOptions& options)
 {
     linear_solver_options_ = options;
+    if (is_linear_ && linear_solver_options_.solver_type == LinearSolverType::BatchedQR)
+    {
+        clear_full_linear_cache();
+    }
+    else if (is_linear_)
+    {
+        prepare_full_linear_cache();
+    }
     return *this;
 }
 
@@ -299,32 +307,61 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear(const
 std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_coef() const
 {
     const int64_t S = config_.solver_config.sample_size;
-    const int64_t batch_size = linear_solver_options_.qr_batch_size > 0
-        ? linear_solver_options_.qr_batch_size
-        : S;
+    const int64_t T = config_.eqn_config.num_time_intervals;
+    const int64_t D = equation_->dim();
+    const int64_t Hdim = config_.solver_config.hidden_dim;
+    const float dt = equation_->delta_t();
 
-    if (batch_size >= S)
+    TORCH_CHECK(L_.defined() && M_.defined() && N_.defined() && H_.defined() &&
+        dw_.defined() && x_end_.defined(),
+        "full linear cache is not initialized");
+
+    const auto L = L_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
+    const auto M = M_.squeeze(2).contiguous();                // (S, T, D)
+    const auto N = N_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
+    const auto H = H_.squeeze(-1).contiguous();               // (S, T, H)
+    const auto dW = dw_.permute({0, 2, 1}).contiguous();      // (S, T, D)
+
+    const auto a  = 1.0f - dt * L;      // (S, T)
+    const auto xi = dW - dt * M;        // (S, T, D)
+    const auto c  = dt * N;             // (S, T)
+
+    const auto suffix_inclusive = torch::flip(
+        torch::cumprod(torch::flip(a, {1}), 1),
+        {1}
+    ); // (S, T), suffix_inclusive[:, k] = prod_{j=k}^{T-1} a_j
+
+    auto weights = torch::ones_like(a); // (S, T)
+    if (T > 1)
     {
-        return compute_linear_coef_batch(0, S);
+        weights.index_put_(
+            {torch::indexing::Slice(), torch::indexing::Slice(0, T - 1)},
+            suffix_inclusive.index({
+                torch::indexing::Slice(),
+                torch::indexing::Slice(1, torch::indexing::None)
+            })
+        );
     }
 
-    std::vector<torch::Tensor> A_batches;
-    std::vector<torch::Tensor> B_batches;
-    A_batches.reserve((S + batch_size - 1) / batch_size);
-    B_batches.reserve(A_batches.capacity());
+    auto coef_y0 = a.prod(1, true); // (S, 1)
+    const auto weighted_xi = xi * weights.unsqueeze(-1);
+    auto coef_alpha = torch::bmm(
+        weighted_xi.transpose(1, 2).contiguous(), // (S, D, T)
+        H                                          // (S, T, H)
+    );                                             // (S, D, H)
+    coef_alpha = coef_alpha.reshape({S, D * Hdim}); // (S, D*H)
 
-    for (int64_t row_begin = 0; row_begin < S; row_begin += batch_size)
-    {
-        const int64_t row_end = std::min(row_begin + batch_size, S);
-        const auto [A_batch, B_batch] = compute_linear_coef_batch(row_begin, row_end);
-        A_batches.push_back(A_batch);
-        B_batches.push_back(B_batch);
-    }
+    const auto A = torch::cat({coef_y0, coef_alpha}, 1).contiguous(); // (S, 1 + D*H)
+    const auto constant_part = (weights * c).sum(1, true); // (S, 1)
+    const auto g_XN = equation_->g(t_end_, x_end_).reshape({S, 1}).to(device_);
+    const auto B = g_XN - constant_part; // (S, 1)
 
-    return {
-        torch::cat(A_batches, 0).contiguous(),
-        torch::cat(B_batches, 0).contiguous()
-    };
+    TORCH_CHECK(
+        A.device().type() == device_.type() &&
+        B.device().type() == device_.type(),
+        "A, B must be on ", device_.type(), ", but got ", A.device().type(), " & ", B.device().type());
+
+    return {A, B};
 }
 
 std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_coef_batch(
@@ -775,6 +812,37 @@ void RFMSolver::compute_txw()
     }).unsqueeze(2).contiguous(); // (S, 1, 1, D)
 
     check_tx_shape(t_, x_);
+}
+
+void RFMSolver::prepare_full_linear_cache()
+{
+    TORCH_CHECK(is_linear_, "full linear cache is only available for linear equations");
+    if (H_.defined())
+    {
+        return;
+    }
+
+    compute_txw();
+    compute_L(t_, x_);
+    compute_M(t_, x_);
+    compute_N(t_, x_);
+    compute_H(t_, x_);
+}
+
+void RFMSolver::clear_full_linear_cache()
+{
+    dw_ = torch::Tensor();
+    x_ = torch::Tensor();
+    x_end_ = torch::Tensor();
+    L_ = torch::Tensor();
+    M_ = torch::Tensor();
+    N_ = torch::Tensor();
+    H_ = torch::Tensor();
+
+    if (!t_.defined() || !t_end_.defined())
+    {
+        compute_time_grid();
+    }
 }
 
 void RFMSolver::compute_L(const torch::Tensor &t, const torch::Tensor &x)
