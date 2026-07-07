@@ -1,0 +1,42 @@
+{
+  "eqn_config": {
+    "_comment": "Asymmetric heat equation with non-radial terminal condition",
+    "equation_name": "AsymmetricHeat",
+    "is_linear": true,
+    "total_time": 1.0,
+    "dimension": 100,
+    "num_time_intervals": 20,
+    "params": {
+      "x_init": 0.0,
+      "cos_weight": 0.5,
+      "tanh_weight": 0.1,
+      "sin_frequency": 1.0,
+      "cos_frequency": 1.0,
+      "tanh_frequency": 1.0
+    }
+  },
+  "solver_config": {
+    "use_linear_solver": true,
+    "num_iterations": 200,
+    "sample_size": 16384,
+    "hidden_dim": 50,
+    "initial_lambda": 0.01,
+    "alpha_init_scale": 0.001,
+    "linear": {
+      "solver": "ridge_dual",
+      "batch_size": 0,
+      "ridge_lambda": 0.01
+    },
+    "nonlinear": {
+      "min_lambda": 1e-8,
+      "max_lambda": 1e4,
+      "lambda_decrease": 0.5,
+      "lambda_increase": 3.0,
+      "error_tol": 1e-4,
+      "step_tol": 1e-4,
+      "max_retries": 5,
+      "step_solver": "normal",
+      "batch_size": 0
+    }
+  }
+}

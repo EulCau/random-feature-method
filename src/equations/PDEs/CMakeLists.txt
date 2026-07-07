@@ -2,6 +2,7 @@ add_library(
     equations
     STATIC
     allencahn.cpp
+    asymmetric_heat.cpp
     hjblq.cpp
     bsm.cpp
     heat.cpp)
