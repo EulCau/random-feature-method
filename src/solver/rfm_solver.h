@@ -61,8 +61,16 @@ protected:
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_linear_batched_qr(
         const LinearSolverOptions& options) const;
 
+    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_linear_constant_baseline(
+        const LinearSolverOptions& options) const;
+
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_nonlinear_levenberg_marquardt(
         const torch::Tensor & y0, const torch::Tensor & alpha, float lambda, bool output_log) const;
+
+    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_nonlinear_constant_baseline(
+        const torch::Tensor& y0,
+        float lambda,
+        bool output_log) const;
 
     [[nodiscard]] torch::Tensor compute_nonlinear_terminal_residual(
         const torch::Tensor& theta) const;

@@ -122,7 +122,8 @@ RFMSolver::RFMSolver(
     }
     else
     {
-        if (config_.solver_config.nonlinear.step_solver != "batched_qr")
+        if (config_.solver_config.nonlinear.step_solver != "batched_qr" &&
+            config_.solver_config.nonlinear.step_solver != "constant")
         {
             compute_txw();
         }
@@ -172,7 +173,8 @@ RFMSolver& RFMSolver::options(
 RFMSolver& RFMSolver::linear_options(const LinearSolverOptions& options)
 {
     auto resolved_options = options;
-    if (resolved_options.solver_type == LinearSolverType::BatchedQR)
+    if (resolved_options.solver_type == LinearSolverType::BatchedQR ||
+        resolved_options.solver_type == LinearSolverType::Constant)
     {
         resolved_options.qr_batch_size = resolve_batch_size(
             resolved_options.qr_batch_size,
@@ -182,7 +184,9 @@ RFMSolver& RFMSolver::linear_options(const LinearSolverOptions& options)
         );
     }
     linear_solver_options_ = resolved_options;
-    if (is_linear_ && linear_solver_options_.solver_type == LinearSolverType::BatchedQR)
+    if (is_linear_ &&
+        (linear_solver_options_.solver_type == LinearSolverType::BatchedQR ||
+         linear_solver_options_.solver_type == LinearSolverType::Constant))
     {
         clear_full_linear_cache();
     }
@@ -328,6 +332,11 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear() const
     auto options = linear_solver_options_;
     options.ridge_lambda = config_.solver_config.initial_lambda;
 
+    if (options.solver_type == LinearSolverType::Constant)
+    {
+        return solve_linear_constant_baseline(options);
+    }
+
     if (options.solver_type == LinearSolverType::BatchedQR)
     {
         return solve_linear_batched_qr(options);
@@ -351,6 +360,11 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear(const
     TORCH_CHECK(y0_.defined(), "y0_ is not initialized");
     TORCH_CHECK(alpha_.defined(), "alpha_ is not initialized");
     TORCH_CHECK(lambda_ > 0.0, "lambda_ must be positive");
+
+    if (config_.solver_config.nonlinear.step_solver == "constant")
+    {
+        return solve_nonlinear_constant_baseline(y0_, lambda_, output_log);
+    }
 
     return solve_nonlinear_levenberg_marquardt(y0_, alpha_, lambda_, output_log);
 }
@@ -594,6 +608,219 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_batched_
 
     const auto rmse = static_cast<float>(std::sqrt(squared_error_sum / static_cast<double>(residual_count)));
     return split_linear_solution(x, D, Hdim, rmse);
+}
+
+std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_constant_baseline(
+    const LinearSolverOptions& options
+) const
+{
+    TORCH_CHECK(options.qr_batch_size > 0, "constant baseline batch size must be positive");
+
+    const int64_t S = config_.solver_config.sample_size;
+    const int64_t D = equation_->dim();
+    const int64_t Hdim = rff_.hidden_dim();
+
+    double numerator = 0.0;
+    double denominator = 0.0;
+    for (int64_t row_begin = 0; row_begin < S; row_begin += options.qr_batch_size)
+    {
+        const int64_t row_end = std::min(row_begin + options.qr_batch_size, S);
+        const auto [A_batch, B_batch] = compute_linear_coef_batch(row_begin, row_end);
+        const auto A0 = A_batch.index({
+            torch::indexing::Slice(),
+            0
+        }).reshape({-1, 1}).contiguous();
+        numerator += (A0 * B_batch).sum().item<double>();
+        denominator += (A0 * A0).sum().item<double>();
+    }
+    TORCH_CHECK(denominator > 0.0, "constant baseline has zero denominator");
+
+    const auto y0 = torch::full(
+        {1},
+        static_cast<float>(numerator / denominator),
+        torch::TensorOptions().dtype(torch::kFloat32).device(device_)
+    );
+    const auto alpha = torch::zeros({D, Hdim}, y0.options());
+
+    double squared_error_sum = 0.0;
+    int64_t residual_count = 0;
+    for (int64_t row_begin = 0; row_begin < S; row_begin += options.qr_batch_size)
+    {
+        const int64_t row_end = std::min(row_begin + options.qr_batch_size, S);
+        const auto [A_batch, B_batch] = compute_linear_coef_batch(row_begin, row_end);
+        const auto A0 = A_batch.index({
+            torch::indexing::Slice(),
+            0
+        }).reshape({-1, 1}).contiguous();
+        const auto residual = A0 * y0.reshape({1, 1}) - B_batch;
+        squared_error_sum += residual.pow(2).sum().item<double>();
+        residual_count += residual.numel();
+    }
+
+    const auto rmse = static_cast<float>(std::sqrt(squared_error_sum / static_cast<double>(residual_count)));
+    return {y0.detach().clone(), alpha, rmse};
+}
+
+std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_constant_baseline(
+    const torch::Tensor& y0,
+    const float lambda,
+    const bool output_log
+) const
+{
+    TORCH_CHECK(lambda > 0.0f, "lambda must be positive");
+    TORCH_CHECK(equation_->has_analytic_jacobian(),
+        "nonlinear constant baseline currently requires analytic Jacobian");
+
+    const auto& nonlinear_options = config_.solver_config.nonlinear;
+    const int64_t S = config_.solver_config.sample_size;
+    const int64_t D = equation_->dim();
+    const int64_t Hdim = rff_.hidden_dim();
+    const int64_t batch_size = resolve_batch_size(
+        nonlinear_options.batch_size,
+        D,
+        Hdim,
+        "nonlinear"
+    );
+
+    auto y0_value = y0.to(device_).reshape({1}).item<float>();
+    float damping = lambda;
+    float final_error = 0.0f;
+    const auto alpha_zero = torch::zeros(
+        {D, Hdim},
+        torch::TensorOptions().dtype(torch::kFloat32).device(device_)
+    );
+
+    auto make_theta = [&alpha_zero, this](const float value)
+    {
+        const auto y0_tensor = torch::full(
+            {1},
+            value,
+            torch::TensorOptions().dtype(torch::kFloat32).device(device_)
+        );
+        return solver_utils::pack_nonlinear_parameters(y0_tensor, alpha_zero)
+            .detach()
+            .contiguous();
+    };
+
+    auto evaluate = [this, S, batch_size](const torch::Tensor& theta)
+    {
+        double squared_error_sum = 0.0;
+        double jacobian_square_sum = 0.0;
+        double jacobian_residual_sum = 0.0;
+        int64_t residual_count = 0;
+
+        for (int64_t row_begin = 0; row_begin < S; row_begin += batch_size)
+        {
+            const int64_t row_end = std::min(row_begin + batch_size, S);
+            const auto [residual_batch, jacobian_batch] =
+                compute_nonlinear_terminal_residual_and_jacobian_batch(theta, row_begin, row_end);
+            const auto j0 = jacobian_batch.index({
+                torch::indexing::Slice(),
+                0
+            }).reshape({-1, 1}).contiguous();
+            const auto residual = residual_batch.reshape({-1, 1}).contiguous();
+            squared_error_sum += residual.pow(2).sum().item<double>();
+            jacobian_square_sum += j0.pow(2).sum().item<double>();
+            jacobian_residual_sum += (j0 * residual).sum().item<double>();
+            residual_count += residual.numel();
+        }
+
+        return std::tuple<double, double, double, int64_t>{
+            squared_error_sum,
+            jacobian_square_sum,
+            jacobian_residual_sum,
+            residual_count
+        };
+    };
+
+    for (int64_t iter = 0; iter < config_.solver_config.num_iterations; ++iter)
+    {
+        const auto theta = make_theta(y0_value);
+        const auto [
+            squared_error_sum,
+            jacobian_square_sum,
+            jacobian_residual_sum,
+            residual_count
+        ] = evaluate(theta);
+        const float curr_loss = static_cast<float>(0.5 * squared_error_sum);
+        const float curr_error = static_cast<float>(
+            std::sqrt(squared_error_sum / static_cast<double>(residual_count))
+        );
+
+        bool accepted = false;
+        float accepted_y0 = y0_value;
+        float accepted_error = curr_error;
+        float accepted_step_norm = 0.0f;
+
+        for (int64_t retry = 0; retry <= nonlinear_options.max_retries; ++retry)
+        {
+            const double denominator = jacobian_square_sum + static_cast<double>(damping);
+            TORCH_CHECK(denominator > 0.0, "constant baseline LM denominator must be positive");
+            const float delta = static_cast<float>(-jacobian_residual_sum / denominator);
+            const float trial_y0 = y0_value + delta;
+            const auto trial_theta = make_theta(trial_y0);
+            const auto [trial_loss, trial_error] = compute_nonlinear_loss_error_batched(
+                trial_theta,
+                batch_size
+            );
+            const bool trial_accepted = trial_loss < curr_loss;
+
+            if (output_log)
+            {
+                std::cout
+                    << "[LM constant] iter=" << iter
+                    << " retry=" << retry
+                    << " loss=" << curr_loss
+                    << " error=" << curr_error
+                    << " trial_error=" << trial_error
+                    << " lambda=" << damping
+                    << " step_norm=" << std::abs(delta)
+                    << " accepted=" << std::boolalpha << trial_accepted
+                    << " y_0=" << trial_y0
+                    << std::noboolalpha
+                    << std::endl;
+            }
+
+            if (trial_accepted)
+            {
+                accepted = true;
+                accepted_y0 = trial_y0;
+                accepted_error = trial_error;
+                accepted_step_norm = std::abs(delta);
+                break;
+            }
+
+            if (retry < nonlinear_options.max_retries)
+            {
+                damping = std::min(nonlinear_options.max_lambda, damping * nonlinear_options.lambda_increase);
+            }
+        }
+
+        if (!accepted)
+        {
+            break;
+        }
+
+        y0_value = accepted_y0;
+        final_error = accepted_error;
+        damping = std::max(nonlinear_options.min_lambda, damping * nonlinear_options.lambda_decrease);
+
+        if (final_error <= nonlinear_options.error_tol || accepted_step_norm <= nonlinear_options.step_tol)
+        {
+            break;
+        }
+    }
+
+    const auto final_y0 = torch::full(
+        {1},
+        y0_value,
+        torch::TensorOptions().dtype(torch::kFloat32).device(device_)
+    );
+    std::tie(std::ignore, final_error) = compute_nonlinear_loss_error_batched(
+        make_theta(y0_value),
+        batch_size
+    );
+    return {final_y0.detach().clone(), alpha_zero.detach().clone(), final_error};
 }
 
 std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_levenberg_marquardt(

@@ -4,6 +4,7 @@
 
 enum class LinearSolverType
 {
+    Constant,
     RidgeDual,
     QR,
     BatchedQR

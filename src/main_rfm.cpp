@@ -37,7 +37,11 @@ LinearSolverOptions get_linear_solver_options_from_config(
     options.ridge_lambda = config.linear.ridge_lambda;
 
     //TODO: Replace string-based solver selection with a configurable registry or factory.
-    if (config.linear.solver == "ridge_dual")
+    if (config.linear.solver == "constant")
+    {
+        options.solver_type = LinearSolverType::Constant;
+    }
+    else if (config.linear.solver == "ridge_dual")
     {
         options.solver_type = LinearSolverType::RidgeDual;
     }
