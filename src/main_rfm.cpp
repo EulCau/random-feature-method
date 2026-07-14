@@ -2,7 +2,6 @@
 #include "config.h"
 #include "equation_factory.h"
 #include "register_all_eqn.h"
-#include <algorithm>
 #include <iostream>
 #include <chrono>
 #include <cstdlib>
@@ -213,6 +212,7 @@ int main(const int argc, char* argv[])
     std::cout << "eqn dim: " << cfg.eqn_config.dimension << std::endl;
     std::cout << "hidden dim: " << cfg.solver_config.hidden_dim << std::endl;
     std::cout << "samples num: " << cfg.solver_config.sample_size << std::endl;
+    std::cout << "test samples num: " << cfg.solver_config.test_sample_size << std::endl;
     std::cout << "total time: " << elapsed << " ms" << std::endl;
     std::cout << "device: " << device << std::endl;
 

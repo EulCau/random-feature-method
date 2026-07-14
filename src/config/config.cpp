@@ -65,6 +65,8 @@ Config load_config(const std::string& json_path)
         solver.at("use_linear_solver").get<bool>(),
         solver.at("num_iterations").get<int64_t>(),
         solver.at("sample_size").get<int64_t>(),
+        get_or<int64_t>(solver, "test_sample_size", solver.at("sample_size").get<int64_t>()),
+        get_or<int64_t>(solver, "test_batch_size", int64_t{0}),
         solver.at("hidden_dim").get<int64_t>(),
         solver.at("initial_lambda").get<float>(),
         solver.at("alpha_init_scale").get<float>(),

@@ -40,6 +40,8 @@ struct SolverConfig
     bool use_linear_solver;
     int64_t num_iterations;
     int64_t sample_size;
+    int64_t test_sample_size;
+    int64_t test_batch_size;
     int64_t hidden_dim;
     float initial_lambda;
     float alpha_init_scale;

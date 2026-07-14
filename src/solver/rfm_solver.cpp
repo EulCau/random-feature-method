@@ -46,9 +46,9 @@ namespace
 [[nodiscard]] uint64_t splitmix64(uint64_t x)
 {
     x += 0x9E3779B97F4A7C15ULL;
-    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ULL;
-    x = (x ^ (x >> 27)) * 0x94D049BB133111EBULL;
-    return x ^ (x >> 31);
+    x = (x ^ x >> 30) * 0xBF58476D1CE4E5B9ULL;
+    x = (x ^ x >> 27) * 0x94D049BB133111EBULL;
+    return x ^ x >> 31;
 }
 
 [[nodiscard]] std::pair<torch::Tensor, torch::Tensor> reduce_linear_qr_libtorch(
@@ -210,21 +210,19 @@ float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& alpha) const
 {
     torch::NoGradGuard no_grad;
 
-    const int64_t S = config_.solver_config.sample_size;
-    int64_t batch_size = S;
-    if (is_linear_ && linear_solver_options_.qr_batch_size > 0)
+    const int64_t S = config_.solver_config.test_sample_size;
+    TORCH_CHECK(S > 0, "test_sample_size must be positive");
+
+    int64_t batch_size = config_.solver_config.test_batch_size;
+    TORCH_CHECK(batch_size >= 0, "test_batch_size must be nonnegative");
+    if (batch_size == 0)
     {
-        batch_size = linear_solver_options_.qr_batch_size;
+        batch_size = S;
     }
-    else if (!is_linear_ && config_.solver_config.nonlinear.step_solver == "batched_qr")
-    {
-        batch_size = resolve_batch_size(
-            config_.solver_config.nonlinear.batch_size,
-            equation_->dim(),
-            rff_.hidden_dim(),
-            "nonlinear"
-        );
-    }
+    batch_size = std::min(batch_size, S);
+
+    // Keep evaluation paths independent of solver-specific random-number use.
+    torch::manual_seed(splitmix64(seed_ ^ 0xD1B54A32D192ED03ULL));
 
     double squared_error_sum = 0.0;
     int64_t residual_count = 0;
@@ -725,7 +723,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_const
             residual_count += residual.numel();
         }
 
-        return std::tuple<double, double, double, int64_t>{
+        return std::tuple{
             squared_error_sum,
             jacobian_square_sum,
             jacobian_residual_sum,
@@ -742,8 +740,8 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_const
             jacobian_residual_sum,
             residual_count
         ] = evaluate(theta);
-        const float curr_loss = static_cast<float>(0.5 * squared_error_sum);
-        const float curr_error = static_cast<float>(
+        const auto curr_loss = static_cast<float>(0.5 * squared_error_sum);
+        const auto curr_error = static_cast<float>(
             std::sqrt(squared_error_sum / static_cast<double>(residual_count))
         );
 
@@ -756,7 +754,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_const
         {
             const double denominator = jacobian_square_sum + static_cast<double>(damping);
             TORCH_CHECK(denominator > 0.0, "constant baseline LM denominator must be positive");
-            const float delta = static_cast<float>(-jacobian_residual_sum / denominator);
+            const auto delta = static_cast<float>(-jacobian_residual_sum / denominator);
             const float trial_y0 = y0_value + delta;
             const auto trial_theta = make_theta(trial_y0);
             const auto [trial_loss, trial_error] = compute_nonlinear_loss_error_batched(
@@ -1230,8 +1228,8 @@ std::tuple<torch::Tensor, float, float> RFMSolver::solve_nonlinear_lm_step_batch
     }
 
     const auto delta = torch::linalg_solve_triangular(R, rhs, true).reshape({-1}).contiguous();
-    const float loss = static_cast<float>(0.5 * squared_error_sum);
-    const float error = static_cast<float>(std::sqrt(squared_error_sum / static_cast<double>(residual_count)));
+    const auto loss = static_cast<float>(0.5 * squared_error_sum);
+    const auto error = static_cast<float>(std::sqrt(squared_error_sum / static_cast<double>(residual_count)));
     return {delta, loss, error};
 }
 
