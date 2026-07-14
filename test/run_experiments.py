@@ -248,7 +248,7 @@ def run_nonlinear_variant_experiments(
         "test_rmse_ratio", "test_mse_reduction", "time_ms",
     ]
     with csv_path.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer = csv.DictWriter(stream, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         writer.writerows(records)
 
@@ -449,7 +449,7 @@ def main() -> int:
         "test_mse_reduction", "time_ms",
     ]
     with csv_path.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer = csv.DictWriter(stream, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         writer.writerows(records)
 
