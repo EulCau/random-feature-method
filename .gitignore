@@ -9,3 +9,6 @@ Tmp/
 .vs/
 
 .venv/
+__pycache__/
+
+references/
