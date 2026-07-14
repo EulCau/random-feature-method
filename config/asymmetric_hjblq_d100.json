@@ -1,28 +1,27 @@
 {
   "eqn_config": {
-    "_comment": "Asymmetric heat equation with multi-direction non-radial terminal condition",
-    "equation_name": "AsymmetricHeat",
-    "is_linear": true,
+    "_comment": "HJB-LQ equation with a weak multi-direction asymmetric terminal perturbation",
+    "equation_name": "AsymmetricHJBLQ",
+    "is_linear": false,
     "total_time": 1.0,
     "dimension": 100,
     "num_time_intervals": 20,
     "params": {
       "x_init": 0.0,
-      "cos_weight": 0.5,
-      "tanh_weight": 0.1,
-      "sin_frequency": 1.0,
-      "cos_frequency": 1.0,
-      "tanh_frequency": 1.0,
+      "sigma": 1.41421356237,
+      "lambda": 1.0,
+      "asymmetry_scale": 0.1,
+      "asymmetry_frequency": 1.0,
       "direction_count": 20
     }
   },
   "solver_config": {
-    "use_linear_solver": true,
-    "num_iterations": 200,
-    "sample_size": 16384,
+    "use_linear_solver": false,
+    "num_iterations": 50,
+    "sample_size": 8008,
     "test_sample_size": 65536,
     "test_batch_size": 16384,
-    "hidden_dim": 50,
+    "hidden_dim": 10,
     "initial_lambda": 0.01,
     "alpha_init_scale": 0.001,
     "linear": {
@@ -32,13 +31,13 @@
     },
     "nonlinear": {
       "min_lambda": 1e-8,
-      "max_lambda": 1e4,
+      "max_lambda": 1e6,
       "lambda_decrease": 0.5,
       "lambda_increase": 3.0,
       "error_tol": 1e-4,
       "step_tol": 1e-4,
       "max_retries": 5,
-      "step_solver": "normal",
+      "step_solver": "batched_qr",
       "batch_size": 0
     }
   }

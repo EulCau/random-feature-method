@@ -1,6 +1,8 @@
 #include "equation.h"
 #include "register_equation.h"
 
+#include <cmath>
+
 struct AsymmetricHeatCoefficient final : Coefficient
 {
     [[nodiscard]] torch::Tensor L(
@@ -35,19 +37,18 @@ public:
           tanh_weight_(eqn_config.params.value("tanh_weight", 0.1f)),
           sin_frequency_(eqn_config.params.value("sin_frequency", 1.0f)),
           cos_frequency_(eqn_config.params.value("cos_frequency", 1.0f)),
-          tanh_frequency_(eqn_config.params.value("tanh_frequency", 1.0f))
+          tanh_frequency_(eqn_config.params.value("tanh_frequency", 1.0f)),
+          direction_count_(eqn_config.params.value("direction_count", int64_t{20}))
     {
+        TORCH_CHECK(direction_count_ > 0, "direction_count must be positive");
+
         const auto opts = torch::TensorOptions().dtype(torch::kFloat32);
-        const auto idx = torch::arange(1, dim_ + 1, opts);
+        const auto dim_idx = torch::arange(1, dim_ + 1, opts).reshape({1, dim_});
+        const auto dir_idx = torch::arange(1, direction_count_ + 1, opts).reshape({direction_count_, 1});
 
-        direction_a_ = torch::sin(12.9898f * idx + 0.123f);
-        direction_b_ = torch::cos(78.233f * idx + 0.456f);
-        direction_c_ = torch::sin(37.719f * idx + 0.789f) +
-            0.5f * torch::cos(11.131f * idx);
-
-        direction_a_ = direction_a_ / direction_a_.norm();
-        direction_b_ = direction_b_ / direction_b_.norm();
-        direction_c_ = direction_c_ / direction_c_.norm();
+        directions_ = torch::sin(12.9898f * dir_idx * dim_idx + 0.123f) +
+            0.5f * torch::cos(78.233f * (dir_idx + 1.0f) * dim_idx + 0.456f);
+        directions_ = directions_ / directions_.norm(2, 1, true);
 
         if (linear_)
         {
@@ -102,17 +103,14 @@ public:
     {
         TORCH_CHECK(x.dim() >= 4, "x must have at least 4 dimensions");
 
-        const auto direction_a = direction_a_.to(x.device()).reshape({1, 1, 1, dim_});
-        const auto direction_b = direction_b_.to(x.device()).reshape({1, 1, 1, dim_});
-        const auto direction_c = direction_c_.to(x.device()).reshape({1, 1, 1, dim_});
+        const auto directions = directions_.to(x.device());
+        const auto projected = torch::matmul(x.squeeze(2), directions.transpose(0, 1));
+        const auto values = torch::sin(sin_frequency_ * projected) +
+            cos_weight_ * torch::cos(cos_frequency_ * projected) +
+            tanh_weight_ * torch::tanh(tanh_frequency_ * projected);
 
-        const auto xa = torch::sum(x * direction_a, -1, true);
-        const auto xb = torch::sum(x * direction_b, -1, true);
-        const auto xc = torch::sum(x * direction_c, -1, true);
-
-        return torch::sin(sin_frequency_ * xa) +
-            cos_weight_ * torch::cos(cos_frequency_ * xb) +
-            tanh_weight_ * torch::tanh(tanh_frequency_ * xc);
+        return (values.sum(-1, true) / std::sqrt(static_cast<float>(direction_count_)))
+            .unsqueeze(2);
     }
 
 private:
@@ -122,9 +120,8 @@ private:
     float sin_frequency_;
     float cos_frequency_;
     float tanh_frequency_;
-    torch::Tensor direction_a_;
-    torch::Tensor direction_b_;
-    torch::Tensor direction_c_;
+    int64_t direction_count_;
+    torch::Tensor directions_;
 };
 
 REGISTER_EQUATION_CLASS(AsymmetricHeat)
