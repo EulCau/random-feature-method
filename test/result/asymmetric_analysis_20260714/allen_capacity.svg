@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="620" viewBox="0 0 1000 620">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="100" y="42" font-family="sans-serif" font-size="25" font-weight="700" fill="#17202a">AsymmetricAllenCahn: feature capacity</text>
+<text x="100" y="70" font-family="sans-serif" font-size="14" fill="#5d6d7e">Fixed S/p=4, mean test RMSE with 95% confidence intervals</text>
+<line x1="100" y1="535.00" x2="955" y2="535.00" stroke="#e7ebef" stroke-width="1"/>
+<text x="88" y="540.00" text-anchor="end" font-family="sans-serif" font-size="13" fill="#566573">0.000</text>
+<line x1="100" y1="448.00" x2="955" y2="448.00" stroke="#e7ebef" stroke-width="1"/>
+<text x="88" y="453.00" text-anchor="end" font-family="sans-serif" font-size="13" fill="#566573">0.006</text>
+<line x1="100" y1="361.00" x2="955" y2="361.00" stroke="#e7ebef" stroke-width="1"/>
+<text x="88" y="366.00" text-anchor="end" font-family="sans-serif" font-size="13" fill="#566573">0.012</text>
+<line x1="100" y1="274.00" x2="955" y2="274.00" stroke="#e7ebef" stroke-width="1"/>
+<text x="88" y="279.00" text-anchor="end" font-family="sans-serif" font-size="13" fill="#566573">0.018</text>
+<line x1="100" y1="187.00" x2="955" y2="187.00" stroke="#e7ebef" stroke-width="1"/>
+<text x="88" y="192.00" text-anchor="end" font-family="sans-serif" font-size="13" fill="#566573">0.024</text>
+<line x1="100" y1="100.00" x2="955" y2="100.00" stroke="#e7ebef" stroke-width="1"/>
+<text x="88" y="105.00" text-anchor="end" font-family="sans-serif" font-size="13" fill="#566573">0.030</text>
+<line x1="100.00" y1="535" x2="100.00" y2="542" stroke="#34495e"/>
+<text x="100.00" y="561" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#566573">1</text>
+<line x1="280.00" y1="535" x2="280.00" y2="542" stroke="#34495e"/>
+<text x="280.00" y="561" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#566573">5</text>
+<line x1="505.00" y1="535" x2="505.00" y2="542" stroke="#34495e"/>
+<text x="505.00" y="561" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#566573">10</text>
+<line x1="955.00" y1="535" x2="955.00" y2="542" stroke="#34495e"/>
+<text x="955.00" y="561" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#566573">20</text>
+<line x1="100" y1="100" x2="100" y2="535" stroke="#34495e" stroke-width="1.5"/>
+<line x1="100" y1="535" x2="955" y2="535" stroke="#34495e" stroke-width="1.5"/>
+<text x="527.5" y="598" text-anchor="middle" font-family="sans-serif" font-size="15" fill="#34495e">Hidden dimension H</text>
+<text x="24" y="317.5" text-anchor="middle" transform="rotate(-90 24 317.5)" font-family="sans-serif" font-size="15" fill="#34495e">Test RMSE</text>
+<polyline points="100.00,198.58 280.00,369.99 505.00,391.94 955.00,402.53" fill="none" stroke="#1769aa" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<line x1="100.00" y1="99.71" x2="100.00" y2="297.46" stroke="#1769aa" stroke-width="1.6"/>
+<line x1="95.00" y1="99.71" x2="105.00" y2="99.71" stroke="#1769aa" stroke-width="1.6"/>
+<line x1="95.00" y1="297.46" x2="105.00" y2="297.46" stroke="#1769aa" stroke-width="1.6"/>
+<circle cx="100.00" cy="198.58" r="5" fill="#ffffff" stroke="#1769aa" stroke-width="3"/>
+<line x1="280.00" y1="353.85" x2="280.00" y2="386.13" stroke="#1769aa" stroke-width="1.6"/>
+<line x1="275.00" y1="353.85" x2="285.00" y2="353.85" stroke="#1769aa" stroke-width="1.6"/>
+<line x1="275.00" y1="386.13" x2="285.00" y2="386.13" stroke="#1769aa" stroke-width="1.6"/>
+<circle cx="280.00" cy="369.99" r="5" fill="#ffffff" stroke="#1769aa" stroke-width="3"/>
+<line x1="505.00" y1="385.50" x2="505.00" y2="398.38" stroke="#1769aa" stroke-width="1.6"/>
+<line x1="500.00" y1="385.50" x2="510.00" y2="385.50" stroke="#1769aa" stroke-width="1.6"/>
+<line x1="500.00" y1="398.38" x2="510.00" y2="398.38" stroke="#1769aa" stroke-width="1.6"/>
+<circle cx="505.00" cy="391.94" r="5" fill="#ffffff" stroke="#1769aa" stroke-width="3"/>
+<line x1="955.00" y1="400.41" x2="955.00" y2="404.65" stroke="#1769aa" stroke-width="1.6"/>
+<line x1="950.00" y1="400.41" x2="960.00" y2="400.41" stroke="#1769aa" stroke-width="1.6"/>
+<line x1="950.00" y1="404.65" x2="960.00" y2="404.65" stroke="#1769aa" stroke-width="1.6"/>
+<circle cx="955.00" cy="402.53" r="5" fill="#ffffff" stroke="#1769aa" stroke-width="3"/>
+<line x1="790" y1="118" x2="818" y2="118" stroke="#1769aa" stroke-width="3"/>
+<text x="827" y="123" font-family="sans-serif" font-size="13" fill="#34495e">RFM</text>
+<polyline points="100.00,149.55 280.00,149.54 505.00,149.61 955.00,149.67" fill="none" stroke="#d1495b" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<line x1="100.00" y1="148.97" x2="100.00" y2="150.13" stroke="#d1495b" stroke-width="1.6"/>
+<line x1="95.00" y1="148.97" x2="105.00" y2="148.97" stroke="#d1495b" stroke-width="1.6"/>
+<line x1="95.00" y1="150.13" x2="105.00" y2="150.13" stroke="#d1495b" stroke-width="1.6"/>
+<circle cx="100.00" cy="149.55" r="5" fill="#ffffff" stroke="#d1495b" stroke-width="3"/>
+<line x1="280.00" y1="148.82" x2="280.00" y2="150.26" stroke="#d1495b" stroke-width="1.6"/>
+<line x1="275.00" y1="148.82" x2="285.00" y2="148.82" stroke="#d1495b" stroke-width="1.6"/>
+<line x1="275.00" y1="150.26" x2="285.00" y2="150.26" stroke="#d1495b" stroke-width="1.6"/>
+<circle cx="280.00" cy="149.54" r="5" fill="#ffffff" stroke="#d1495b" stroke-width="3"/>
+<line x1="505.00" y1="148.85" x2="505.00" y2="150.38" stroke="#d1495b" stroke-width="1.6"/>
+<line x1="500.00" y1="148.85" x2="510.00" y2="148.85" stroke="#d1495b" stroke-width="1.6"/>
+<line x1="500.00" y1="150.38" x2="510.00" y2="150.38" stroke="#d1495b" stroke-width="1.6"/>
+<circle cx="505.00" cy="149.61" r="5" fill="#ffffff" stroke="#d1495b" stroke-width="3"/>
+<line x1="955.00" y1="148.95" x2="955.00" y2="150.40" stroke="#d1495b" stroke-width="1.6"/>
+<line x1="950.00" y1="148.95" x2="960.00" y2="148.95" stroke="#d1495b" stroke-width="1.6"/>
+<line x1="950.00" y1="150.40" x2="960.00" y2="150.40" stroke="#d1495b" stroke-width="1.6"/>
+<circle cx="955.00" cy="149.67" r="5" fill="#ffffff" stroke="#d1495b" stroke-width="3"/>
+<line x1="790" y1="143" x2="818" y2="143" stroke="#d1495b" stroke-width="3"/>
+<text x="827" y="148" font-family="sans-serif" font-size="13" fill="#34495e">Constant</text>
+</svg>
