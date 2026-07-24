@@ -1,0 +1,45 @@
+{
+  "eqn_config": {
+    "_comment": "HJB-LQ equation with a high-frequency multi-direction asymmetric terminal perturbation",
+    "equation_name": "HighFrequencyAsymmetricHJBLQ",
+    "is_linear": false,
+    "total_time": 1.0,
+    "dimension": 100,
+    "num_time_intervals": 20,
+    "params": {
+      "x_init": 0.0,
+      "sigma": 1.41421356237,
+      "lambda": 1.0,
+      "asymmetry_scale": 0.1,
+      "base_frequency": 4.0,
+      "frequency_bandwidth": 4.0,
+      "direction_count": 20
+    }
+  },
+  "solver_config": {
+    "use_linear_solver": false,
+    "num_iterations": 50,
+    "sample_size": 8008,
+    "test_sample_size": 65536,
+    "test_batch_size": 16384,
+    "hidden_dim": 10,
+    "initial_lambda": 0.01,
+    "alpha_init_scale": 0.001,
+    "linear": {
+      "solver": "ridge_dual",
+      "batch_size": 0,
+      "ridge_lambda": 0.01
+    },
+    "nonlinear": {
+      "min_lambda": 1e-8,
+      "max_lambda": 1e6,
+      "lambda_decrease": 0.5,
+      "lambda_increase": 3.0,
+      "error_tol": 1e-4,
+      "step_tol": 1e-4,
+      "max_retries": 5,
+      "step_solver": "batched_qr",
+      "batch_size": 0
+    }
+  }
+}

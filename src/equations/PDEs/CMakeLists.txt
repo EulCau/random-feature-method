@@ -5,6 +5,7 @@ add_library(
     asymmetric_allencahn.cpp
     asymmetric_heat.cpp
     asymmetric_hjblq.cpp
+    high_frequency_asymmetric_hjblq.cpp
     hjblq.cpp
     bsm.cpp
     heat.cpp)

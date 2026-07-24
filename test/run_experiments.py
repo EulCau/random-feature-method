@@ -32,7 +32,10 @@ def parse_args() -> argparse.Namespace:
     test_dir = Path(__file__).resolve().parent
     root = test_dir.parent
     parser = argparse.ArgumentParser(
-        description="Run weakly asymmetric linear and nonlinear PDE experiments."
+        description=(
+            "Run asymmetric linear and nonlinear PDE experiments, including "
+            "a high-frequency HJB variant."
+        )
     )
     parser.add_argument("--solver", type=Path, default=test_dir / "bin" / "rfm_solver")
     parser.add_argument(
@@ -73,7 +76,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--skip-nonlinear-variants",
         action="store_true",
-        help="Skip AsymmetricAllenCahn and AsymmetricHJBLQ experiments.",
+        help=(
+            "Skip AsymmetricAllenCahn, AsymmetricHJBLQ, and "
+            "HighFrequencyAsymmetricHJBLQ experiments."
+        ),
     )
     parser.add_argument(
         "--nonlinear-hidden-dims", nargs="+", type=int, default=[20]
@@ -184,6 +190,7 @@ def run_nonlinear_variant_experiments(
     config_paths = [
         test_dir.parent / "config" / "asymmetric_allencahn_d100.json",
         test_dir.parent / "config" / "asymmetric_hjblq_d100.json",
+        test_dir.parent / "config" / "high_frequency_asymmetric_hjblq_d100.json",
     ]
     records: list[dict[str, str | int | float]] = []
 
@@ -257,7 +264,7 @@ def run_nonlinear_variant_experiments(
         groups[(str(record["equation"]), str(record["method"]),
                 int(record["hidden_dim"]), float(record["sample_ratio"]))].append(record)
     with summary_path.open("w", encoding="utf-8") as out:
-        out.write("Weakly asymmetric nonlinear PDE experiments\n")
+        out.write("Asymmetric nonlinear PDE experiments\n")
         out.write(f"timestamp={timestamp}\nsolver={solver}\n")
         out.write(f"evaluation_seeds={','.join(args.seeds)}\n")
         out.write("step_solver=batched_qr; baseline=constant alpha\n")
