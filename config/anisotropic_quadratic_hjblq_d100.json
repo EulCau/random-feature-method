@@ -1,0 +1,44 @@
+{
+  "eqn_config": {
+    "_comment": "HJB equation with an exactly solvable anisotropic quadratic terminal condition",
+    "equation_name": "AnisotropicQuadraticHJBLQ",
+    "is_linear": false,
+    "total_time": 1.0,
+    "dimension": 100,
+    "num_time_intervals": 20,
+    "params": {
+      "x_init": 0.0,
+      "sigma": 1.41421356237,
+      "lambda": 1.0,
+      "direction_count": 10,
+      "eigenvalue_min": 0.05,
+      "eigenvalue_max": 0.25
+    }
+  },
+  "solver_config": {
+    "use_linear_solver": false,
+    "num_iterations": 50,
+    "sample_size": 32016,
+    "test_sample_size": 65536,
+    "test_batch_size": 16384,
+    "hidden_dim": 20,
+    "initial_lambda": 0.01,
+    "beta_init_scale": 0.001,
+    "linear": {
+      "solver": "ridge_dual",
+      "batch_size": 0,
+      "ridge_lambda": 0.01
+    },
+    "nonlinear": {
+      "min_lambda": 1e-8,
+      "max_lambda": 1e6,
+      "lambda_decrease": 0.5,
+      "lambda_increase": 3.0,
+      "error_tol": 1e-4,
+      "step_tol": 1e-4,
+      "max_retries": 5,
+      "step_solver": "batched_qr",
+      "batch_size": 8004
+    }
+  }
+}

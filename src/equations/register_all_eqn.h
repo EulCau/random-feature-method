@@ -1,5 +1,6 @@
 #pragma once
 extern "C" void force_link_AllenCahn();
+extern "C" void force_link_AnisotropicQuadraticHJBLQ();
 extern "C" void force_link_AsymmetricAllenCahn();
 extern "C" void force_link_AsymmetricHeat();
 extern "C" void force_link_AsymmetricHJBLQ();
@@ -10,6 +11,7 @@ extern "C" void force_link_Heat();
 
 inline void force_link_all_equations() {
 	force_link_AllenCahn();
+	force_link_AnisotropicQuadraticHJBLQ();
 	force_link_AsymmetricAllenCahn();
 	force_link_AsymmetricHeat();
 	force_link_AsymmetricHJBLQ();
