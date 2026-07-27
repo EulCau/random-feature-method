@@ -33,19 +33,19 @@ public:
 
 	[[nodiscard]] virtual torch::Tensor g(const torch::Tensor& t, const torch::Tensor& x) const = 0;
 
-	[[nodiscard]] virtual bool has_analytic_jacobian() const { return false; }
-
-	[[nodiscard]] virtual std::pair<torch::Tensor, torch::Tensor> terminal_residual_and_jacobian(
+	// Convert grad_x u to the BSDE control Z = sigma(t, x)^T grad_x u.
+	// The default is the identity diffusion. Leading dimensions are preserved.
+	[[nodiscard]] virtual torch::Tensor gradient_to_z(
 		const torch::Tensor& t,
-		const torch::Tensor& t_end,
 		const torch::Tensor& x,
-		const torch::Tensor& x_end,
-		const torch::Tensor& dw,
-		const torch::Tensor& H,
-		const torch::Tensor& y0,
-		const torch::Tensor& alpha) const
+		const torch::Tensor& spatial_gradient) const
 	{
-		TORCH_CHECK(false, "Analytic terminal residual/Jacobian is not implemented for this equation");
+		TORCH_CHECK(
+			spatial_gradient.size(-1) == dim_,
+			"spatial_gradient last dimension must be ", dim_,
+			", but got ", spatial_gradient.sizes()
+		);
+		return spatial_gradient;
 	}
 
 	[[nodiscard]] int64_t dim() const { return dim_; }

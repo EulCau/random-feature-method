@@ -9,6 +9,8 @@
 class RFMSolver
 {
 public:
+    // y0 and beta represent the equivalent centered scalar model
+    // u(t,x) = y0 + beta^T(phi(t,x) - phi(0,x0)).
     RFMSolver(
         const Config& config, const std::shared_ptr<Equation>& eq,
         torch::Device device, uint64_t seed);
@@ -19,14 +21,14 @@ public:
 
     RFMSolver& options(
         const std::optional<torch::Tensor>& y0,
-        const std::optional<torch::Tensor>& alpha,
+        const std::optional<torch::Tensor>& beta,
         std::optional<float> lambda
     );
 
     RFMSolver& linear_options(const LinearSolverOptions& options);
 
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve(bool output_log = false) const;
-    [[nodiscard]] float test(const torch::Tensor& y0, const torch::Tensor& alpha) const;
+    [[nodiscard]] float test(const torch::Tensor& y0, const torch::Tensor& beta) const;
 
     [[nodiscard]] uint64_t seed() const { return seed_; }
     [[nodiscard]] bool is_linear() const { return is_linear_; }
@@ -40,10 +42,9 @@ public:
     [[nodiscard]] const torch::Tensor& L() const { return L_; }
     [[nodiscard]] const torch::Tensor& M() const { return M_; }
     [[nodiscard]] const torch::Tensor& N() const { return N_; }
-    [[nodiscard]] const torch::Tensor& H() const { return H_; }
 
     [[nodiscard]] const torch::Tensor& y0() const { return y0_; }
-    [[nodiscard]] const torch::Tensor& alpha() const { return alpha_; }
+    [[nodiscard]] const torch::Tensor& beta() const { return beta_; }
     [[nodiscard]] float lambda() const { return lambda_; }
     [[nodiscard]] const LinearSolverOptions& linear_solver_options() const { return linear_solver_options_; }
 
@@ -65,7 +66,10 @@ protected:
         const LinearSolverOptions& options) const;
 
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_nonlinear_levenberg_marquardt(
-        const torch::Tensor & y0, const torch::Tensor & alpha, float lambda, bool output_log) const;
+        const torch::Tensor& y0,
+        const torch::Tensor& beta,
+        float lambda,
+        bool output_log) const;
 
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_nonlinear_constant_baseline(
         const torch::Tensor& y0,
@@ -103,13 +107,31 @@ protected:
         int64_t row_end) const;
 
     [[nodiscard]] torch::Tensor forward_nonlinear_terminal_y(
-        const torch::Tensor& y0, const torch::Tensor& alpha) const;
+        const torch::Tensor& y0,
+        const torch::Tensor& beta) const;
 
-    [[nodiscard]] torch::Tensor compute_nonlinear_z(const torch::Tensor& alpha) const;
+    [[nodiscard]] torch::Tensor compute_z(
+        const torch::Tensor& t,
+        const torch::Tensor& x,
+        const torch::Tensor& beta) const;
+
+    [[nodiscard]] torch::Tensor contract_z_features(
+        const torch::Tensor& t,
+        const torch::Tensor& x,
+        const torch::Tensor& weights) const;
+
+    [[nodiscard]] std::pair<torch::Tensor, torch::Tensor>
+    compute_terminal_residual_and_jacobian_for_samples(
+        const torch::Tensor& theta,
+        const torch::Tensor& t,
+        const torch::Tensor& t_end,
+        const torch::Tensor& x,
+        const torch::Tensor& x_end,
+        const torch::Tensor& dw) const;
 
     [[nodiscard]] std::pair<double, int64_t> test_batch(
         const torch::Tensor& y0,
-        const torch::Tensor& alpha,
+        const torch::Tensor& beta,
         int64_t batch_size) const;
 
     void compute_time_grid();
@@ -119,7 +141,6 @@ protected:
     void compute_L(const torch::Tensor& t, const torch::Tensor& x);
     void compute_M(const torch::Tensor& t, const torch::Tensor& x);
     void compute_N(const torch::Tensor& t, const torch::Tensor& x);
-    void compute_H(const torch::Tensor& t, const torch::Tensor& x);
 
     void check_tx_shape(const torch::Tensor& t, const torch::Tensor& x) const;
 
@@ -136,10 +157,9 @@ protected:
     torch::Tensor L_;
     torch::Tensor M_;
     torch::Tensor N_;
-    torch::Tensor H_;
     torch::Tensor t_;
     torch::Tensor y0_;
-    torch::Tensor alpha_;
+    torch::Tensor beta_;
     float lambda_{};
     LinearSolverOptions linear_solver_options_;
 };

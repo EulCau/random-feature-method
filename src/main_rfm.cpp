@@ -19,19 +19,18 @@ struct CommandLineOptions
     std::optional<uint64_t> seed;
 };
 
-int64_t default_batch_size(const int64_t dimension, const int64_t hidden_dim)
+int64_t default_batch_size(const int64_t hidden_dim)
 {
-    return 4 * (1 + dimension * hidden_dim);
+    return 4 * (1 + hidden_dim);
 }
 
 LinearSolverOptions get_linear_solver_options_from_config(
-    const SolverConfig& config,
-    const EqnConfig& eqn_config)
+    const SolverConfig& config)
 {
     LinearSolverOptions options;
     TORCH_CHECK(config.linear.batch_size >= 0, "linear batch_size must be nonnegative");
     options.qr_batch_size = config.linear.batch_size == 0
-        ? default_batch_size(eqn_config.dimension, config.hidden_dim)
+        ? default_batch_size(config.hidden_dim)
         : config.linear.batch_size;
     options.ridge_lambda = config.linear.ridge_lambda;
 
@@ -189,15 +188,14 @@ int main(const int argc, char* argv[])
     if (rfm_solver.is_linear())
     {
         rfm_solver.linear_options(get_linear_solver_options_from_config(
-            cfg.solver_config,
-            cfg.eqn_config
+            cfg.solver_config
         ));
     }
 
     if (torch::cuda::is_available()) torch::cuda::synchronize();
 
-    const auto [y0, alpha, rmse] = rfm_solver.solve(true);
-    const float test_mse = rfm_solver.test(y0, alpha);
+    const auto [y0, beta, rmse] = rfm_solver.solve(true);
+    const float test_mse = rfm_solver.test(y0, beta);
 
     if (torch::cuda::is_available()) torch::cuda::synchronize();
 
@@ -208,7 +206,7 @@ int main(const int argc, char* argv[])
     std::cout << "y0 = " << y0.item<float>() << std::endl;
     std::cout << "rmse = " << rmse << std::endl;
     std::cout << "test rmse = " << test_mse << std::endl;
-    std::cout << "dtype: " << alpha.dtype() << std::endl;
+    std::cout << "dtype: " << beta.dtype() << std::endl;
     std::cout << "eqn dim: " << cfg.eqn_config.dimension << std::endl;
     std::cout << "hidden dim: " << cfg.solver_config.hidden_dim << std::endl;
     std::cout << "samples num: " << cfg.solver_config.sample_size << std::endl;

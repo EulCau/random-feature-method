@@ -7,43 +7,12 @@ namespace solver_utils
 
 torch::Tensor pack_nonlinear_parameters(
     const torch::Tensor& y0,
-    const torch::Tensor& alpha)
+    const torch::Tensor& beta)
 {
     return torch::cat({
         y0.reshape({1}),
-        alpha.reshape({-1})
+        beta.reshape({-1})
     }).contiguous();
-}
-
-torch::Tensor compute_nonlinear_jacobian(
-    const torch::Tensor& residual,
-    const torch::Tensor& theta)
-{
-    const int64_t num_residual = residual.numel();
-    const int64_t num_param = theta.numel();
-    auto jacobian = torch::zeros(
-        {num_residual, num_param},
-        theta.options().dtype(theta.dtype())
-    );
-
-    for (int64_t i = 0; i < num_residual; ++i)
-    {
-        auto grad_output = torch::zeros_like(residual);
-        grad_output.index_put_({i}, 1.0f);
-
-        auto grads = torch::autograd::grad(
-            {residual},
-            {theta},
-            {grad_output},
-            true,
-            false,
-            false
-        );
-
-        jacobian.index_put_({i}, grads[0].reshape({num_param}));
-    }
-
-    return jacobian.contiguous();
 }
 
 torch::Tensor solve_lm_step(

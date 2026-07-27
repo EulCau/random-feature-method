@@ -2,34 +2,69 @@
 
 #include <torch/torch.h>
 
-// phi(x, t) = tanh(A x + b t + c)
-// A: (H, d), b: (H,), c: (H,)
+// phi_h(t, x) = tanh(
+//     s_h * (q_h^T (x / space_scale) + gamma_h * t / total_time) + c_h)
 class RandomFeatureFunction {
 public:
-    RandomFeatureFunction(int64_t dim, int64_t hidden_dim, torch::Device device, uint64_t seed = 42);
+    RandomFeatureFunction(
+        int64_t dim,
+        int64_t hidden_dim,
+        float total_time,
+        torch::Device device,
+        uint64_t seed = 42,
+        float scale_min = 0.5f,
+        float scale_max = 2.0f,
+        float space_scale = 1.0f,
+        float time_scale = 1.0f,
+        float bias_scale = 1.0f);
 
-    // 重新随机采样内层参数 (A,b,c)
+    // Resample the fixed inner parameters (q, s, gamma, c).
     void resample_params(uint64_t seed);
 
-    // 计算 phi(x, t), 返回形状 (H) 的 1D Tensor (float)
-    // x: (d) 1D Tensor; t: 标量 float
+    // t: (1 or B, T, 1, 1), x: (B, T, 1, d)
+    // Return phi with shape (B, T, H, 1).
     [[nodiscard]] torch::Tensor phi(const torch::Tensor& t, const torch::Tensor& x) const;
+
+    // Return beta0 + sum_h beta_h phi_h with shape (B, T, 1, 1).
+    [[nodiscard]] torch::Tensor value(
+        const torch::Tensor& t,
+        const torch::Tensor& x,
+        const torch::Tensor& beta0,
+        const torch::Tensor& beta) const;
+
+    // Return d phi_h / d x_j with shape (B, T, H, d).
+    [[nodiscard]] torch::Tensor spatial_gradient_features(
+        const torch::Tensor& t,
+        const torch::Tensor& x) const;
+
+    // Return grad_x sum_h beta_h phi_h with shape (B, T, 1, d).
+    [[nodiscard]] torch::Tensor spatial_gradient(
+        const torch::Tensor& t,
+        const torch::Tensor& x,
+        const torch::Tensor& beta) const;
 
     [[nodiscard]] int64_t dim() const { return dim_; }
     [[nodiscard]] int64_t hidden_dim() const { return hidden_; }
 
-    // 直接获取参数 (如需调试)
     [[nodiscard]] uint64_t seed() const { return seed_; }
-    [[nodiscard]] const torch::Tensor& A() const { return A_; }
-    [[nodiscard]] const torch::Tensor& b() const { return b_; }
+    [[nodiscard]] const torch::Tensor& q() const { return q_; }
+    [[nodiscard]] const torch::Tensor& scales() const { return scales_; }
+    [[nodiscard]] const torch::Tensor& gamma() const { return gamma_; }
     [[nodiscard]] const torch::Tensor& c() const { return c_; }
 
 protected:
     int64_t dim_;
     int64_t hidden_;
+    float total_time_;
+    float scale_min_;
+    float scale_max_;
+    float space_scale_;
+    float time_scale_;
+    float bias_scale_;
     uint64_t seed_;
     torch::Device device_;
-    torch::Tensor A_; // (H, d)
-    torch::Tensor b_; // (H)
-    torch::Tensor c_; // (H)
+    torch::Tensor q_;      // (d, H), unit direction in each column
+    torch::Tensor scales_; // (1, H), log-uniform frequency scale
+    torch::Tensor gamma_;  // (1, H), time direction
+    torch::Tensor c_;      // (1, H), bias
 };

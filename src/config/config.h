@@ -35,6 +35,15 @@ struct LinearSolveOptions
     double ridge_lambda;
 };
 
+struct RandomFeatureOptions
+{
+    float scale_min;
+    float scale_max;
+    float space_scale;
+    float time_scale;
+    float bias_scale;
+};
+
 struct SolverConfig
 {
     bool use_linear_solver;
@@ -44,7 +53,8 @@ struct SolverConfig
     int64_t test_batch_size;
     int64_t hidden_dim;
     float initial_lambda;
-    float alpha_init_scale;
+    float beta_init_scale;
+    RandomFeatureOptions random_feature;
     LinearSolveOptions linear;
     NonlinearSolveOptions nonlinear;
 };

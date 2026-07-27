@@ -5,10 +5,9 @@
 #include <cmath>
 #include <tuple>
 
-inline std::tuple<torch::Tensor, torch::Tensor, float> solve_y0_alpha_ridge_dual(
-    const torch::Tensor& A,          // (n, 1 + dim * hidden_dim)
+inline std::tuple<torch::Tensor, torch::Tensor, float> solve_y0_beta_ridge_dual(
+    const torch::Tensor& A,          // (n, 1 + hidden_dim)
     const torch::Tensor& B,          // (n, 1)
-    int64_t dim,
     int64_t hidden_dim,
     const double lambda = 1e-6
 ) {
@@ -20,9 +19,9 @@ inline std::tuple<torch::Tensor, torch::Tensor, float> solve_y0_alpha_ridge_dual
         "A and B row mismatch: A=", A.sizes(), ", B=", B.sizes()
     );
     TORCH_CHECK(
-        A.size(1) == 1 + dim * hidden_dim,
-        "A must have shape (n, 1 + dim * hidden_dim), got A=",
-        A.sizes(), ", dim=", dim, ", hidden_dim=", hidden_dim
+        A.size(1) == 1 + hidden_dim,
+        "A must have shape (n, 1 + hidden_dim), got A=",
+        A.sizes(), ", hidden_dim=", hidden_dim
     );
     TORCH_CHECK(lambda > 0.0, "lambda must be positive");
 
@@ -43,7 +42,7 @@ inline std::tuple<torch::Tensor, torch::Tensor, float> solve_y0_alpha_ridge_dual
         const auto rhs = torch::matmul(At, B_work);          // (p, 1)
         auto penalty = torch::eye(p, opts);
 
-        // y0 is not a random-feature coefficient, so only regularize alpha.
+        // y0 is not a random-feature coefficient, so only regularize beta.
         penalty.index_put_({0, 0}, 0.0);
         X = torch::linalg_solve(normal + lambda * penalty, rhs).contiguous();
     }
@@ -58,13 +57,13 @@ inline std::tuple<torch::Tensor, torch::Tensor, float> solve_y0_alpha_ridge_dual
     }
 
     const auto y0 = X.index({0, 0}).clone();
-    const auto alpha = X.index({
+    const auto beta = X.index({
         torch::indexing::Slice(1, torch::indexing::None),
         0
-    }).reshape({dim, hidden_dim}).contiguous();
+    }).reshape({hidden_dim}).contiguous();
 
     const auto residual = torch::matmul(A_work, X) - B_work; // (n, 1)
     const auto mse_loss = std::sqrt(residual.pow(2).mean().item<float>());
 
-    return {y0, alpha, mse_loss};
+    return {y0, beta, mse_loss};
 }

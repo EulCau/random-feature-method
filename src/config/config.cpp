@@ -31,6 +31,11 @@ Config load_config(const std::string& json_path)
     const auto& eqn = j.at("eqn_config");
     const auto& solver = j.at("solver_config");
     const auto linear = get_or<json>(solver, "linear", json::object());
+    const auto random_feature = get_or<json>(
+        solver,
+        "random_feature",
+        json::object()
+    );
     const auto& nonlinear = solver.at("nonlinear");
 
     EqnConfig eqn_cfg{
@@ -61,6 +66,14 @@ Config load_config(const std::string& json_path)
         get_or<double>(linear, "ridge_lambda", solver.at("initial_lambda").get<float>())
     };
 
+    RandomFeatureOptions random_feature_cfg{
+        get_or<float>(random_feature, "scale_min", 0.5f),
+        get_or<float>(random_feature, "scale_max", 2.0f),
+        get_or<float>(random_feature, "space_scale", 1.0f),
+        get_or<float>(random_feature, "time_scale", 1.0f),
+        get_or<float>(random_feature, "bias_scale", 1.0f)
+    };
+
     SolverConfig solver_cfg{
         solver.at("use_linear_solver").get<bool>(),
         solver.at("num_iterations").get<int64_t>(),
@@ -69,7 +82,12 @@ Config load_config(const std::string& json_path)
         get_or<int64_t>(solver, "test_batch_size", int64_t{0}),
         solver.at("hidden_dim").get<int64_t>(),
         solver.at("initial_lambda").get<float>(),
-        solver.at("alpha_init_scale").get<float>(),
+        get_or<float>(
+            solver,
+            "beta_init_scale",
+            get_or<float>(solver, "alpha_init_scale", 0.001f)
+        ),
+        random_feature_cfg,
         linear_cfg,
         nonlinear_cfg
     };

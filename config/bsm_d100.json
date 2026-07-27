@@ -19,7 +19,7 @@
     "sample_size": 16384,
     "hidden_dim": 50,
     "initial_lambda": 0.01,
-    "alpha_init_scale": 0.001,
+    "beta_init_scale": 0.001,
     "linear": {
       "solver": "ridge_dual",
       "batch_size": 0,

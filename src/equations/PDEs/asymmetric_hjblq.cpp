@@ -57,40 +57,12 @@ public:
         return radial + asymmetric.unsqueeze(2);
     }
 
-    [[nodiscard]] bool has_analytic_jacobian() const override { return true; }
-
-    [[nodiscard]] std::pair<torch::Tensor, torch::Tensor> terminal_residual_and_jacobian(
-        const torch::Tensor& t, const torch::Tensor& t_end,
-        const torch::Tensor& x, const torch::Tensor& x_end,
-        const torch::Tensor& dw, const torch::Tensor& H,
-        const torch::Tensor& y0, const torch::Tensor& alpha) const override
+    [[nodiscard]] torch::Tensor gradient_to_z(
+        const torch::Tensor& t,
+        const torch::Tensor& x,
+        const torch::Tensor& spatial_gradient) const override
     {
-        using namespace torch::indexing;
-        const int64_t S = x.size(0);
-        const int64_t T = x.size(1);
-        const int64_t D = alpha.size(0);
-        const int64_t Hdim = alpha.size(1);
-        auto y = y0.reshape({1, 1}).expand({S, 1}).contiguous();
-        auto sensitivity_alpha = torch::zeros({S, D, Hdim}, alpha.options());
-        const auto features = H.squeeze(-1).contiguous();
-        const auto z_all = torch::matmul(features, alpha.transpose(0, 1));
-        const auto dw_all = dw.permute({0, 2, 1}).contiguous();
-
-        for (int64_t k = 0; k < T; ++k)
-        {
-            const auto h_k = features.index({Slice(), k, Slice()});
-            const auto z_k = z_all.index({Slice(), k, Slice()});
-            const auto dw_k = dw_all.index({Slice(), k, Slice()});
-            const auto coef = lambda_ * delta_t_ * z_k + dw_k;
-            sensitivity_alpha = sensitivity_alpha + coef.unsqueeze(2) * h_k.unsqueeze(1);
-            y = y + 0.5f * lambda_ * delta_t_ * torch::sum(z_k * z_k, -1, true) +
-                torch::sum(dw_k * z_k, -1, true);
-        }
-
-        const auto residual = y - g(t_end, x_end).reshape({S, 1});
-        const auto jacobian = torch::cat({torch::ones({S, 1}, alpha.options()),
-            sensitivity_alpha.reshape({S, D * Hdim})}, 1).contiguous();
-        return {residual.contiguous(), jacobian};
+        return sigma_ * spatial_gradient;
     }
 
 private:

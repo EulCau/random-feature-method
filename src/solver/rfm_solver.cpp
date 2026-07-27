@@ -15,30 +15,28 @@ namespace
 
 [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> split_linear_solution(
     const torch::Tensor& x,
-    const int64_t dim,
     const int64_t hidden_dim,
     const float rmse)
 {
     const auto x_matrix = x.reshape({-1, 1}).contiguous();
     const auto y0 = x_matrix.index({0, 0}).clone();
-    const auto alpha = x_matrix.index({
+    const auto beta = x_matrix.index({
         torch::indexing::Slice(1, torch::indexing::None),
         0
-    }).reshape({dim, hidden_dim}).contiguous();
+    }).reshape({hidden_dim}).contiguous();
 
-    return {y0, alpha, rmse};
+    return {y0, beta, rmse};
 }
 
 [[nodiscard]] int64_t resolve_batch_size(
     const int64_t configured_batch_size,
-    const int64_t dim,
     const int64_t hidden_dim,
     const char* name)
 {
     TORCH_CHECK(configured_batch_size >= 0, name, " batch_size must be nonnegative");
     if (configured_batch_size == 0)
     {
-        return 4 * (1 + dim * hidden_dim);
+        return 4 * (1 + hidden_dim);
     }
     return configured_batch_size;
 }
@@ -94,8 +92,14 @@ RFMSolver::RFMSolver(
           rff_(RandomFeatureFunction(
                 config_.eqn_config.dimension,
                 config_.solver_config.hidden_dim,
+                config_.eqn_config.total_time,
                 device_,
-                seed_)),
+                seed_,
+                config_.solver_config.random_feature.scale_min,
+                config_.solver_config.random_feature.scale_max,
+                config_.solver_config.random_feature.space_scale,
+                config_.solver_config.random_feature.time_scale,
+                config_.solver_config.random_feature.bias_scale)),
           lambda_(config_.solver_config.initial_lambda)
 {
     TORCH_CHECK(equation_ != nullptr, "equation must not be null");
@@ -128,26 +132,25 @@ RFMSolver::RFMSolver(
             compute_txw();
         }
 
-        const auto D = equation_->dim();
         const auto H = rff_.hidden_dim();
 
         y0_ = torch::randn({1}, torch::TensorOptions()
             .dtype(torch::kFloat32)
             .device(device_));
 
-        alpha_ = torch::randn({D, H}, torch::TensorOptions()
+        beta_ = torch::randn({H}, torch::TensorOptions()
             .dtype(torch::kFloat32)
-            .device(device_)) * config_.solver_config.alpha_init_scale;
+            .device(device_)) * config_.solver_config.beta_init_scale;
     }
 
 }
 
 /* Options
- * set the initial $y_0$, $alpha$, and $lambda$. */
+ * set the initial $y_0$, $\beta$, and $\lambda$. */
 
 RFMSolver& RFMSolver::options(
     const std::optional<torch::Tensor>& y0,
-    const std::optional<torch::Tensor>& alpha,
+    const std::optional<torch::Tensor>& beta,
     const std::optional<float> lambda
 )
 {
@@ -156,9 +159,9 @@ RFMSolver& RFMSolver::options(
         y0_ = y0.value().to(device_).clone().detach();
     }
 
-    if (alpha.has_value())
+    if (beta.has_value())
     {
-        alpha_ = alpha.value().to(device_).clone().detach();
+        beta_ = beta.value().to(device_).reshape({-1}).clone().detach();
     }
 
     if (lambda.has_value())
@@ -178,7 +181,6 @@ RFMSolver& RFMSolver::linear_options(const LinearSolverOptions& options)
     {
         resolved_options.qr_batch_size = resolve_batch_size(
             resolved_options.qr_batch_size,
-            equation_->dim(),
             rff_.hidden_dim(),
             "linear"
         );
@@ -206,7 +208,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve(const bool outp
     return solve_nonlinear(output_log);
 }
 
-float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& alpha) const
+float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& beta) const
 {
     torch::NoGradGuard no_grad;
 
@@ -231,7 +233,7 @@ float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& alpha) const
         const int64_t current_batch_size = std::min(batch_size, S - row_begin);
         const auto [batch_squared_error, batch_count] = test_batch(
             y0,
-            alpha,
+            beta,
             current_batch_size
         );
         squared_error_sum += batch_squared_error;
@@ -243,21 +245,20 @@ float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& alpha) const
 
 std::pair<double, int64_t> RFMSolver::test_batch(
     const torch::Tensor& y0,
-    const torch::Tensor& alpha,
+    const torch::Tensor& beta,
     const int64_t batch_size
 ) const
 {
     using namespace torch::indexing;
 
     const int64_t T = config_.eqn_config.num_time_intervals;
-    const int64_t D = equation_->dim();
     const int64_t Hdim = rff_.hidden_dim();
     const float dt = equation_->delta_t();
 
-    TORCH_CHECK(alpha.numel() == D * Hdim, "alpha must have ", D * Hdim, " elements, got ", alpha.numel());
+    TORCH_CHECK(beta.numel() == Hdim, "beta must have ", Hdim, " elements, got ", beta.numel());
 
     const auto y0_eval = y0.to(device_).reshape({1});
-    const auto alpha_eval = alpha.to(device_).reshape({D, Hdim}).contiguous();
+    const auto beta_eval = beta.to(device_).reshape({Hdim}).contiguous();
 
     const auto [dw_sample, x_sample] = equation_->sample(batch_size);
     const auto dw_eval = dw_sample.to(device_).contiguous();
@@ -287,11 +288,7 @@ std::pair<double, int64_t> RFMSolver::test_batch(
         .contiguous();
 
     auto y = y0_eval.reshape({1, 1, 1, 1}).expand({batch_size, 1, 1, 1});
-    const auto H_eval = rff_.phi(t, x_eval);
-    const auto z_all = torch::matmul(
-        H_eval.squeeze(-1).contiguous(),
-        alpha_eval.transpose(0, 1)
-    ).unsqueeze(2).contiguous(); // (S, T, 1, D)
+    const auto z_all = compute_z(t, x_eval, beta_eval); // (S, T, 1, D)
     const auto dw_all = dw_eval.permute({0, 2, 1}).unsqueeze(2).contiguous(); // (S, T, 1, D)
 
     for (int64_t k = 0; k < T; ++k)
@@ -342,21 +339,20 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear() const
 
     const auto [A, B] = compute_linear_coef();
 
-    const auto [y0, alpha, rmse] = solve_linear_least_squares(
+    const auto [y0, beta, rmse] = solve_linear_least_squares(
         A,
         B,
-        config_.eqn_config.dimension,
         config_.solver_config.hidden_dim,
         options
     );
 
-    return {y0, alpha, rmse};
+    return {y0, beta, rmse};
 }
 
 std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear(const bool output_log) const
 {
     TORCH_CHECK(y0_.defined(), "y0_ is not initialized");
-    TORCH_CHECK(alpha_.defined(), "alpha_ is not initialized");
+    TORCH_CHECK(beta_.defined(), "beta_ is not initialized");
     TORCH_CHECK(lambda_ > 0.0, "lambda_ must be positive");
 
     if (config_.solver_config.nonlinear.step_solver == "constant")
@@ -364,7 +360,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear(const
         return solve_nonlinear_constant_baseline(y0_, lambda_, output_log);
     }
 
-    return solve_nonlinear_levenberg_marquardt(y0_, alpha_, lambda_, output_log);
+    return solve_nonlinear_levenberg_marquardt(y0_, beta_, lambda_, output_log);
 }
 
 /* Utils
@@ -374,18 +370,15 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
 {
     const int64_t S = config_.solver_config.sample_size;
     const int64_t T = config_.eqn_config.num_time_intervals;
-    const int64_t D = equation_->dim();
-    const int64_t Hdim = config_.solver_config.hidden_dim;
     const float dt = equation_->delta_t();
 
-    TORCH_CHECK(L_.defined() && M_.defined() && N_.defined() && H_.defined() &&
-        dw_.defined() && x_end_.defined(),
+    TORCH_CHECK(L_.defined() && M_.defined() && N_.defined() &&
+        dw_.defined() && x_.defined() && x_end_.defined(),
         "full linear cache is not initialized");
 
     const auto L = L_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
     const auto M = M_.squeeze(2).contiguous();                // (S, T, D)
     const auto N = N_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
-    const auto H = H_.squeeze(-1).contiguous();               // (S, T, H)
     const auto dW = dw_.permute({0, 2, 1}).contiguous();      // (S, T, D)
 
     const auto a  = 1.0f - dt * L;      // (S, T)
@@ -411,13 +404,13 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
 
     auto coef_y0 = a.prod(1, true); // (S, 1)
     const auto weighted_xi = xi * weights.unsqueeze(-1);
-    auto coef_alpha = torch::bmm(
-        weighted_xi.transpose(1, 2).contiguous(), // (S, D, T)
-        H                                          // (S, T, H)
-    );                                             // (S, D, H)
-    coef_alpha = coef_alpha.reshape({S, D * Hdim}); // (S, D*H)
+    const auto coef_beta = contract_z_features(
+        t_,
+        x_,
+        weighted_xi
+    ); // (S, H)
 
-    const auto A = torch::cat({coef_y0, coef_alpha}, 1).contiguous(); // (S, 1 + D*H)
+    const auto A = torch::cat({coef_y0, coef_beta}, 1).contiguous(); // (S, 1 + H)
     const auto constant_part = (weights * c).sum(1, true); // (S, 1)
     const auto g_XN = equation_->g(t_end_, x_end_).reshape({S, 1}).to(device_);
     const auto B = g_XN - constant_part; // (S, 1)
@@ -437,8 +430,6 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
 {
     const int64_t S = config_.solver_config.sample_size;
     const int64_t T = config_.eqn_config.num_time_intervals;
-    const int64_t D = equation_->dim();
-    const int64_t Hdim = config_.solver_config.hidden_dim;
     const float dt = equation_->delta_t();
     const int64_t batch_size = row_end - row_begin;
 
@@ -475,7 +466,6 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
     const auto L = equation_->coef().L(t, x).squeeze(-1).squeeze(-1).contiguous(); // (B, T)
     const auto M = equation_->coef().M(t, x).squeeze(2).contiguous();              // (B, T, D)
     const auto N = equation_->coef().N(t, x).squeeze(-1).squeeze(-1).contiguous(); // (B, T)
-    const auto H = rff_.phi(t, x).squeeze(-1).contiguous();                       // (B, T, H)
     const auto dW = dw_batch.permute({0, 2, 1}).contiguous();                     // (B, T, D)
 
     // 线性递推中的三块
@@ -504,20 +494,12 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
     // 矩阵第一块: y0 系数
     auto coef_y0 = a.prod(1, true); // (B, 1)
 
-    // 矩阵第二块: alpha 系数
-    // weighted_xi: (S, T, D)
+    // Matrix block for beta.
     const auto weighted_xi = xi * weights.unsqueeze(-1);
-
-    // coef_alpha[s] = weighted_xi[s]^T @ H[s] -> (D, H)
-    auto coef_alpha = torch::bmm(
-        weighted_xi.transpose(1, 2).contiguous(), // (B, D, T)
-        H                                          // (B, T, H)
-    );                                             // (B, D, H)
-
-    coef_alpha = coef_alpha.reshape({batch_size, D * Hdim}); // (B, D*H)
+    const auto coef_beta = contract_z_features(t, x, weighted_xi); // (B, H)
 
     // 拼接设计矩阵
-    const auto A = torch::cat({coef_y0, coef_alpha}, 1).contiguous(); // (B, 1 + D*H)
+    const auto A = torch::cat({coef_y0, coef_beta}, 1).contiguous(); // (B, 1 + H)
 
     // 右端项
     const auto constant_part = (weights * c).sum(1, true); // (B, 1)
@@ -538,9 +520,8 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_batched_
 ) const
 {
     const int64_t S = config_.solver_config.sample_size;
-    const int64_t D = config_.eqn_config.dimension;
     const int64_t Hdim = config_.solver_config.hidden_dim;
-    const int64_t parameter_count = 1 + D * Hdim;
+    const int64_t parameter_count = 1 + Hdim;
 
     TORCH_CHECK(options.qr_batch_size > 0, "qr_batch_size must be positive");
 
@@ -589,7 +570,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_batched_
         rhs = rhs.reshape({parameter_count, 1}).contiguous();
     }
 
-    TORCH_CHECK(initialized, "sample_size must be at least 1 + dimension * hidden_dim for batched QR");
+    TORCH_CHECK(initialized, "sample_size must be at least 1 + hidden_dim for batched QR");
 
     const auto x = torch::linalg_solve_triangular(R, rhs, true).reshape({parameter_count, 1});
 
@@ -605,7 +586,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_batched_
     }
 
     const auto rmse = static_cast<float>(std::sqrt(squared_error_sum / static_cast<double>(residual_count)));
-    return split_linear_solution(x, D, Hdim, rmse);
+    return split_linear_solution(x, Hdim, rmse);
 }
 
 std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_constant_baseline(
@@ -615,7 +596,6 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_constant
     TORCH_CHECK(options.qr_batch_size > 0, "constant baseline batch size must be positive");
 
     const int64_t S = config_.solver_config.sample_size;
-    const int64_t D = equation_->dim();
     const int64_t Hdim = rff_.hidden_dim();
 
     double numerator = 0.0;
@@ -638,7 +618,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_constant
         static_cast<float>(numerator / denominator),
         torch::TensorOptions().dtype(torch::kFloat32).device(device_)
     );
-    const auto alpha = torch::zeros({D, Hdim}, y0.options());
+    const auto beta = torch::zeros({Hdim}, y0.options());
 
     double squared_error_sum = 0.0;
     int64_t residual_count = 0;
@@ -656,7 +636,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_constant
     }
 
     const auto rmse = static_cast<float>(std::sqrt(squared_error_sum / static_cast<double>(residual_count)));
-    return {y0.detach().clone(), alpha, rmse};
+    return {y0.detach().clone(), beta, rmse};
 }
 
 std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_constant_baseline(
@@ -666,16 +646,12 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_const
 ) const
 {
     TORCH_CHECK(lambda > 0.0f, "lambda must be positive");
-    TORCH_CHECK(equation_->has_analytic_jacobian(),
-        "nonlinear constant baseline currently requires analytic Jacobian");
 
     const auto& nonlinear_options = config_.solver_config.nonlinear;
     const int64_t S = config_.solver_config.sample_size;
-    const int64_t D = equation_->dim();
     const int64_t Hdim = rff_.hidden_dim();
     const int64_t batch_size = resolve_batch_size(
         nonlinear_options.batch_size,
-        D,
         Hdim,
         "nonlinear"
     );
@@ -683,19 +659,19 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_const
     auto y0_value = y0.to(device_).reshape({1}).item<float>();
     float damping = lambda;
     float final_error = 0.0f;
-    const auto alpha_zero = torch::zeros(
-        {D, Hdim},
+    const auto beta_zero = torch::zeros(
+        {Hdim},
         torch::TensorOptions().dtype(torch::kFloat32).device(device_)
     );
 
-    auto make_theta = [&alpha_zero, this](const float value)
+    auto make_theta = [&beta_zero, this](const float value)
     {
         const auto y0_tensor = torch::full(
             {1},
             value,
             torch::TensorOptions().dtype(torch::kFloat32).device(device_)
         );
-        return solver_utils::pack_nonlinear_parameters(y0_tensor, alpha_zero)
+        return solver_utils::pack_nonlinear_parameters(y0_tensor, beta_zero)
             .detach()
             .contiguous();
     };
@@ -818,20 +794,22 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_const
         make_theta(y0_value),
         batch_size
     );
-    return {final_y0.detach().clone(), alpha_zero.detach().clone(), final_error};
+    return {final_y0.detach().clone(), beta_zero.detach().clone(), final_error};
 }
 
 std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_levenberg_marquardt(
-    const torch::Tensor &y0, const torch::Tensor &alpha, const float lambda, const bool output_log) const
+    const torch::Tensor& y0,
+    const torch::Tensor& beta,
+    const float lambda,
+    const bool output_log) const
 {
     const int64_t max_iters = config_.solver_config.num_iterations;
 
-    torch::Tensor theta = solver_utils::pack_nonlinear_parameters(y0, alpha).detach().clone().to(device_);
+    torch::Tensor theta = solver_utils::pack_nonlinear_parameters(y0, beta).detach().clone().to(device_);
     float damping = lambda;
     float final_error = 0.0f;
     const int64_t nonlinear_batch_size = resolve_batch_size(
         config_.solver_config.nonlinear.batch_size,
-        equation_->dim(),
         rff_.hidden_dim(),
         "nonlinear"
     );
@@ -964,13 +942,12 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
         }
     }
 
-    const int64_t D = equation_->dim();
     const int64_t Hdim = rff_.hidden_dim();
 
     const auto final_y0 = theta.index({0}).reshape({1});
-    const auto final_alpha = theta.index({
+    const auto final_beta = theta.index({
         torch::indexing::Slice(1, torch::indexing::None)
-    }).reshape({D, Hdim}).contiguous();
+    }).reshape({Hdim}).contiguous();
     if (config_.solver_config.nonlinear.step_solver == "batched_qr")
     {
         std::tie(std::ignore, final_error) = compute_nonlinear_loss_error_batched(
@@ -986,7 +963,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
 
     return {
         final_y0.detach().clone(),
-        final_alpha.detach().clone(),
+        final_beta.detach().clone(),
         final_error
     };
 }
@@ -996,9 +973,8 @@ torch::Tensor RFMSolver::compute_nonlinear_terminal_residual(
 ) const
 {
     const int64_t S = config_.solver_config.sample_size;
-    const int64_t D = equation_->dim();
     const int64_t Hdim = rff_.hidden_dim();
-    const int64_t expected_size = 1 + D * Hdim;
+    const int64_t expected_size = 1 + Hdim;
 
     TORCH_CHECK(
         theta.dim() == 1 && theta.size(0) == expected_size,
@@ -1006,11 +982,11 @@ torch::Tensor RFMSolver::compute_nonlinear_terminal_residual(
     );
 
     const auto y0 = theta.index({0}).reshape({1});
-    const auto alpha = theta.index({
+    const auto beta = theta.index({
         torch::indexing::Slice(1, torch::indexing::None)
-    }).reshape({D, Hdim}).contiguous();
+    }).reshape({Hdim}).contiguous();
 
-    const auto y_terminal = forward_nonlinear_terminal_y(y0, alpha);
+    const auto y_terminal = forward_nonlinear_terminal_y(y0, beta);
     const auto g_terminal = equation_->g(t_end_, x_end_);
 
     TORCH_CHECK(
@@ -1075,10 +1051,9 @@ torch::Tensor RFMSolver::compute_nonlinear_terminal_residual_batch(
 
     const int64_t S = config_.solver_config.sample_size;
     const int64_t T = config_.eqn_config.num_time_intervals;
-    const int64_t D = equation_->dim();
     const int64_t Hdim = rff_.hidden_dim();
     const int64_t batch_size = row_end - row_begin;
-    const int64_t expected_size = 1 + D * Hdim;
+    const int64_t expected_size = 1 + Hdim;
 
     TORCH_CHECK(theta.dim() == 1 && theta.size(0) == expected_size,
         "theta must have shape (", expected_size, "), but got ", theta.sizes());
@@ -1086,15 +1061,11 @@ torch::Tensor RFMSolver::compute_nonlinear_terminal_residual_batch(
         "invalid nonlinear residual row range [", row_begin, ", ", row_end, ") for S=", S);
 
     const auto y0 = theta.index({0}).reshape({1});
-    const auto alpha = theta.index({Slice(1, None)}).reshape({D, Hdim}).contiguous();
+    const auto beta = theta.index({Slice(1, None)}).reshape({Hdim}).contiguous();
     const auto [t, t_end, x, x_end, dw] = sample_nonlinear_batch(row_begin, row_end);
 
     auto y = y0.reshape({1, 1, 1, 1}).expand({batch_size, 1, 1, 1});
-    const auto features = rff_.phi(t, x).squeeze(-1).contiguous(); // (B, T, H)
-    const auto z_all = torch::matmul(
-        features,
-        alpha.transpose(0, 1)
-    ).unsqueeze(2).contiguous(); // (B, T, 1, D)
+    const auto z_all = compute_z(t, x, beta); // (B, T, 1, D)
     const auto dw_all = dw.permute({0, 2, 1}).unsqueeze(2).contiguous(); // (B, T, 1, D)
     const float dt = equation_->delta_t();
 
@@ -1122,76 +1093,169 @@ std::pair<torch::Tensor, torch::Tensor> RFMSolver::compute_nonlinear_terminal_re
     const int64_t row_end
 ) const
 {
-    using namespace torch::indexing;
-
-    TORCH_CHECK(equation_->has_analytic_jacobian(),
-        "batched nonlinear QR currently requires analytic Jacobian");
-
     const int64_t S = config_.solver_config.sample_size;
-    const int64_t D = equation_->dim();
     const int64_t Hdim = rff_.hidden_dim();
-    const int64_t expected_size = 1 + D * Hdim;
+    const int64_t expected_size = 1 + Hdim;
 
     TORCH_CHECK(theta.dim() == 1 && theta.size(0) == expected_size,
         "theta must have shape (", expected_size, "), but got ", theta.sizes());
     TORCH_CHECK(0 <= row_begin && row_begin < row_end && row_end <= S,
         "invalid nonlinear Jacobian row range [", row_begin, ", ", row_end, ") for S=", S);
 
-    const auto y0 = theta.index({0}).reshape({1});
-    const auto alpha = theta.index({Slice(1, None)}).reshape({D, Hdim}).contiguous();
     const auto [t, t_end, x, x_end, dw] = sample_nonlinear_batch(row_begin, row_end);
-    const auto H = rff_.phi(t, x).contiguous();
-
-    auto [residual, jacobian] = equation_->terminal_residual_and_jacobian(
-        t, t_end, x, x_end, dw, H, y0, alpha);
-
-    TORCH_CHECK(residual.dim() == 2 && residual.size(1) == 1,
-        "analytic residual must have shape (B, 1), but got ", residual.sizes());
-    TORCH_CHECK(jacobian.dim() == 2 && jacobian.size(0) == residual.size(0) &&
-        jacobian.size(1) == expected_size,
-        "analytic Jacobian must have shape (B, ", expected_size, "), but got ", jacobian.sizes());
-
-    return {residual.contiguous(), jacobian.contiguous()};
+    return compute_terminal_residual_and_jacobian_for_samples(
+        theta,
+        t,
+        t_end,
+        x,
+        x_end,
+        dw
+    );
 }
 
 std::pair<torch::Tensor, torch::Tensor> RFMSolver::compute_nonlinear_terminal_residual_and_jacobian(
     const torch::Tensor& theta
 ) const
 {
-    const int64_t D = equation_->dim();
     const int64_t Hdim = rff_.hidden_dim();
-    const int64_t expected_size = 1 + D * Hdim;
+    const int64_t expected_size = 1 + Hdim;
 
     TORCH_CHECK(
         theta.dim() == 1 && theta.size(0) == expected_size,
         "theta must have shape (", expected_size, "), but got ", theta.sizes()
     );
 
-    if (equation_->has_analytic_jacobian())
+    return compute_terminal_residual_and_jacobian_for_samples(
+        theta,
+        t_,
+        t_end_,
+        x_,
+        x_end_,
+        dw_
+    );
+}
+
+std::pair<torch::Tensor, torch::Tensor>
+RFMSolver::compute_terminal_residual_and_jacobian_for_samples(
+    const torch::Tensor& theta,
+    const torch::Tensor& t,
+    const torch::Tensor& t_end,
+    const torch::Tensor& x,
+    const torch::Tensor& x_end,
+    const torch::Tensor& dw
+) const
+{
+    using namespace torch::indexing;
+
+    const int64_t batch_size = x.size(0);
+    const int64_t time_count = x.size(1);
+    const int64_t hidden_dim = rff_.hidden_dim();
+    const int64_t expected_size = 1 + hidden_dim;
+    const float dt = equation_->delta_t();
+
+    TORCH_CHECK(
+        theta.dim() == 1 && theta.size(0) == expected_size,
+        "theta must have shape (", expected_size, "), but got ", theta.sizes()
+    );
+
+    const auto y0 = theta.index({0}).reshape({1});
+    const auto beta = theta.index({Slice(1, None)})
+        .reshape({hidden_dim})
+        .contiguous();
+    auto y = y0.reshape({1, 1, 1, 1})
+        .expand({batch_size, 1, 1, 1})
+        .contiguous();
+    auto sensitivity_y0 = torch::ones_like(y);
+    auto sensitivity_beta = torch::zeros(
+        {batch_size, 1, hidden_dim},
+        theta.options()
+    );
+    const auto dw_all = dw.permute({0, 2, 1})
+        .unsqueeze(2)
+        .contiguous(); // (B, T, 1, D)
+
+    for (int64_t k = 0; k < time_count; ++k)
     {
-        const auto y0 = theta.index({0}).reshape({1});
-        const auto alpha = theta.index({
-            torch::indexing::Slice(1, torch::indexing::None)
-        }).reshape({D, Hdim}).contiguous();
+        const auto t_k = t.index({Slice(), Slice(k, k + 1), Slice(), Slice()});
+        const auto x_k = x.index({Slice(), Slice(k, k + 1), Slice(), Slice()});
+        const auto dw_k = dw_all.index({Slice(), Slice(k, k + 1), Slice(), Slice()});
 
-        const auto H = rff_.phi(t_, x_).contiguous();
-        auto [residual, jacobian] = equation_->terminal_residual_and_jacobian(
-            t_, t_end_, x_, x_end_, dw_, H, y0, alpha);
+        const auto gradient_features =
+            rff_.spatial_gradient_features(t_k, x_k); // (B, 1, H, D)
+        const auto z_features = equation_->gradient_to_z(
+            t_k,
+            x_k,
+            gradient_features
+        ); // (B, 1, H, D)
+        TORCH_CHECK(
+            z_features.sizes() == gradient_features.sizes(),
+            "gradient_to_z must preserve feature-gradient shape ",
+            gradient_features.sizes(), ", but got ", z_features.sizes()
+        );
+        const auto z_k = (
+            z_features * beta.reshape({1, 1, hidden_dim, 1})
+        ).sum(2, true); // (B, 1, 1, D)
 
-        TORCH_CHECK(residual.dim() == 2 && residual.size(1) == 1,
-            "analytic residual must have shape (S, 1), but got ", residual.sizes());
-        TORCH_CHECK(jacobian.dim() == 2 && jacobian.size(0) == residual.size(0) &&
-            jacobian.size(1) == expected_size,
-            "analytic Jacobian must have shape (S, ", expected_size, "), but got ", jacobian.sizes());
+        auto y_local = y.detach().requires_grad_(true);
+        auto z_local = z_k.detach().requires_grad_(true);
+        const auto f_k = equation_->f(t_k, x_k, y_local, z_local);
+        TORCH_CHECK(
+            f_k.sizes() == y.sizes(),
+            "equation_->f must return shape ", y.sizes(),
+            ", but got ", f_k.sizes()
+        );
 
-        return {residual.contiguous(), jacobian.contiguous()};
+        auto f_y = torch::zeros_like(y);
+        auto f_z = torch::zeros_like(z_k);
+        if (f_k.requires_grad())
+        {
+            const auto gradients = torch::autograd::grad(
+                {f_k},
+                {y_local, z_local},
+                {torch::ones_like(f_k)},
+                false,
+                false,
+                true
+            );
+            if (gradients[0].defined())
+            {
+                f_y = gradients[0];
+            }
+            if (gradients[1].defined())
+            {
+                f_z = gradients[1];
+            }
+        }
+
+        // dY_{k+1} = (1 - dt*f_y)dY_k + (dW_k - dt*f_z)dZ_k.
+        const auto scale = 1.0f - dt * f_y;
+        const auto z_sensitivity = (
+            (dw_k - dt * f_z) * z_features
+        ).sum(-1); // (B, 1, H)
+        sensitivity_y0 = scale * sensitivity_y0;
+        sensitivity_beta =
+            scale.reshape({batch_size, 1, 1}) * sensitivity_beta +
+            z_sensitivity;
+
+        const auto martingale = torch::sum(dw_k * z_k, -1, true);
+        y = (y - dt * f_k + martingale).detach();
     }
 
-    const auto theta_with_grad = theta.detach().clone().requires_grad_(true);
-    const auto residual = compute_nonlinear_terminal_residual(theta_with_grad).reshape({-1});
-    auto jacobian = solver_utils::compute_nonlinear_jacobian(residual, theta_with_grad);
+    const auto g_terminal = equation_->g(t_end, x_end);
+    TORCH_CHECK(
+        g_terminal.sizes() == y.sizes(),
+        "equation_->g must return shape ", y.sizes(),
+        ", but got ", g_terminal.sizes()
+    );
 
-    return {residual.reshape({-1, 1}).contiguous(), jacobian};
+    const auto residual = (y - g_terminal)
+        .reshape({batch_size, 1})
+        .contiguous();
+    const auto jacobian = torch::cat({
+        sensitivity_y0.reshape({batch_size, 1}),
+        sensitivity_beta.reshape({batch_size, hidden_dim})
+    }, 1).contiguous();
+    return {residual, jacobian};
 }
 
 std::tuple<torch::Tensor, float, float> RFMSolver::solve_nonlinear_lm_step_batched_qr(
@@ -1260,7 +1324,7 @@ std::pair<float, float> RFMSolver::compute_nonlinear_loss_error_batched(
 
 torch::Tensor RFMSolver::forward_nonlinear_terminal_y(
     const torch::Tensor& y0,
-    const torch::Tensor& alpha
+    const torch::Tensor& beta
 ) const
 {
     using namespace torch::indexing;
@@ -1270,7 +1334,7 @@ torch::Tensor RFMSolver::forward_nonlinear_terminal_y(
     const float dt = equation_->delta_t();
 
     auto y = y0.reshape({1, 1, 1, 1}).expand({S, 1, 1, 1});
-    const auto z_all = compute_nonlinear_z(alpha);
+    const auto z_all = compute_z(t_, x_, beta);
     const auto dw_all = dw_.permute({0, 2, 1}).unsqueeze(2).contiguous(); // (S, T, 1, D)
 
     for (int64_t k = 0; k < T; ++k)
@@ -1298,10 +1362,99 @@ torch::Tensor RFMSolver::forward_nonlinear_terminal_y(
     return y.contiguous();
 }
 
-torch::Tensor RFMSolver::compute_nonlinear_z(const torch::Tensor& alpha) const
+torch::Tensor RFMSolver::compute_z(
+    const torch::Tensor& t,
+    const torch::Tensor& x,
+    const torch::Tensor& beta
+) const
 {
-    const auto features = rff_.phi(t_, x_).squeeze(-1).contiguous(); // (S, T, H)
-    return torch::matmul(features, alpha.transpose(0, 1)).unsqueeze(2).contiguous(); // (S, T, 1, D)
+    const auto spatial_gradient = rff_.spatial_gradient(t, x, beta);
+    const auto z = equation_->gradient_to_z(t, x, spatial_gradient);
+    TORCH_CHECK(
+        z.sizes() == spatial_gradient.sizes(),
+        "gradient_to_z must preserve spatial-gradient shape ",
+        spatial_gradient.sizes(), ", but got ", z.sizes()
+    );
+    return z.contiguous();
+}
+
+torch::Tensor RFMSolver::contract_z_features(
+    const torch::Tensor& t,
+    const torch::Tensor& x,
+    const torch::Tensor& weights
+) const
+{
+    using namespace torch::indexing;
+
+    check_tx_shape(t, x);
+    TORCH_CHECK(
+        weights.dim() == 3 &&
+        weights.size(0) == x.size(0) &&
+        weights.size(1) == x.size(1) &&
+        weights.size(2) == equation_->dim(),
+        "weights must have shape (", x.size(0), ", ", x.size(1), ", ",
+        equation_->dim(), "), but got ", weights.sizes()
+    );
+
+    constexpr int64_t feature_batch_size = 512;
+    const int64_t sample_count = x.size(0);
+    const int64_t time_count = x.size(1);
+    const int64_t hidden_dim = rff_.hidden_dim();
+    auto result = torch::zeros({sample_count, hidden_dim}, weights.options());
+
+    for (int64_t row_begin = 0; row_begin < sample_count; row_begin += feature_batch_size)
+    {
+        const int64_t row_end = std::min(
+            row_begin + feature_batch_size,
+            sample_count
+        );
+        const int64_t current_batch_size = row_end - row_begin;
+        auto result_batch = torch::zeros(
+            {current_batch_size, hidden_dim},
+            weights.options()
+        );
+
+        for (int64_t k = 0; k < time_count; ++k)
+        {
+            const auto t_k = t.size(0) == 1
+                ? t.index({Slice(), Slice(k, k + 1), Slice(), Slice()})
+                : t.index({
+                    Slice(row_begin, row_end),
+                    Slice(k, k + 1),
+                    Slice(),
+                    Slice()
+                });
+            const auto x_k = x.index({
+                Slice(row_begin, row_end),
+                Slice(k, k + 1),
+                Slice(),
+                Slice()
+            });
+            const auto gradient_features =
+                rff_.spatial_gradient_features(t_k, x_k); // (B, 1, H, D)
+            const auto z_features = equation_->gradient_to_z(
+                t_k,
+                x_k,
+                gradient_features
+            );
+            TORCH_CHECK(
+                z_features.sizes() == gradient_features.sizes(),
+                "gradient_to_z must preserve feature-gradient shape ",
+                gradient_features.sizes(), ", but got ", z_features.sizes()
+            );
+            const auto weights_k = weights.index({
+                Slice(row_begin, row_end),
+                Slice(k, k + 1),
+                Slice()
+            }).unsqueeze(2); // (B, 1, 1, D)
+            result_batch = result_batch +
+                (weights_k * z_features).sum(3).sum(1);
+        }
+
+        result.index_put_({Slice(row_begin, row_end)}, result_batch);
+    }
+
+    return result.contiguous();
 }
 
 void RFMSolver::compute_time_grid()
@@ -1349,7 +1502,7 @@ void RFMSolver::compute_txw()
 void RFMSolver::prepare_full_linear_cache()
 {
     TORCH_CHECK(is_linear_, "full linear cache is only available for linear equations");
-    if (H_.defined())
+    if (L_.defined())
     {
         return;
     }
@@ -1358,7 +1511,6 @@ void RFMSolver::prepare_full_linear_cache()
     compute_L(t_, x_);
     compute_M(t_, x_);
     compute_N(t_, x_);
-    compute_H(t_, x_);
 }
 
 void RFMSolver::clear_full_linear_cache()
@@ -1369,7 +1521,6 @@ void RFMSolver::clear_full_linear_cache()
     L_ = torch::Tensor();
     M_ = torch::Tensor();
     N_ = torch::Tensor();
-    H_ = torch::Tensor();
 
     if (!t_.defined() || !t_end_.defined())
     {
@@ -1447,29 +1598,6 @@ void RFMSolver::compute_N(const torch::Tensor& t, const torch::Tensor& x)
     );
 
     N_ = result;
-}
-
-void RFMSolver::compute_H(const torch::Tensor& t, const torch::Tensor& x)
-{
-    check_tx_shape(t, x);
-
-    const torch::Tensor result = rff_.phi(t, x);
-
-    TORCH_CHECK(
-        result.size(0) == x.size(0) &&
-        result.size(1) == x.size(1) &&
-        result.size(2) == config_.solver_config.hidden_dim &&
-        result.size(3) == 1,
-        "Invalid shape for H(t, x). Expected ",
-        x.sizes(), ", but got ", result.sizes()
-    );
-
-    TORCH_CHECK(
-        result.device().type() == device_.type(),
-        "result_H must be on ", device_.type(), ", but got ", result.device().type()
-    );
-
-    H_ = result;
 }
 
 void RFMSolver::check_tx_shape(

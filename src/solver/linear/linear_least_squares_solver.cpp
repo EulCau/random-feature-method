@@ -14,21 +14,20 @@ namespace
     const torch::Tensor& A,
     const torch::Tensor& B,
     const torch::Tensor& X,
-    const int64_t dim,
     const int64_t hidden_dim)
 {
     const auto X_matrix = X.reshape({-1, 1}).contiguous();
 
     const auto y0 = X_matrix.index({0, 0}).clone();
-    const auto alpha = X_matrix.index({
+    const auto beta = X_matrix.index({
         torch::indexing::Slice(1, torch::indexing::None),
         0
-    }).reshape({dim, hidden_dim}).contiguous();
+    }).reshape({hidden_dim}).contiguous();
 
     const auto residual = torch::matmul(A.contiguous(), X_matrix) - B.contiguous();
     const float rmse = std::sqrt(residual.pow(2).mean().item<float>());
 
-    return {y0, alpha, rmse};
+    return {y0, beta, rmse};
 }
 
 [[nodiscard]] torch::Tensor solve_qr_libtorch(
@@ -73,20 +72,18 @@ namespace
 LinearSolveResult solve_linear_least_squares(
     const torch::Tensor& A,
     const torch::Tensor& B,
-    const int64_t dim,
     const int64_t hidden_dim,
     const LinearSolverOptions& options)
 {
     if (options.solver_type == LinearSolverType::RidgeDual)
     {
-        const auto [y0, alpha, rmse] = solve_y0_alpha_ridge_dual(
+        const auto [y0, beta, rmse] = solve_y0_beta_ridge_dual(
             A,
             B,
-            dim,
             hidden_dim,
             options.ridge_lambda
         );
-        return {y0, alpha, rmse};
+        return {y0, beta, rmse};
     }
 
     torch::Tensor X;
@@ -153,5 +150,5 @@ LinearSolveResult solve_linear_least_squares(
         X = torch::linalg_solve_triangular(R, rhs, true).contiguous();
     }
 
-    return split_solution(A, B, X, dim, hidden_dim);
+    return split_solution(A, B, X, hidden_dim);
 }
