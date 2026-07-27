@@ -11,6 +11,7 @@
 - `sample()`: (num_sample: int64) -> [Tensor [num_sample,D,T], Tensor [num_sample,D,T+1]], 采样布朗增量与状态路径, 公开.
 - `f()`: (t: Tensor [...], x: Tensor [...], y: Tensor [...], z: Tensor [...]) -> Tensor [...], 返回驱动项 f(t,x,y,z), 公开.
 - `g()`: (t: Tensor [...], x: Tensor [...]) -> Tensor [...], 返回终端条件 g(t,x), 公开.
+- `gradient_to_z()`: (t: Tensor [...], x: Tensor [...,D], spatial_gradient: Tensor [...,D]) -> Tensor [...,D], 计算 $Z=\sigma^\top\nabla_xu$, 公开.
 - `coef()`: () -> Coefficient, 返回线性系数对象, 公开.
 - `dim()`: () -> int64, 返回状态维度, 公开.
 - `total_time()`: () -> float, 返回总时间, 公开.
@@ -28,22 +29,27 @@
 
 ## RandomFeatureFunction (RFF)
 
-- `RandomFeatureFunction()`: (dim: int64, hidden_dim: int64, device: Device, seed: uint64) -> RandomFeatureFunction, 初始化随机特征参数, 公开.
-- `resample_params()`: (seed: uint64) -> void, 重采样 A/b/c, 公开.
+- `RandomFeatureFunction()`: (dim: int64, hidden_dim: int64, total_time: float, device: Device, seed: uint64, ...) -> RandomFeatureFunction, 初始化随机特征参数, 公开.
+- `resample_params()`: (seed: uint64) -> void, 重采样 q/s/gamma/c, 公开.
 - `phi()`: (t: Tensor [1或B,T,1,1], x: Tensor [B,T,1,D]) -> Tensor [B,T,H,1], 计算随机特征映射, 公开.
+- `value()`: (t, x, beta0, beta) -> Tensor [B,T,1,1], 计算标量随机特征模型, 公开.
+- `spatial_gradient_features()`: (t, x) -> Tensor [B,T,H,D], 计算每个特征的解析空间梯度, 公开.
+- `spatial_gradient()`: (t, x, beta) -> Tensor [B,T,1,D], 计算标量模型的解析空间梯度, 公开.
 - `dim()`: () -> int64, 返回输入维度 D, 公开.
 - `hidden_dim()`: () -> int64, 返回特征维度 H, 公开.
 - `seed()`: () -> uint64, 返回当前随机种子, 公开.
-- `A()`: () -> Tensor [D,H], 返回参数 A, 公开.
-- `b()`: () -> Tensor [1,H], 返回参数 b, 公开.
+- `q()`: () -> Tensor [D,H], 返回单位方向 q, 公开.
+- `scales()`: () -> Tensor [1,H], 返回频率尺度 s, 公开.
+- `gamma()`: () -> Tensor [1,H], 返回时间方向 gamma, 公开.
 - `c()`: () -> Tensor [1,H], 返回参数 c, 公开.
 
 - `dim_`: int64, 输入维度缓存, 可继承.
 - `hidden_`: int64, 特征维度缓存, 可继承.
 - `seed_`: uint64, 随机种子缓存, 可继承.
 - `device_`: Device, 设备缓存, 可继承.
-- `A_`: Tensor [D,H], 线性投影参数, 可继承, 对应公开函数: `A()`.
-- `b_`: Tensor [1,H], 时间项参数, 可继承, 对应公开函数: `b()`.
+- `q_`: Tensor [D,H], 单位空间方向, 可继承, 对应公开函数: `q()`.
+- `scales_`: Tensor [1,H], 频率尺度, 可继承, 对应公开函数: `scales()`.
+- `gamma_`: Tensor [1,H], 时间方向, 可继承, 对应公开函数: `gamma()`.
 - `c_`: Tensor [1,H], 偏置参数, 可继承, 对应公开函数: `c()`.
 
 ## RFMSolver
@@ -63,10 +69,8 @@
 - `M()`: () -> Tensor [S,T,1,D], 返回 M_, 公开.
 - `compute_N()`: (t: Tensor [S,T,1,1], x: Tensor [S,T,1,D]) -> void, 计算并写入 N_, 公开.
 - `N()`: () -> Tensor [S,T,1,1], 返回 N_, 公开.
-- `compute_H()`: (t: Tensor [S,T,1,1], x: Tensor [S,T,1,D]) -> void, 计算并写入 H_, 公开.
-- `H()`: () -> Tensor [S,T,H,1], 返回 H_, 公开.
-- `compute_linear_coef()`: () -> [Tensor [S,1+D*H], Tensor [S,1]], 组装线性系统 A/B, 公开.
-- `Solve_linear()`: () -> [Tensor [标量], Tensor [D,H], float], 求解并返回 y0/alpha/rmse, 公开.
+- `compute_linear_coef()`: () -> [Tensor [S,1+H], Tensor [S,1]], 组装线性系统 A/B, 可继承.
+- `solve()`: () -> [Tensor [标量], Tensor [H], float], 求解并返回 y0/beta/rmse, 公开.
 
 - `check_tx_shape()`: (t: Tensor [1或S,T,1,1], x: Tensor [S,T,1,D]) -> void, 校验输入形状, dtype, device, 可继承.
 
@@ -83,4 +87,3 @@
 - `L_`: Tensor [S,T,1,1], L 系数缓存, 可继承, 对应公开函数: `L()`.
 - `M_`: Tensor [S,T,1,D], M 系数缓存, 可继承, 对应公开函数: `M()`.
 - `N_`: Tensor [S,T,1,1], N 系数缓存, 可继承, 对应公开函数: `N()`.
-- `H_`: Tensor [S,T,H,1], 随机特征缓存, 可继承, 对应公开函数: `H()`.
