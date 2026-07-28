@@ -9,6 +9,10 @@ namespace solver_utils
     const torch::Tensor& y0,
     const torch::Tensor& beta);
 
+[[nodiscard]] torch::Tensor jacobian_column_scales(
+    const torch::Tensor& jacobian,
+    float epsilon);
+
 [[nodiscard]] torch::Tensor solve_lm_step(
     const torch::Tensor& jacobian,
     const torch::Tensor& residual,

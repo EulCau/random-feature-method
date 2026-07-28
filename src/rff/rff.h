@@ -1,6 +1,8 @@
 #pragma once
 
+#include "config.h"
 #include <torch/torch.h>
+#include <vector>
 
 // phi_h(t, x) = tanh(
 //     s_h * (q_h^T (x / space_scale) + gamma_h * t / total_time) + c_h)
@@ -12,11 +14,8 @@ public:
         float total_time,
         torch::Device device,
         uint64_t seed = 42,
-        float scale_min = 0.5f,
-        float scale_max = 2.0f,
-        float space_scale = 1.0f,
-        float time_scale = 1.0f,
-        float bias_scale = 1.0f);
+        const RandomFeatureOptions& options = RandomFeatureOptions{
+            0.5f, 2.0f, 1.0f, 1.0f, 1.0f, {}});
 
     // Resample the fixed inner parameters (q, s, gamma, c).
     void resample_params(uint64_t seed);
@@ -56,11 +55,10 @@ protected:
     int64_t dim_;
     int64_t hidden_;
     float total_time_;
-    float scale_min_;
-    float scale_max_;
     float space_scale_;
     float time_scale_;
     float bias_scale_;
+    std::vector<RandomFeatureScaleBand> scale_bands_;
     uint64_t seed_;
     torch::Device device_;
     torch::Tensor q_;      // (d, H), unit direction in each column

@@ -3,6 +3,7 @@
 #include "json.hpp"
 #include <cstdint>
 #include <string>
+#include <vector>
 
 struct EqnConfig
 {
@@ -26,6 +27,12 @@ struct NonlinearSolveOptions
     int64_t max_retries;
     std::string step_solver;
     int64_t batch_size;
+    bool hard_terminal_lift;
+    int64_t consistency_points;
+    float consistency_weight;
+    bool normalize_residuals;
+    bool scale_jacobian_columns;
+    float column_scale_epsilon;
 };
 
 struct LinearSolveOptions
@@ -35,6 +42,13 @@ struct LinearSolveOptions
     double ridge_lambda;
 };
 
+struct RandomFeatureScaleBand
+{
+    float scale_min;
+    float scale_max;
+    float weight;
+};
+
 struct RandomFeatureOptions
 {
     float scale_min;
@@ -42,6 +56,15 @@ struct RandomFeatureOptions
     float space_scale;
     float time_scale;
     float bias_scale;
+    std::vector<RandomFeatureScaleBand> scale_bands;
+};
+
+struct ReferenceEvaluationOptions
+{
+    bool enabled;
+    int64_t sample_size;
+    int64_t batch_size;
+    std::vector<float> time_fractions;
 };
 
 struct SolverConfig
@@ -57,6 +80,7 @@ struct SolverConfig
     RandomFeatureOptions random_feature;
     LinearSolveOptions linear;
     NonlinearSolveOptions nonlinear;
+    ReferenceEvaluationOptions reference_evaluation;
 };
 
 struct Config

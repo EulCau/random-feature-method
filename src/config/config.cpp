@@ -1,6 +1,7 @@
 #include "config.h"
 #include <fstream>
 #include <stdexcept>
+#include <vector>
 
 using json = nlohmann::json;
 
@@ -14,6 +15,26 @@ T get_or(const json& j, const char* key, const T& default_value)
         return default_value;
     }
     return j.at(key).get<T>();
+}
+
+std::vector<RandomFeatureScaleBand> load_scale_bands(
+    const json& random_feature)
+{
+    std::vector<RandomFeatureScaleBand> bands;
+    if (!random_feature.contains("scale_bands"))
+    {
+        return bands;
+    }
+
+    for (const auto& band : random_feature.at("scale_bands"))
+    {
+        bands.push_back(RandomFeatureScaleBand{
+            band.at("min").get<float>(),
+            band.at("max").get<float>(),
+            get_or<float>(band, "weight", 1.0f)
+        });
+    }
+    return bands;
 }
 }
 
@@ -34,6 +55,11 @@ Config load_config(const std::string& json_path)
     const auto random_feature = get_or<json>(
         solver,
         "random_feature",
+        json::object()
+    );
+    const auto reference_evaluation = get_or<json>(
+        solver,
+        "reference_evaluation",
         json::object()
     );
     const auto& nonlinear = solver.at("nonlinear");
@@ -57,7 +83,13 @@ Config load_config(const std::string& json_path)
         nonlinear.at("step_tol").get<float>(),
         nonlinear.at("max_retries").get<int64_t>(),
         get_or<std::string>(nonlinear, "step_solver", "normal"),
-        get_or<int64_t>(nonlinear, "batch_size", int64_t{0})
+        get_or<int64_t>(nonlinear, "batch_size", int64_t{0}),
+        get_or<bool>(nonlinear, "hard_terminal_lift", false),
+        get_or<int64_t>(nonlinear, "consistency_points", int64_t{0}),
+        get_or<float>(nonlinear, "consistency_weight", 0.0f),
+        get_or<bool>(nonlinear, "normalize_residuals", false),
+        get_or<bool>(nonlinear, "scale_jacobian_columns", false),
+        get_or<float>(nonlinear, "column_scale_epsilon", 1.0e-6f)
     };
 
     LinearSolveOptions linear_cfg{
@@ -71,15 +103,45 @@ Config load_config(const std::string& json_path)
         get_or<float>(random_feature, "scale_max", 2.0f),
         get_or<float>(random_feature, "space_scale", 1.0f),
         get_or<float>(random_feature, "time_scale", 1.0f),
-        get_or<float>(random_feature, "bias_scale", 1.0f)
+        get_or<float>(random_feature, "bias_scale", 1.0f),
+        load_scale_bands(random_feature)
+    };
+
+    const int64_t test_sample_size = get_or<int64_t>(
+        solver,
+        "test_sample_size",
+        solver.at("sample_size").get<int64_t>()
+    );
+    const int64_t test_batch_size = get_or<int64_t>(
+        solver,
+        "test_batch_size",
+        int64_t{0}
+    );
+    ReferenceEvaluationOptions reference_evaluation_cfg{
+        get_or<bool>(reference_evaluation, "enabled", false),
+        get_or<int64_t>(
+            reference_evaluation,
+            "sample_size",
+            test_sample_size
+        ),
+        get_or<int64_t>(
+            reference_evaluation,
+            "batch_size",
+            test_batch_size
+        ),
+        get_or<std::vector<float>>(
+            reference_evaluation,
+            "time_fractions",
+            std::vector<float>{0.25f, 0.5f, 0.75f}
+        )
     };
 
     SolverConfig solver_cfg{
         solver.at("use_linear_solver").get<bool>(),
         solver.at("num_iterations").get<int64_t>(),
         solver.at("sample_size").get<int64_t>(),
-        get_or<int64_t>(solver, "test_sample_size", solver.at("sample_size").get<int64_t>()),
-        get_or<int64_t>(solver, "test_batch_size", int64_t{0}),
+        test_sample_size,
+        test_batch_size,
         solver.at("hidden_dim").get<int64_t>(),
         solver.at("initial_lambda").get<float>(),
         get_or<float>(
@@ -89,7 +151,8 @@ Config load_config(const std::string& json_path)
         ),
         random_feature_cfg,
         linear_cfg,
-        nonlinear_cfg
+        nonlinear_cfg,
+        reference_evaluation_cfg
     };
 
     return Config{eqn_cfg, solver_cfg};

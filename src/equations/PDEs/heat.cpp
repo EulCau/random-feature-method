@@ -104,6 +104,32 @@ public:
         return torch::exp(-norm_sq / terminal_scale_);
     }
 
+    [[nodiscard]] bool has_reference_solution() const override
+    {
+        return true;
+    }
+
+    [[nodiscard]] torch::Tensor reference_solution(
+        const torch::Tensor& t,
+        const torch::Tensor& x) const override
+    {
+        TORCH_CHECK(
+            t.sizes().slice(0, 2) == x.sizes().slice(0, 2),
+            "t and x leading dimensions must match"
+        );
+        const auto remaining_time = total_time_ - t;
+        const auto denominator = terminal_scale_ + 2.0f * remaining_time;
+        const auto prefactor = torch::pow(
+            terminal_scale_ / denominator,
+            0.5f * static_cast<float>(dim_)
+        );
+        const auto norm_square = torch::sum(x * x, -1, true);
+        return (
+            prefactor *
+            torch::exp(-norm_square / denominator)
+        ).contiguous();
+    }
+
 private:
     float x_init_;
     float terminal_scale_;

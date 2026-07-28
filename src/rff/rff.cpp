@@ -1,5 +1,8 @@
 #include "rff.h"
+#include <algorithm>
 #include <cmath>
+#include <numeric>
+#include <utility>
 #include <ATen/cuda/CUDAGeneratorImpl.h>
 
 namespace
@@ -58,6 +61,48 @@ void check_inputs(
     );
 }
 
+std::vector<int64_t> allocate_band_counts(
+    const int64_t hidden_dim,
+    const std::vector<RandomFeatureScaleBand>& bands)
+{
+    const float total_weight = std::accumulate(
+        bands.begin(),
+        bands.end(),
+        0.0f,
+        [](const float sum, const RandomFeatureScaleBand& band)
+        {
+            return sum + band.weight;
+        }
+    );
+
+    std::vector<int64_t> counts(bands.size(), 0);
+    std::vector<std::pair<float, size_t>> remainders;
+    remainders.reserve(bands.size());
+    int64_t assigned = 0;
+    for (size_t i = 0; i < bands.size(); ++i)
+    {
+        const float exact =
+            static_cast<float>(hidden_dim) * bands[i].weight / total_weight;
+        counts[i] = static_cast<int64_t>(std::floor(exact));
+        assigned += counts[i];
+        remainders.emplace_back(exact - static_cast<float>(counts[i]), i);
+    }
+
+    std::stable_sort(
+        remainders.begin(),
+        remainders.end(),
+        [](const auto& lhs, const auto& rhs)
+        {
+            return lhs.first > rhs.first;
+        }
+    );
+    for (int64_t i = assigned; i < hidden_dim; ++i)
+    {
+        ++counts[remainders[static_cast<size_t>(i - assigned)].second];
+    }
+    return counts;
+}
+
 } // namespace
 
 RandomFeatureFunction::RandomFeatureFunction(
@@ -66,30 +111,39 @@ RandomFeatureFunction::RandomFeatureFunction(
     const float total_time,
     const torch::Device device,
     const uint64_t seed,
-    const float scale_min,
-    const float scale_max,
-    const float space_scale,
-    const float time_scale,
-    const float bias_scale)
+    const RandomFeatureOptions& options)
         : dim_(dim),
           hidden_(hidden_dim),
           total_time_(total_time),
-          scale_min_(scale_min),
-          scale_max_(scale_max),
-          space_scale_(space_scale),
-          time_scale_(time_scale),
-          bias_scale_(bias_scale),
+          space_scale_(options.space_scale),
+          time_scale_(options.time_scale),
+          bias_scale_(options.bias_scale),
+          scale_bands_(options.scale_bands.empty()
+              ? std::vector<RandomFeatureScaleBand>{{
+                    options.scale_min,
+                    options.scale_max,
+                    1.0f
+                }}
+              : options.scale_bands),
           seed_(seed),
           device_(device)
 {
     TORCH_CHECK(dim_ > 0, "dim must be positive");
     TORCH_CHECK(hidden_ > 0, "hidden_dim must be positive");
     TORCH_CHECK(total_time_ > 0.0f, "total_time must be positive");
-    TORCH_CHECK(scale_min_ > 0.0f, "scale_min must be positive");
-    TORCH_CHECK(scale_max_ >= scale_min_, "scale_max must be at least scale_min");
     TORCH_CHECK(space_scale_ > 0.0f, "space_scale must be positive");
     TORCH_CHECK(time_scale_ >= 0.0f, "time_scale must be nonnegative");
     TORCH_CHECK(bias_scale_ >= 0.0f, "bias_scale must be nonnegative");
+    TORCH_CHECK(!scale_bands_.empty(), "at least one scale band is required");
+    for (const auto& band : scale_bands_)
+    {
+        TORCH_CHECK(band.scale_min > 0.0f, "scale band min must be positive");
+        TORCH_CHECK(
+            band.scale_max >= band.scale_min,
+            "scale band max must be at least min"
+        );
+        TORCH_CHECK(band.weight > 0.0f, "scale band weight must be positive");
+    }
     resample_params(seed);
 }
 
@@ -102,15 +156,29 @@ void RandomFeatureFunction::resample_params(const uint64_t seed)
     );
     q_ = q_ / q_.norm(2, 0, true).clamp_min(1.0e-12f);
 
-    const auto log_scale = rand_like_shape(
-        {1, hidden_},
-        device_,
-        seed ^ 0x13198a2e03707344ULL
-    );
-    scales_ = torch::exp(
-        std::log(scale_min_) +
-        (std::log(scale_max_) - std::log(scale_min_)) * log_scale
-    );
+    const auto uniform_scale = rand_like_shape(
+        {1, hidden_}, device_, seed ^ 0x13198a2e03707344ULL);
+    const auto band_counts = allocate_band_counts(hidden_, scale_bands_);
+    std::vector<torch::Tensor> scale_chunks;
+    scale_chunks.reserve(scale_bands_.size());
+    int64_t offset = 0;
+    for (size_t i = 0; i < scale_bands_.size(); ++i)
+    {
+        const int64_t count = band_counts[i];
+        if (count == 0)
+        {
+            continue;
+        }
+        const auto& band = scale_bands_[i];
+        const auto uniform_chunk = uniform_scale.slice(1, offset, offset + count);
+        scale_chunks.push_back(torch::exp(
+            std::log(band.scale_min) +
+            (std::log(band.scale_max) - std::log(band.scale_min)) *
+                uniform_chunk
+        ));
+        offset += count;
+    }
+    scales_ = torch::cat(scale_chunks, 1).contiguous();
     gamma_ = time_scale_ * randn_like_shape(
         {1, hidden_},
         device_,

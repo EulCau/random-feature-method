@@ -114,6 +114,36 @@ public:
         return sigma_ * spatial_gradient;
     }
 
+    [[nodiscard]] bool has_reference_solution() const override
+    {
+        return true;
+    }
+
+    [[nodiscard]] torch::Tensor reference_solution(
+        const torch::Tensor& t,
+        const torch::Tensor& x) const override
+    {
+        const auto projected = torch::matmul(
+            x.squeeze(2),
+            directions_.to(x.device()).transpose(0, 1)
+        );
+        const auto eigenvalues = eigenvalues_.to(x.device())
+            .reshape({1, 1, direction_count_});
+        const auto remaining_time = (total_time_ - t)
+            .squeeze(-1)
+            .squeeze(-1)
+            .unsqueeze(-1);
+        const auto denominator =
+            1.0f +
+            2.0f * lambda_ * sigma_ * sigma_ *
+                remaining_time * eigenvalues;
+        const auto value = (
+            eigenvalues * projected.square() / denominator +
+            0.5f * torch::log(denominator) / lambda_
+        ).sum(-1, true);
+        return value.unsqueeze(2).contiguous();
+    }
+
 private:
     torch::Tensor x_init_;
     float sigma_;

@@ -1,16 +1,37 @@
 #pragma once
 
 #include <torch/torch.h>
+#include <limits>
 #include <random>
 #include "equation.h"
 #include "linear_solver_options.h"
 #include "rff.h"
 
+struct RFMSolverDiagnostics
+{
+    float objective_rmse{std::numeric_limits<float>::quiet_NaN()};
+    float test_terminal_std{std::numeric_limits<float>::quiet_NaN()};
+    float normalized_test_rmse{std::numeric_limits<float>::quiet_NaN()};
+    float explained_terminal_variance{std::numeric_limits<float>::quiet_NaN()};
+    float beta_norm{std::numeric_limits<float>::quiet_NaN()};
+    float final_gradient_inf_norm{std::numeric_limits<float>::quiet_NaN()};
+    float final_damping{std::numeric_limits<float>::quiet_NaN()};
+    int64_t accepted_lm_iterations{0};
+};
+
+struct InternalPathEvaluation
+{
+    torch::Tensor t;
+    torch::Tensor x;
+    torch::Tensor direct_value;
+    torch::Tensor propagated_value;
+};
+
 class RFMSolver
 {
 public:
-    // y0 and beta represent the equivalent centered scalar model
-    // u(t,x) = y0 + beta^T(phi(t,x) - phi(0,x0)).
+    // The default scalar model is centered at (0, x0). The optional hard
+    // terminal lift additionally enforces u(0, x0) = y0 and u(T, x) = g(x).
     RFMSolver(
         const Config& config, const std::shared_ptr<Equation>& eq,
         torch::Device device, uint64_t seed);
@@ -29,6 +50,12 @@ public:
 
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve(bool output_log = false) const;
     [[nodiscard]] float test(const torch::Tensor& y0, const torch::Tensor& beta) const;
+    [[nodiscard]] InternalPathEvaluation evaluate_internal_paths(
+        const torch::Tensor& y0,
+        const torch::Tensor& beta,
+        const torch::Tensor& dw_sample,
+        const torch::Tensor& x_sample,
+        const std::vector<int64_t>& time_indices) const;
 
     [[nodiscard]] uint64_t seed() const { return seed_; }
     [[nodiscard]] bool is_linear() const { return is_linear_; }
@@ -47,6 +74,7 @@ public:
     [[nodiscard]] const torch::Tensor& beta() const { return beta_; }
     [[nodiscard]] float lambda() const { return lambda_; }
     [[nodiscard]] const LinearSolverOptions& linear_solver_options() const { return linear_solver_options_; }
+    [[nodiscard]] const RFMSolverDiagnostics& diagnostics() const { return diagnostics_; }
 
 protected:
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_linear() const;
@@ -76,18 +104,18 @@ protected:
         float lambda,
         bool output_log) const;
 
-    [[nodiscard]] torch::Tensor compute_nonlinear_terminal_residual(
+    [[nodiscard]] torch::Tensor compute_nonlinear_objective_residual(
         const torch::Tensor& theta) const;
 
-    [[nodiscard]] std::pair<torch::Tensor, torch::Tensor> compute_nonlinear_terminal_residual_and_jacobian(
+    [[nodiscard]] std::pair<torch::Tensor, torch::Tensor> compute_nonlinear_objective_residual_and_jacobian(
         const torch::Tensor& theta) const;
 
-    [[nodiscard]] torch::Tensor compute_nonlinear_terminal_residual_batch(
+    [[nodiscard]] torch::Tensor compute_nonlinear_objective_residual_batch(
         const torch::Tensor& theta,
         int64_t row_begin,
         int64_t row_end) const;
 
-    [[nodiscard]] std::pair<torch::Tensor, torch::Tensor> compute_nonlinear_terminal_residual_and_jacobian_batch(
+    [[nodiscard]] std::pair<torch::Tensor, torch::Tensor> compute_nonlinear_objective_residual_and_jacobian_batch(
         const torch::Tensor& theta,
         int64_t row_begin,
         int64_t row_end) const;
@@ -98,6 +126,14 @@ protected:
         int64_t batch_size) const;
 
     [[nodiscard]] std::pair<float, float> compute_nonlinear_loss_error_batched(
+        const torch::Tensor& theta,
+        int64_t batch_size) const;
+
+    [[nodiscard]] float compute_nonlinear_terminal_error_batched(
+        const torch::Tensor& theta,
+        int64_t batch_size) const;
+
+    [[nodiscard]] float compute_nonlinear_gradient_inf_norm(
         const torch::Tensor& theta,
         int64_t batch_size) const;
 
@@ -120,8 +156,17 @@ protected:
         const torch::Tensor& x,
         const torch::Tensor& weights) const;
 
+    [[nodiscard]] torch::Tensor compute_residual_for_samples(
+        const torch::Tensor& theta,
+        const torch::Tensor& t,
+        const torch::Tensor& t_end,
+        const torch::Tensor& x,
+        const torch::Tensor& x_end,
+        const torch::Tensor& dw,
+        bool objective) const;
+
     [[nodiscard]] std::pair<torch::Tensor, torch::Tensor>
-    compute_terminal_residual_and_jacobian_for_samples(
+    compute_objective_residual_and_jacobian_for_samples(
         const torch::Tensor& theta,
         const torch::Tensor& t,
         const torch::Tensor& t_end,
@@ -129,10 +174,26 @@ protected:
         const torch::Tensor& x_end,
         const torch::Tensor& dw) const;
 
-    [[nodiscard]] std::pair<double, int64_t> test_batch(
+    [[nodiscard]] std::tuple<double, double, double, int64_t> test_batch(
         const torch::Tensor& y0,
         const torch::Tensor& beta,
         int64_t batch_size) const;
+
+    [[nodiscard]] torch::Tensor compute_direct_nonlinear_value(
+        const torch::Tensor& t,
+        const torch::Tensor& x,
+        const torch::Tensor& x_initial,
+        const torch::Tensor& y0,
+        const torch::Tensor& beta) const;
+
+    [[nodiscard]] torch::Tensor compute_nonlinear_z_features(
+        const torch::Tensor& t,
+        const torch::Tensor& x) const;
+
+    [[nodiscard]] bool use_hard_terminal_lift() const;
+    [[nodiscard]] std::vector<int64_t> nonlinear_consistency_indices(
+        int64_t time_count) const;
+    [[nodiscard]] torch::Tensor nonlinear_residual_scale() const;
 
     void compute_time_grid();
     void compute_txw();
@@ -162,4 +223,6 @@ protected:
     torch::Tensor beta_;
     float lambda_{};
     LinearSolverOptions linear_solver_options_;
+    mutable RFMSolverDiagnostics diagnostics_;
+    mutable torch::Tensor nonlinear_residual_scale_;
 };

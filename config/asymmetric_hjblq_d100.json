@@ -24,6 +24,28 @@
     "hidden_dim": 10,
     "initial_lambda": 0.01,
     "beta_init_scale": 0.001,
+    "random_feature": {
+      "space_scale": 1.0,
+      "time_scale": 1.0,
+      "bias_scale": 1.0,
+      "scale_bands": [
+        {
+          "min": 0.03125,
+          "max": 0.25,
+          "weight": 0.6
+        },
+        {
+          "min": 0.25,
+          "max": 1.0,
+          "weight": 0.25
+        },
+        {
+          "min": 1.0,
+          "max": 4.0,
+          "weight": 0.15
+        }
+      ]
+    },
     "linear": {
       "solver": "ridge_dual",
       "batch_size": 0,
@@ -38,7 +60,13 @@
       "step_tol": 1e-4,
       "max_retries": 5,
       "step_solver": "batched_qr",
-      "batch_size": 0
+      "batch_size": 0,
+      "hard_terminal_lift": true,
+      "consistency_points": 3,
+      "consistency_weight": 1.0,
+      "normalize_residuals": true,
+      "scale_jacobian_columns": true,
+      "column_scale_epsilon": 1e-6
     }
   }
 }

@@ -33,6 +33,46 @@ public:
 
 	[[nodiscard]] virtual torch::Tensor g(const torch::Tensor& t, const torch::Tensor& x) const = 0;
 
+	[[nodiscard]] virtual bool has_reference_solution() const
+	{
+		return false;
+	}
+
+	// Return the exact u(t, x) at supplied points when available.
+	[[nodiscard]] virtual torch::Tensor reference_solution(
+		const torch::Tensor& t,
+		const torch::Tensor& x) const
+	{
+		TORCH_CHECK(
+			false,
+			"reference solution is not available for this equation"
+		);
+		return {};
+	}
+
+	// Return grad_x g(T, x). Leading dimensions are preserved.
+	// Equations can override this default autograd implementation analytically.
+	[[nodiscard]] virtual torch::Tensor terminal_gradient(
+		const torch::Tensor& t,
+		const torch::Tensor& x) const
+	{
+		torch::AutoGradMode enable_grad(true);
+		auto x_local = x.detach().clone().requires_grad_(true);
+		const auto terminal_value = g(t, x_local);
+		const auto gradients = torch::autograd::grad(
+			{terminal_value},
+			{x_local},
+			{torch::ones_like(terminal_value)},
+			false,
+			false
+		);
+		TORCH_CHECK(
+			!gradients.empty() && gradients[0].defined(),
+			"terminal function gradient is undefined"
+		);
+		return gradients[0].detach().contiguous();
+	}
+
 	// Convert grad_x u to the BSDE control Z = sigma(t, x)^T grad_x u.
 	// The default is the identity diffusion. Leading dimensions are preserved.
 	[[nodiscard]] virtual torch::Tensor gradient_to_z(

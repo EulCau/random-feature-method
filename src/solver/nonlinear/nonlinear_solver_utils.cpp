@@ -15,6 +15,20 @@ torch::Tensor pack_nonlinear_parameters(
     }).contiguous();
 }
 
+torch::Tensor jacobian_column_scales(
+    const torch::Tensor& jacobian,
+    const float epsilon)
+{
+    TORCH_CHECK(jacobian.dim() == 2, "jacobian must be 2D");
+    TORCH_CHECK(jacobian.size(0) > 0, "jacobian must have at least one row");
+    TORCH_CHECK(epsilon > 0.0f, "column scale epsilon must be positive");
+    return jacobian.square()
+        .mean(0)
+        .sqrt()
+        .clamp_min(epsilon)
+        .contiguous();
+}
+
 torch::Tensor solve_lm_step(
     const torch::Tensor& jacobian,
     const torch::Tensor& residual,

@@ -65,6 +65,26 @@ public:
         return sigma_ * spatial_gradient;
     }
 
+    [[nodiscard]] torch::Tensor terminal_gradient(
+        const torch::Tensor& t,
+        const torch::Tensor& x) const override
+    {
+        const auto directions = directions_.to(x.device());
+        const auto radial_gradient =
+            2.0f * x / (1.0f + torch::sum(x * x, -1, true));
+        const auto projected = torch::matmul(
+            x.squeeze(2),
+            directions.transpose(0, 1)
+        );
+        const auto asymmetric_gradient =
+            asymmetry_scale_ * asymmetry_frequency_ *
+            torch::matmul(
+                torch::cos(asymmetry_frequency_ * projected),
+                directions
+            ) / std::sqrt(static_cast<float>(direction_count_));
+        return radial_gradient + asymmetric_gradient.unsqueeze(2);
+    }
+
 private:
     torch::Tensor x_init_;
     float sigma_;

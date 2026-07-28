@@ -24,6 +24,12 @@
     "hidden_dim": 20,
     "initial_lambda": 0.01,
     "beta_init_scale": 0.001,
+    "reference_evaluation": {
+      "enabled": false,
+      "sample_size": 65536,
+      "batch_size": 16384,
+      "time_fractions": [0.25, 0.5, 0.75]
+    },
     "linear": {
       "solver": "ridge_dual",
       "batch_size": 0,
