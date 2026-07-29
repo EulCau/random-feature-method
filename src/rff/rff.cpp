@@ -16,34 +16,41 @@ torch::Generator make_generator(const torch::Device& device, const uint64_t seed
 }
 
 torch::Tensor randn_like_shape(
-    const std::vector<int64_t>& shape, const torch::Device& device, const uint64_t seed)
+    const std::vector<int64_t>& shape,
+    const torch::Device& device,
+    const torch::ScalarType dtype,
+    const uint64_t seed)
 {
     auto gen = make_generator(device, seed);
     return torch::randn(
         shape,
         gen,
-        torch::TensorOptions().dtype(torch::kFloat32).device(device)
+        torch::TensorOptions().dtype(dtype).device(device)
     );
 }
 
 torch::Tensor rand_like_shape(
-    const std::vector<int64_t>& shape, const torch::Device& device, const uint64_t seed)
+    const std::vector<int64_t>& shape,
+    const torch::Device& device,
+    const torch::ScalarType dtype,
+    const uint64_t seed)
 {
     auto gen = make_generator(device, seed);
     return torch::rand(
         shape,
         gen,
-        torch::TensorOptions().dtype(torch::kFloat32).device(device)
+        torch::TensorOptions().dtype(dtype).device(device)
     );
 }
 
 void check_inputs(
     const torch::Tensor& t,
     const torch::Tensor& x,
-    const int64_t dim)
+    const int64_t dim,
+    const torch::ScalarType dtype)
 {
-    TORCH_CHECK(t.dtype() == torch::kFloat32, "t must be float32");
-    TORCH_CHECK(x.dtype() == torch::kFloat32, "x must be float32");
+    TORCH_CHECK(t.dtype() == dtype, "t must have dtype ", dtype);
+    TORCH_CHECK(x.dtype() == dtype, "x must have dtype ", dtype);
     TORCH_CHECK(t.dim() == 4, "t must be a 4D tensor");
     TORCH_CHECK(x.dim() == 4, "x must be a 4D tensor");
     TORCH_CHECK(
@@ -65,27 +72,27 @@ std::vector<int64_t> allocate_band_counts(
     const int64_t hidden_dim,
     const std::vector<RandomFeatureScaleBand>& bands)
 {
-    const float total_weight = std::accumulate(
+    const double total_weight = std::accumulate(
         bands.begin(),
         bands.end(),
-        0.0f,
-        [](const float sum, const RandomFeatureScaleBand& band)
+        0.0,
+        [](const double sum, const RandomFeatureScaleBand& band)
         {
             return sum + band.weight;
         }
     );
 
     std::vector<int64_t> counts(bands.size(), 0);
-    std::vector<std::pair<float, size_t>> remainders;
+    std::vector<std::pair<double, size_t>> remainders;
     remainders.reserve(bands.size());
     int64_t assigned = 0;
     for (size_t i = 0; i < bands.size(); ++i)
     {
-        const float exact =
-            static_cast<float>(hidden_dim) * bands[i].weight / total_weight;
+        const double exact =
+            static_cast<double>(hidden_dim) * bands[i].weight / total_weight;
         counts[i] = static_cast<int64_t>(std::floor(exact));
         assigned += counts[i];
-        remainders.emplace_back(exact - static_cast<float>(counts[i]), i);
+        remainders.emplace_back(exact - static_cast<double>(counts[i]), i);
     }
 
     std::stable_sort(
@@ -108,9 +115,10 @@ std::vector<int64_t> allocate_band_counts(
 RandomFeatureFunction::RandomFeatureFunction(
     const int64_t dim,
     const int64_t hidden_dim,
-    const float total_time,
+    const double total_time,
     const torch::Device device,
     const uint64_t seed,
+    const NumericDType dtype,
     const RandomFeatureOptions& options)
         : dim_(dim),
           hidden_(hidden_dim),
@@ -122,27 +130,30 @@ RandomFeatureFunction::RandomFeatureFunction(
               ? std::vector<RandomFeatureScaleBand>{{
                     options.scale_min,
                     options.scale_max,
-                    1.0f
+                    1.0
                 }}
               : options.scale_bands),
           seed_(seed),
-          device_(device)
+          device_(device),
+          dtype_(dtype == NumericDType::Float64
+              ? torch::kFloat64
+              : torch::kFloat32)
 {
     TORCH_CHECK(dim_ > 0, "dim must be positive");
     TORCH_CHECK(hidden_ > 0, "hidden_dim must be positive");
-    TORCH_CHECK(total_time_ > 0.0f, "total_time must be positive");
-    TORCH_CHECK(space_scale_ > 0.0f, "space_scale must be positive");
-    TORCH_CHECK(time_scale_ >= 0.0f, "time_scale must be nonnegative");
-    TORCH_CHECK(bias_scale_ >= 0.0f, "bias_scale must be nonnegative");
+    TORCH_CHECK(total_time_ > 0.0, "total_time must be positive");
+    TORCH_CHECK(space_scale_ > 0.0, "space_scale must be positive");
+    TORCH_CHECK(time_scale_ >= 0.0, "time_scale must be nonnegative");
+    TORCH_CHECK(bias_scale_ >= 0.0, "bias_scale must be nonnegative");
     TORCH_CHECK(!scale_bands_.empty(), "at least one scale band is required");
     for (const auto& band : scale_bands_)
     {
-        TORCH_CHECK(band.scale_min > 0.0f, "scale band min must be positive");
+        TORCH_CHECK(band.scale_min > 0.0, "scale band min must be positive");
         TORCH_CHECK(
             band.scale_max >= band.scale_min,
             "scale band max must be at least min"
         );
-        TORCH_CHECK(band.weight > 0.0f, "scale band weight must be positive");
+        TORCH_CHECK(band.weight > 0.0, "scale band weight must be positive");
     }
     resample_params(seed);
 }
@@ -152,12 +163,16 @@ void RandomFeatureFunction::resample_params(const uint64_t seed)
     q_ = randn_like_shape(
         {dim_, hidden_},
         device_,
+        dtype_,
         seed ^ 0x9e3779b97f4a7c15ULL
     );
-    q_ = q_ / q_.norm(2, 0, true).clamp_min(1.0e-12f);
+    q_ = q_ / q_.norm(2, 0, true).clamp_min(1.0e-12);
 
     const auto uniform_scale = rand_like_shape(
-        {1, hidden_}, device_, seed ^ 0x13198a2e03707344ULL);
+        {1, hidden_},
+        device_,
+        dtype_,
+        seed ^ 0x13198a2e03707344ULL);
     const auto band_counts = allocate_band_counts(hidden_, scale_bands_);
     std::vector<torch::Tensor> scale_chunks;
     scale_chunks.reserve(scale_bands_.size());
@@ -182,11 +197,13 @@ void RandomFeatureFunction::resample_params(const uint64_t seed)
     gamma_ = time_scale_ * randn_like_shape(
         {1, hidden_},
         device_,
+        dtype_,
         seed ^ 0x243f6a8885a308d3ULL
     );
     c_ = bias_scale_ * randn_like_shape(
         {1, hidden_},
         device_,
+        dtype_,
         seed ^ 0xb7e151628aed2a6bULL
     );
     seed_ = seed;
@@ -197,7 +214,7 @@ torch::Tensor RandomFeatureFunction::phi(
     const torch::Tensor& x
 ) const
 {
-    check_inputs(t, x, dim_);
+    check_inputs(t, x, dim_, dtype_);
 
     const auto B = x.size(0);
     const auto T = x.size(1);
@@ -246,7 +263,7 @@ torch::Tensor RandomFeatureFunction::spatial_gradient_features(
 ) const
 {
     const auto features = phi(t, x).squeeze(-1); // (B, T, H)
-    const auto derivative = (1.0f - features.square()) * scales_;
+    const auto derivative = (1.0 - features.square()) * scales_;
     return derivative.unsqueeze(-1) *
         q_.transpose(0, 1).reshape({1, 1, hidden_, dim_}) /
         space_scale_;
@@ -265,7 +282,7 @@ torch::Tensor RandomFeatureFunction::spatial_gradient(
 
     const auto features = phi(t, x).squeeze(-1); // (B, T, H)
     const auto weighted_derivative =
-        (1.0f - features.square()) *
+        (1.0 - features.square()) *
         scales_ *
         beta.reshape({1, 1, hidden_});
     return (torch::matmul(weighted_derivative, q_.transpose(0, 1)) /

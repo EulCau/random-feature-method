@@ -11,11 +11,12 @@ public:
     RandomFeatureFunction(
         int64_t dim,
         int64_t hidden_dim,
-        float total_time,
+        double total_time,
         torch::Device device,
         uint64_t seed = 42,
+        NumericDType dtype = NumericDType::Float32,
         const RandomFeatureOptions& options = RandomFeatureOptions{
-            0.5f, 2.0f, 1.0f, 1.0f, 1.0f, {}});
+            0.5, 2.0, 1.0, 1.0, 1.0, {}});
 
     // Resample the fixed inner parameters (q, s, gamma, c).
     void resample_params(uint64_t seed);
@@ -54,13 +55,14 @@ public:
 protected:
     int64_t dim_;
     int64_t hidden_;
-    float total_time_;
-    float space_scale_;
-    float time_scale_;
-    float bias_scale_;
+    double total_time_;
+    double space_scale_;
+    double time_scale_;
+    double bias_scale_;
     std::vector<RandomFeatureScaleBand> scale_bands_;
     uint64_t seed_;
     torch::Device device_;
+    torch::ScalarType dtype_;
     torch::Tensor q_;      // (d, H), unit direction in each column
     torch::Tensor scales_; // (1, H), log-uniform frequency scale
     torch::Tensor gamma_;  // (1, H), time direction

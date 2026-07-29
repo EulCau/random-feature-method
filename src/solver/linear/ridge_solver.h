@@ -5,7 +5,7 @@
 #include <cmath>
 #include <tuple>
 
-inline std::tuple<torch::Tensor, torch::Tensor, float> solve_y0_beta_ridge_dual(
+inline std::tuple<torch::Tensor, torch::Tensor, double> solve_y0_beta_ridge_dual(
     const torch::Tensor& A,          // (n, 1 + hidden_dim)
     const torch::Tensor& B,          // (n, 1)
     int64_t hidden_dim,
@@ -63,7 +63,7 @@ inline std::tuple<torch::Tensor, torch::Tensor, float> solve_y0_beta_ridge_dual(
     }).reshape({hidden_dim}).contiguous();
 
     const auto residual = torch::matmul(A_work, X) - B_work; // (n, 1)
-    const auto mse_loss = std::sqrt(residual.pow(2).mean().item<float>());
+    const auto mse_loss = std::sqrt(residual.pow(2).mean().item<double>());
 
     return {y0, beta, mse_loss};
 }

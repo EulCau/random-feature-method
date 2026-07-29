@@ -13,10 +13,10 @@
 namespace
 {
 
-[[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> split_linear_solution(
+[[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, double> split_linear_solution(
     const torch::Tensor& x,
     const int64_t hidden_dim,
-    const float rmse)
+    const double rmse)
 {
     const auto x_matrix = x.reshape({-1, 1}).contiguous();
     const auto y0 = x_matrix.index({0, 0}).clone();
@@ -72,6 +72,108 @@ namespace
     return {R.contiguous(), rhs.contiguous()};
 }
 
+[[nodiscard]] double floating_point_epsilon(
+    const torch::ScalarType scalar_type)
+{
+    if (scalar_type == torch::kFloat32)
+    {
+        return std::numeric_limits<float>::epsilon();
+    }
+    TORCH_CHECK(
+        scalar_type == torch::kFloat64,
+        "Jacobian spectrum diagnostics support float32 and float64, got ",
+        scalar_type
+    );
+    return std::numeric_limits<double>::epsilon();
+}
+
+void print_jacobian_spectrum(
+    const torch::Tensor& singular_values_descending,
+    const int64_t row_count,
+    const int64_t column_count,
+    const torch::ScalarType source_scalar_type)
+{
+    TORCH_CHECK(
+        singular_values_descending.dim() == 1 &&
+        singular_values_descending.numel() == column_count,
+        "singular value vector must have one entry per Jacobian column"
+    );
+    const auto singular_values =
+        singular_values_descending.to(torch::kFloat64).contiguous();
+    const double epsilon = floating_point_epsilon(source_scalar_type);
+    const double sigma_max = singular_values.index({0}).item<double>();
+    const double sigma_min =
+        singular_values.index({column_count - 1}).item<double>();
+    const double rank_tolerance =
+        static_cast<double>(std::max(row_count, column_count)) *
+        epsilon * sigma_max;
+    const int64_t numerical_rank =
+        (singular_values > rank_tolerance).sum().item<int64_t>();
+    const double condition_number = sigma_min > 0.0
+        ? sigma_max / sigma_min
+        : std::numeric_limits<double>::infinity();
+    const double caution_condition = 1.0 / std::sqrt(epsilon);
+    const double unresolved_condition = 1.0 / epsilon;
+
+    std::cout
+        << "[Jacobian spectrum] rows=" << row_count
+        << " cols=" << column_count
+        << " dtype=" << source_scalar_type
+        << " numerical_rank=" << numerical_rank << "/" << column_count
+        << " rank_tolerance=" << rank_tolerance
+        << " sigma_max=" << sigma_max
+        << " sigma_min=" << sigma_min
+        << " condition=" << condition_number
+        << " condition_times_epsilon=" << condition_number * epsilon
+        << std::endl;
+    std::cout
+        << "[Jacobian reference] caution_condition>="
+        << caution_condition
+        << " numerically_unresolved_condition>="
+        << unresolved_condition
+        << " full_rank_requires_sigma_min>"
+        << rank_tolerance
+        << std::endl;
+    std::cout
+        << "[Jacobian singular values] "
+        << singular_values.cpu()
+        << std::endl;
+}
+
+void print_jacobian_spectrum_from_matrix(const torch::Tensor& jacobian)
+{
+    const auto singular_values = torch::linalg_svdvals(
+        jacobian.to(torch::kFloat64)
+    );
+    print_jacobian_spectrum(
+        singular_values,
+        jacobian.size(0),
+        jacobian.size(1),
+        jacobian.scalar_type()
+    );
+}
+
+void print_jacobian_spectrum_from_gram(
+    const torch::Tensor& jacobian_gram,
+    const int64_t row_count,
+    const torch::ScalarType source_scalar_type)
+{
+    const auto eigenvalues = torch::linalg_eigvalsh(
+        jacobian_gram.to(torch::kFloat64)
+    );
+    const auto singular_values = eigenvalues
+        .clamp_min(0.0)
+        .sqrt()
+        .flip({0})
+        .contiguous();
+    print_jacobian_spectrum(
+        singular_values,
+        row_count,
+        jacobian_gram.size(0),
+        source_scalar_type
+    );
+}
+
 } // namespace
 
 RFMSolver::RFMSolver(
@@ -95,6 +197,7 @@ RFMSolver::RFMSolver(
                 config_.eqn_config.total_time,
                 device_,
                 seed_,
+                config_.solver_config.dtype,
                 config_.solver_config.random_feature)),
           lambda_(config_.solver_config.initial_lambda)
 {
@@ -116,12 +219,22 @@ RFMSolver::RFMSolver(
         nonlinear_options.consistency_points >= 0,
         "nonlinear consistency_points must be nonnegative"
     );
+    for (const double fraction :
+         nonlinear_options.consistency_time_fractions)
+    {
+        TORCH_CHECK(
+            std::isfinite(fraction) && 0.0 < fraction && fraction < 1.0,
+            "nonlinear consistency_time_fractions must satisfy "
+            "0 < fraction < 1, got ",
+            fraction
+        );
+    }
     TORCH_CHECK(
-        nonlinear_options.consistency_weight >= 0.0f,
+        nonlinear_options.consistency_weight >= 0.0,
         "nonlinear consistency_weight must be nonnegative"
     );
     TORCH_CHECK(
-        nonlinear_options.column_scale_epsilon > 0.0f,
+        nonlinear_options.column_scale_epsilon > 0.0,
         "nonlinear column_scale_epsilon must be positive"
     );
     is_linear_ = is_linear && equation_->is_linear();
@@ -144,11 +257,11 @@ RFMSolver::RFMSolver(
         const auto H = rff_.hidden_dim();
 
         y0_ = torch::randn({1}, torch::TensorOptions()
-            .dtype(torch::kFloat32)
+            .dtype(equation_->dtype())
             .device(device_));
 
         beta_ = torch::randn({H}, torch::TensorOptions()
-            .dtype(torch::kFloat32)
+            .dtype(equation_->dtype())
             .device(device_)) * config_.solver_config.beta_init_scale;
     }
 
@@ -160,17 +273,25 @@ RFMSolver::RFMSolver(
 RFMSolver& RFMSolver::options(
     const std::optional<torch::Tensor>& y0,
     const std::optional<torch::Tensor>& beta,
-    const std::optional<float> lambda
+    const std::optional<double> lambda
 )
 {
     if (y0.has_value())
     {
-        y0_ = y0.value().to(device_).clone().detach();
+        y0_ = y0.value().to(
+            torch::TensorOptions()
+                .dtype(equation_->dtype())
+                .device(device_)
+        ).clone().detach();
     }
 
     if (beta.has_value())
     {
-        beta_ = beta.value().to(device_).reshape({-1}).clone().detach();
+        beta_ = beta.value().to(
+            torch::TensorOptions()
+                .dtype(equation_->dtype())
+                .device(device_)
+        ).reshape({-1}).clone().detach();
     }
 
     if (lambda.has_value())
@@ -211,14 +332,14 @@ RFMSolver& RFMSolver::linear_options(const LinearSolverOptions& options)
 /* Solver
  * `Solver` directs linear and nonlinear problems to different main solver functions. */
 
-std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve(const bool output_log) const
+std::tuple<torch::Tensor, torch::Tensor, double> RFMSolver::solve(const bool output_log) const
 {
     auto result = is_linear_ ? solve_linear() : solve_nonlinear(output_log);
-    diagnostics_.beta_norm = std::get<1>(result).norm().item<float>();
+    diagnostics_.beta_norm = std::get<1>(result).norm().item<double>();
     return result;
 }
 
-float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& beta) const
+double RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& beta) const
 {
     torch::NoGradGuard no_grad;
 
@@ -270,15 +391,15 @@ float RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& beta) const
     );
     const double terminal_std = std::sqrt(terminal_variance);
     const double test_rmse = std::sqrt(mean_square_error);
-    diagnostics_.test_terminal_std = static_cast<float>(terminal_std);
+    diagnostics_.test_terminal_std = terminal_std;
     diagnostics_.normalized_test_rmse = terminal_std > 0.0
-        ? static_cast<float>(test_rmse / terminal_std)
-        : std::numeric_limits<float>::infinity();
+        ? test_rmse / terminal_std
+        : std::numeric_limits<double>::infinity();
     diagnostics_.explained_terminal_variance = terminal_variance > 0.0
-        ? static_cast<float>(1.0 - mean_square_error / terminal_variance)
-        : -std::numeric_limits<float>::infinity();
+        ? 1.0 - mean_square_error / terminal_variance
+        : -std::numeric_limits<double>::infinity();
 
-    return static_cast<float>(test_rmse);
+    return test_rmse;
 }
 
 InternalPathEvaluation RFMSolver::evaluate_internal_paths(
@@ -333,8 +454,10 @@ InternalPathEvaluation RFMSolver::evaluate_internal_paths(
     );
 
     const int64_t batch_size = dw_sample.size(0);
-    const auto dw = dw_sample.to(device_).contiguous();
-    const auto x_all = x_sample.to(device_)
+    const auto evaluation_options =
+        torch::TensorOptions().dtype(equation_->dtype()).device(device_);
+    const auto dw = dw_sample.to(evaluation_options).contiguous();
+    const auto x_all = x_sample.to(evaluation_options)
         .permute({0, 2, 1})
         .contiguous(); // (B, T + 1, D)
     const auto x = x_all.index({Slice(), Slice(0, time_count), Slice()})
@@ -346,10 +469,9 @@ InternalPathEvaluation RFMSolver::evaluate_internal_paths(
         Slice(),
         Slice()
     }).contiguous();
-    const auto tensor_options =
-        torch::TensorOptions().dtype(torch::kFloat32).device(device_);
+    const auto tensor_options = evaluation_options;
     const auto t_full = torch::linspace(
-        0.0f,
+        0.0,
         config_.eqn_config.total_time,
         time_count + 1,
         tensor_options
@@ -358,10 +480,10 @@ InternalPathEvaluation RFMSolver::evaluate_internal_paths(
         .reshape({1, time_count, 1, 1})
         .expand({batch_size, time_count, 1, 1})
         .contiguous();
-    const auto beta_eval = beta.to(device_)
+    const auto beta_eval = beta.to(evaluation_options)
         .reshape({hidden_dim})
         .contiguous();
-    auto y = y0.to(device_)
+    auto y = y0.to(evaluation_options)
         .reshape({1, 1, 1, 1})
         .expand({batch_size, 1, 1, 1})
         .contiguous();
@@ -434,7 +556,7 @@ InternalPathEvaluation RFMSolver::evaluate_internal_paths(
         evaluation_t,
         evaluation_x,
         x_initial,
-        y0.to(device_).reshape({1}),
+        y0.to(evaluation_options).reshape({1}),
         beta_eval
     );
     TORCH_CHECK(
@@ -461,16 +583,21 @@ std::tuple<double, double, double, int64_t> RFMSolver::test_batch(
 
     const int64_t T = config_.eqn_config.num_time_intervals;
     const int64_t Hdim = rff_.hidden_dim();
-    const float dt = equation_->delta_t();
+    const double dt = equation_->delta_t();
 
     TORCH_CHECK(beta.numel() == Hdim, "beta must have ", Hdim, " elements, got ", beta.numel());
 
-    const auto y0_eval = y0.to(device_).reshape({1});
-    const auto beta_eval = beta.to(device_).reshape({Hdim}).contiguous();
+    const auto evaluation_options =
+        torch::TensorOptions().dtype(equation_->dtype()).device(device_);
+    const auto y0_eval = y0.to(evaluation_options).reshape({1});
+    const auto beta_eval =
+        beta.to(evaluation_options).reshape({Hdim}).contiguous();
 
     const auto [dw_sample, x_sample] = equation_->sample(batch_size);
-    const auto dw_eval = dw_sample.to(device_).contiguous();
-    const auto x_all = x_sample.to(device_).permute({0, 2, 1}).contiguous();
+    const auto dw_eval = dw_sample.to(evaluation_options).contiguous();
+    const auto x_all = x_sample.to(evaluation_options)
+        .permute({0, 2, 1})
+        .contiguous();
 
     const auto x_eval = x_all.index({
         Slice(),
@@ -484,7 +611,7 @@ std::tuple<double, double, double, int64_t> RFMSolver::test_batch(
         Slice()
     }).unsqueeze(2).contiguous(); // (S, 1, 1, D)
 
-    const auto opts = torch::TensorOptions().dtype(torch::kFloat32).device(device_);
+    const auto opts = evaluation_options;
     const auto t_full = torch::linspace(0, config_.eqn_config.total_time, T + 1, opts);
     const auto t = t_full.slice(0, 0, T)
         .reshape({1, T, 1, 1})
@@ -532,7 +659,7 @@ std::tuple<double, double, double, int64_t> RFMSolver::test_batch(
     };
 }
 
-std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear() const
+std::tuple<torch::Tensor, torch::Tensor, double> RFMSolver::solve_linear() const
 {
     auto options = linear_solver_options_;
     options.ridge_lambda = config_.solver_config.initial_lambda;
@@ -559,7 +686,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear() const
     return {y0, beta, rmse};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear(const bool output_log) const
+std::tuple<torch::Tensor, torch::Tensor, double> RFMSolver::solve_nonlinear(const bool output_log) const
 {
     TORCH_CHECK(y0_.defined(), "y0_ is not initialized");
     TORCH_CHECK(beta_.defined(), "beta_ is not initialized");
@@ -580,7 +707,7 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
 {
     const int64_t S = config_.solver_config.sample_size;
     const int64_t T = config_.eqn_config.num_time_intervals;
-    const float dt = equation_->delta_t();
+    const double dt = equation_->delta_t();
 
     TORCH_CHECK(L_.defined() && M_.defined() && N_.defined() &&
         dw_.defined() && x_.defined() && x_end_.defined(),
@@ -591,7 +718,7 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
     const auto N = N_.squeeze(-1).squeeze(-1).contiguous();   // (S, T)
     const auto dW = dw_.permute({0, 2, 1}).contiguous();      // (S, T, D)
 
-    const auto a  = 1.0f - dt * L;      // (S, T)
+    const auto a  = 1.0 - dt * L;       // (S, T)
     const auto xi = dW - dt * M;        // (S, T, D)
     const auto c  = dt * N;             // (S, T)
 
@@ -640,15 +767,19 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
 {
     const int64_t S = config_.solver_config.sample_size;
     const int64_t T = config_.eqn_config.num_time_intervals;
-    const float dt = equation_->delta_t();
+    const double dt = equation_->delta_t();
     const int64_t batch_size = row_end - row_begin;
 
     TORCH_CHECK(0 <= row_begin && row_begin < row_end && row_end <= S,
         "invalid linear coefficient row range [", row_begin, ", ", row_end, ") for S=", S);
 
     const auto [dw_sample, x_sample] = equation_->sample(batch_size);
-    const auto dw_batch = dw_sample.to(device_).contiguous();
-    const auto x_all = x_sample.to(device_).permute({0, 2, 1}).contiguous(); // (B, T+1, D)
+    const auto tensor_options =
+        torch::TensorOptions().dtype(equation_->dtype()).device(device_);
+    const auto dw_batch = dw_sample.to(tensor_options).contiguous();
+    const auto x_all = x_sample.to(tensor_options)
+        .permute({0, 2, 1})
+        .contiguous(); // (B, T+1, D)
     const auto x = x_all.index({
         torch::indexing::Slice(),
         torch::indexing::Slice(0, -1),
@@ -679,7 +810,7 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
     const auto dW = dw_batch.permute({0, 2, 1}).contiguous();                     // (B, T, D)
 
     // 线性递推中的三块
-    const auto a  = 1.0f - dt * L;      // (S, T)
+    const auto a  = 1.0 - dt * L;       // (S, T)
     const auto xi = dW - dt * M;        // (S, T, D)
     const auto c  = dt * N;             // (S, T)
 
@@ -725,7 +856,7 @@ std::pair<const torch::Tensor, const torch::Tensor> RFMSolver::compute_linear_co
     return {A, B};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_batched_qr(
+std::tuple<torch::Tensor, torch::Tensor, double> RFMSolver::solve_linear_batched_qr(
     const LinearSolverOptions& options
 ) const
 {
@@ -795,11 +926,12 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_batched_
         residual_count += residual.numel();
     }
 
-    const auto rmse = static_cast<float>(std::sqrt(squared_error_sum / static_cast<double>(residual_count)));
+    const auto rmse =
+        std::sqrt(squared_error_sum / static_cast<double>(residual_count));
     return split_linear_solution(x, Hdim, rmse);
 }
 
-std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_constant_baseline(
+std::tuple<torch::Tensor, torch::Tensor, double> RFMSolver::solve_linear_constant_baseline(
     const LinearSolverOptions& options
 ) const
 {
@@ -825,8 +957,8 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_constant
 
     const auto y0 = torch::full(
         {1},
-        static_cast<float>(numerator / denominator),
-        torch::TensorOptions().dtype(torch::kFloat32).device(device_)
+        numerator / denominator,
+        torch::TensorOptions().dtype(equation_->dtype()).device(device_)
     );
     const auto beta = torch::zeros({Hdim}, y0.options());
 
@@ -845,17 +977,18 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_linear_constant
         residual_count += residual.numel();
     }
 
-    const auto rmse = static_cast<float>(std::sqrt(squared_error_sum / static_cast<double>(residual_count)));
+    const auto rmse =
+        std::sqrt(squared_error_sum / static_cast<double>(residual_count));
     return {y0.detach().clone(), beta, rmse};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_constant_baseline(
+std::tuple<torch::Tensor, torch::Tensor, double> RFMSolver::solve_nonlinear_constant_baseline(
     const torch::Tensor& y0,
-    const float lambda,
+    const double lambda,
     const bool output_log
 ) const
 {
-    TORCH_CHECK(lambda > 0.0f, "lambda must be positive");
+    TORCH_CHECK(lambda > 0.0, "lambda must be positive");
 
     const auto& nonlinear_options = config_.solver_config.nonlinear;
     const int64_t S = config_.solver_config.sample_size;
@@ -866,21 +999,21 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_const
         "nonlinear"
     );
 
-    auto y0_value = y0.to(device_).reshape({1}).item<float>();
-    float damping = lambda;
-    float final_error = 0.0f;
+    auto y0_value = y0.to(device_).reshape({1}).item<double>();
+    double damping = lambda;
+    double final_error = 0.0;
     int64_t accepted_iterations = 0;
     const auto beta_zero = torch::zeros(
         {Hdim},
-        torch::TensorOptions().dtype(torch::kFloat32).device(device_)
+        torch::TensorOptions().dtype(equation_->dtype()).device(device_)
     );
 
-    auto make_theta = [&beta_zero, this](const float value)
+    auto make_theta = [&beta_zero, this](const double value)
     {
         const auto y0_tensor = torch::full(
             {1},
             value,
-            torch::TensorOptions().dtype(torch::kFloat32).device(device_)
+            torch::TensorOptions().dtype(equation_->dtype()).device(device_)
         );
         return solver_utils::pack_nonlinear_parameters(y0_tensor, beta_zero)
             .detach()
@@ -927,22 +1060,21 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_const
             jacobian_residual_sum,
             residual_count
         ] = evaluate(theta);
-        const auto curr_loss = static_cast<float>(0.5 * squared_error_sum);
-        const auto curr_error = static_cast<float>(
-            std::sqrt(squared_error_sum / static_cast<double>(residual_count))
-        );
+        const auto curr_loss = 0.5 * squared_error_sum;
+        const auto curr_error =
+            std::sqrt(squared_error_sum / static_cast<double>(residual_count));
 
         bool accepted = false;
-        float accepted_y0 = y0_value;
-        float accepted_error = curr_error;
-        float accepted_step_norm = 0.0f;
+        double accepted_y0 = y0_value;
+        double accepted_error = curr_error;
+        double accepted_step_norm = 0.0;
 
         for (int64_t retry = 0; retry <= nonlinear_options.max_retries; ++retry)
         {
-            const double denominator = jacobian_square_sum + static_cast<double>(damping);
+            const double denominator = jacobian_square_sum + damping;
             TORCH_CHECK(denominator > 0.0, "constant baseline LM denominator must be positive");
-            const auto delta = static_cast<float>(-jacobian_residual_sum / denominator);
-            const float trial_y0 = y0_value + delta;
+            const auto delta = -jacobian_residual_sum / denominator;
+            const double trial_y0 = y0_value + delta;
             const auto trial_theta = make_theta(trial_y0);
             const auto [trial_loss, trial_error] = compute_nonlinear_loss_error_batched(
                 trial_theta,
@@ -1000,7 +1132,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_const
     const auto final_y0 = torch::full(
         {1},
         y0_value,
-        torch::TensorOptions().dtype(torch::kFloat32).device(device_)
+        torch::TensorOptions().dtype(equation_->dtype()).device(device_)
     );
     const auto final_theta = make_theta(y0_value);
     std::tie(std::ignore, final_error) = compute_nonlinear_loss_error_batched(
@@ -1018,25 +1150,29 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_const
     diagnostics_.objective_rmse = final_error;
     diagnostics_.accepted_lm_iterations = accepted_iterations;
     diagnostics_.final_damping = damping;
-    diagnostics_.final_gradient_inf_norm = static_cast<float>(
+    diagnostics_.final_gradient_inf_norm =
         std::abs(final_jacobian_residual_sum) /
-        static_cast<double>(final_residual_count)
-    );
+        static_cast<double>(final_residual_count);
     return {final_y0.detach().clone(), beta_zero.detach().clone(), final_error};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_levenberg_marquardt(
+std::tuple<torch::Tensor, torch::Tensor, double> RFMSolver::solve_nonlinear_levenberg_marquardt(
     const torch::Tensor& y0,
     const torch::Tensor& beta,
-    const float lambda,
+    const double lambda,
     const bool output_log) const
 {
     const int64_t max_iters = config_.solver_config.num_iterations;
     const auto& nonlinear_options = config_.solver_config.nonlinear;
 
-    torch::Tensor theta = solver_utils::pack_nonlinear_parameters(y0, beta).detach().clone().to(device_);
-    float damping = lambda;
-    float final_error = 0.0f;
+    const auto tensor_options =
+        torch::TensorOptions().dtype(equation_->dtype()).device(device_);
+    torch::Tensor theta = solver_utils::pack_nonlinear_parameters(y0, beta)
+        .detach()
+        .clone()
+        .to(tensor_options);
+    double damping = lambda;
+    double final_error = 0.0;
     int64_t accepted_iterations = 0;
     const int64_t nonlinear_batch_size = resolve_batch_size(
         config_.solver_config.nonlinear.batch_size,
@@ -1049,8 +1185,8 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
         torch::Tensor residual;
         torch::Tensor jacobian;
         torch::Tensor column_scales;
-        float curr_loss = 0.0f;
-        float curr_error = 0.0f;
+        double curr_loss = 0.0;
+        double curr_error = 0.0;
 
         if (nonlinear_options.step_solver != "batched_qr")
         {
@@ -1058,20 +1194,24 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
                 compute_nonlinear_objective_residual_and_jacobian(theta);
             residual = residual_raw.reshape({-1});
             jacobian = jacobian_raw;
+            if (output_log)
+            {
+                print_jacobian_spectrum_from_matrix(jacobian);
+            }
             column_scales = nonlinear_options.scale_jacobian_columns
                 ? solver_utils::jacobian_column_scales(
                     jacobian,
                     nonlinear_options.column_scale_epsilon
                 )
                 : torch::ones({jacobian.size(1)}, jacobian.options());
-            curr_loss = 0.5f * residual.pow(2).sum().item<float>();
-            curr_error = std::sqrt(residual.pow(2).mean().item<float>());
+            curr_loss = 0.5 * residual.pow(2).sum().item<double>();
+            curr_error = std::sqrt(residual.pow(2).mean().item<double>());
         }
 
         bool accepted = false;
         torch::Tensor accepted_theta;
-        float accepted_error = 0;
-        float accepted_step_norm = 0.0f;
+        double accepted_error = 0.0;
+        double accepted_step_norm = 0.0;
 
         for (int64_t retry = 0;
              retry <= nonlinear_options.max_retries;
@@ -1092,7 +1232,8 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
                 std::tie(delta, curr_loss, curr_error) = solve_nonlinear_lm_step_batched_qr(
                     theta,
                     damping,
-                    nonlinear_batch_size
+                    nonlinear_batch_size,
+                    output_log && retry == 0
                 );
             }
             else
@@ -1109,11 +1250,11 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
                 );
                 delta = scaled_delta / column_scales;
             }
-            const auto step_norm = delta.norm().item<float>();
+            const auto step_norm = delta.norm().item<double>();
 
             const auto trial_theta = (theta + delta).detach();
-            float trial_loss = 0.0f;
-            float trial_error = 0.0f;
+            double trial_loss = 0.0;
+            double trial_error = 0.0;
             if (nonlinear_options.step_solver == "batched_qr")
             {
                 std::tie(trial_loss, trial_error) = compute_nonlinear_loss_error_batched(
@@ -1124,8 +1265,11 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
             else
             {
                 const auto trial_residual = compute_nonlinear_objective_residual(trial_theta).reshape({-1});
-                trial_loss = 0.5f * trial_residual.pow(2).sum().item<float>();
-                trial_error = std::sqrt(trial_residual.pow(2).mean().item<float>());
+                trial_loss =
+                    0.5 * trial_residual.pow(2).sum().item<double>();
+                trial_error = std::sqrt(
+                    trial_residual.pow(2).mean().item<double>()
+                );
             }
             accepted = trial_loss < curr_loss;
 
@@ -1140,7 +1284,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
                     << " lambda=" << damping
                     << " step_norm=" << step_norm
                     << " accepted=" << std::boolalpha << accepted
-                    << " y_0=" << trial_theta.index({0}).item<float>()
+                    << " y_0=" << trial_theta.index({0}).item<double>()
                     << std::noboolalpha
                     << std::endl;
             }
@@ -1196,7 +1340,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
     const auto final_beta = theta.index({
         torch::indexing::Slice(1, torch::indexing::None)
     }).reshape({Hdim}).contiguous();
-    float terminal_error = 0.0f;
+    double terminal_error = 0.0;
     if (nonlinear_options.step_solver == "batched_qr")
     {
         std::tie(std::ignore, final_error) = compute_nonlinear_loss_error_batched(
@@ -1211,7 +1355,8 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
     else
     {
         const auto final_residual = compute_nonlinear_objective_residual(theta).reshape({-1});
-        final_error = std::sqrt(final_residual.pow(2).mean().item<float>());
+        final_error =
+            std::sqrt(final_residual.pow(2).mean().item<double>());
         const auto terminal_residual = compute_residual_for_samples(
             theta,
             t_,
@@ -1222,7 +1367,7 @@ std::tuple<torch::Tensor, torch::Tensor, float> RFMSolver::solve_nonlinear_leven
             false
         );
         terminal_error = std::sqrt(
-            terminal_residual.pow(2).mean().item<float>()
+            terminal_residual.pow(2).mean().item<double>()
         );
     }
     diagnostics_.objective_rmse = final_error;
@@ -1280,8 +1425,12 @@ RFMSolver::sample_nonlinear_batch(
     torch::manual_seed(batch_seed);
 
     const auto [dw_sample, x_sample] = equation_->sample(batch_size);
-    const auto dw = dw_sample.to(device_).contiguous();
-    const auto x_all = x_sample.to(device_).permute({0, 2, 1}).contiguous();
+    const auto tensor_options =
+        torch::TensorOptions().dtype(equation_->dtype()).device(device_);
+    const auto dw = dw_sample.to(tensor_options).contiguous();
+    const auto x_all = x_sample.to(tensor_options)
+        .permute({0, 2, 1})
+        .contiguous();
     const auto x = x_all.index({Slice(), Slice(0, -1), Slice()})
         .unsqueeze(2)
         .contiguous();
@@ -1289,7 +1438,7 @@ RFMSolver::sample_nonlinear_batch(
         .unsqueeze(2)
         .contiguous();
 
-    const auto opts = torch::TensorOptions().dtype(torch::kFloat32).device(device_);
+    const auto opts = tensor_options;
     const auto t_full = torch::linspace(0, config_.eqn_config.total_time, T + 1, opts);
     const auto t = t_full.slice(0, 0, T)
         .reshape({1, T, 1, 1})
@@ -1346,7 +1495,7 @@ torch::Tensor RFMSolver::compute_residual_for_samples(
     const int64_t batch_size = x.size(0);
     const int64_t time_count = x.size(1);
     const int64_t hidden_dim = rff_.hidden_dim();
-    const float dt = equation_->delta_t();
+    const double dt = equation_->delta_t();
     const auto& nonlinear_options = config_.solver_config.nonlinear;
 
     const auto y0 = theta.index({0}).reshape({1});
@@ -1438,9 +1587,9 @@ torch::Tensor RFMSolver::compute_residual_for_samples(
     residual_blocks.push_back(terminal_residual / residual_scale);
     if (!consistency_residuals.empty())
     {
-        const float consistency_scale = std::sqrt(
+        const double consistency_scale = std::sqrt(
             nonlinear_options.consistency_weight /
-            static_cast<float>(consistency_residuals.size())
+            static_cast<double>(consistency_residuals.size())
         );
         for (const auto& consistency_residual : consistency_residuals)
         {
@@ -1516,7 +1665,7 @@ RFMSolver::compute_objective_residual_and_jacobian_for_samples(
     const int64_t time_count = x.size(1);
     const int64_t hidden_dim = rff_.hidden_dim();
     const int64_t expected_size = 1 + hidden_dim;
-    const float dt = equation_->delta_t();
+    const double dt = equation_->delta_t();
     const auto& nonlinear_options = config_.solver_config.nonlinear;
 
     TORCH_CHECK(
@@ -1618,7 +1767,7 @@ RFMSolver::compute_objective_residual_and_jacobian_for_samples(
         }
 
         // dY_{k+1} = (1 - dt*f_y)dY_k + (dW_k - dt*f_z)dZ_k.
-        const auto scale = 1.0f - dt * f_y;
+        const auto scale = 1.0 - dt * f_y;
         const auto z_sensitivity = (
             (dw_k - dt * f_z) * z_features
         ).sum(-1); // (B, 1, H)
@@ -1710,9 +1859,9 @@ RFMSolver::compute_objective_residual_and_jacobian_for_samples(
     };
     if (!consistency_residuals.empty())
     {
-        const float consistency_scale = std::sqrt(
+        const double consistency_scale = std::sqrt(
             nonlinear_options.consistency_weight /
-            static_cast<float>(consistency_residuals.size())
+            static_cast<double>(consistency_residuals.size())
         );
         for (size_t i = 0; i < consistency_residuals.size(); ++i)
         {
@@ -1731,13 +1880,14 @@ RFMSolver::compute_objective_residual_and_jacobian_for_samples(
     };
 }
 
-std::tuple<torch::Tensor, float, float> RFMSolver::solve_nonlinear_lm_step_batched_qr(
+std::tuple<torch::Tensor, double, double> RFMSolver::solve_nonlinear_lm_step_batched_qr(
     const torch::Tensor& theta,
-    const float lambda,
-    const int64_t batch_size
+    const double lambda,
+    const int64_t batch_size,
+    const bool output_spectrum
 ) const
 {
-    TORCH_CHECK(lambda > 0.0f, "lambda must be positive");
+    TORCH_CHECK(lambda > 0.0, "lambda must be positive");
     TORCH_CHECK(batch_size > 0, "nonlinear batch_size must be positive");
 
     const int64_t S = config_.solver_config.sample_size;
@@ -1746,6 +1896,12 @@ std::tuple<torch::Tensor, float, float> RFMSolver::solve_nonlinear_lm_step_batch
     const auto& nonlinear_options = config_.solver_config.nonlinear;
 
     auto column_scales = torch::ones({num_param}, opts);
+    auto jacobian_gram = torch::zeros(
+        {num_param, num_param},
+        opts.dtype(torch::kFloat64)
+    );
+    int64_t spectrum_row_count = 0;
+    bool spectrum_collected = false;
     if (nonlinear_options.scale_jacobian_columns)
     {
         auto column_square_sum = torch::zeros({num_param}, opts);
@@ -1761,9 +1917,20 @@ std::tuple<torch::Tensor, float, float> RFMSolver::solve_nonlinear_lm_step_batch
                 );
             column_square_sum += jacobian_batch.square().sum(0);
             jacobian_row_count += jacobian_batch.size(0);
+            if (output_spectrum)
+            {
+                const auto jacobian_double =
+                    jacobian_batch.to(torch::kFloat64);
+                jacobian_gram += torch::matmul(
+                    jacobian_double.transpose(0, 1),
+                    jacobian_double
+                );
+                spectrum_row_count += jacobian_batch.size(0);
+            }
         }
+        spectrum_collected = output_spectrum;
         column_scales = (
-            column_square_sum / static_cast<float>(jacobian_row_count)
+            column_square_sum / static_cast<double>(jacobian_row_count)
         ).sqrt().clamp_min(
             nonlinear_options.column_scale_epsilon
         ).contiguous();
@@ -1779,6 +1946,16 @@ std::tuple<torch::Tensor, float, float> RFMSolver::solve_nonlinear_lm_step_batch
         const int64_t row_end = std::min(row_begin + batch_size, S);
         const auto [residual_batch, jacobian_batch] =
             compute_nonlinear_objective_residual_and_jacobian_batch(theta, row_begin, row_end);
+        if (output_spectrum && !spectrum_collected)
+        {
+            const auto jacobian_double =
+                jacobian_batch.to(torch::kFloat64);
+            jacobian_gram += torch::matmul(
+                jacobian_double.transpose(0, 1),
+                jacobian_double
+            );
+            spectrum_row_count += jacobian_batch.size(0);
+        }
         const auto reduction_rhs = -residual_batch.reshape({-1, 1}).contiguous();
         std::tie(R, rhs) = reduce_linear_qr_libtorch(
             torch::cat({R, jacobian_batch / column_scales}, 0).contiguous(),
@@ -1789,17 +1966,27 @@ std::tuple<torch::Tensor, float, float> RFMSolver::solve_nonlinear_lm_step_batch
         residual_count += residual_batch.numel();
     }
 
+    if (output_spectrum)
+    {
+        print_jacobian_spectrum_from_gram(
+            jacobian_gram,
+            spectrum_row_count,
+            theta.scalar_type()
+        );
+    }
+
     const auto scaled_delta =
         torch::linalg_solve_triangular(R, rhs, true)
             .reshape({-1})
             .contiguous();
     const auto delta = (scaled_delta / column_scales).contiguous();
-    const auto loss = static_cast<float>(0.5 * squared_error_sum);
-    const auto error = static_cast<float>(std::sqrt(squared_error_sum / static_cast<double>(residual_count)));
+    const auto loss = 0.5 * squared_error_sum;
+    const auto error =
+        std::sqrt(squared_error_sum / static_cast<double>(residual_count));
     return {delta, loss, error};
 }
 
-std::pair<float, float> RFMSolver::compute_nonlinear_loss_error_batched(
+std::pair<double, double> RFMSolver::compute_nonlinear_loss_error_batched(
     const torch::Tensor& theta,
     const int64_t batch_size
 ) const
@@ -1819,12 +2006,12 @@ std::pair<float, float> RFMSolver::compute_nonlinear_loss_error_batched(
     }
 
     return {
-        static_cast<float>(0.5 * squared_error_sum),
-        static_cast<float>(std::sqrt(squared_error_sum / static_cast<double>(residual_count)))
+        0.5 * squared_error_sum,
+        std::sqrt(squared_error_sum / static_cast<double>(residual_count))
     };
 }
 
-float RFMSolver::compute_nonlinear_terminal_error_batched(
+double RFMSolver::compute_nonlinear_terminal_error_batched(
     const torch::Tensor& theta,
     const int64_t batch_size
 ) const
@@ -1852,12 +2039,12 @@ float RFMSolver::compute_nonlinear_terminal_error_batched(
         squared_error_sum += residual.square().sum().item<double>();
         residual_count += residual.numel();
     }
-    return static_cast<float>(
-        std::sqrt(squared_error_sum / static_cast<double>(residual_count))
+    return std::sqrt(
+        squared_error_sum / static_cast<double>(residual_count)
     );
 }
 
-float RFMSolver::compute_nonlinear_gradient_inf_norm(
+double RFMSolver::compute_nonlinear_gradient_inf_norm(
     const torch::Tensor& theta,
     const int64_t batch_size
 ) const
@@ -1898,8 +2085,8 @@ float RFMSolver::compute_nonlinear_gradient_inf_norm(
         residual_count = residual.numel();
     }
     return (
-        gradient_sum.abs().max() / static_cast<float>(residual_count)
-    ).item<float>();
+        gradient_sum.abs().max() / static_cast<double>(residual_count)
+    ).item<double>();
 }
 
 torch::Tensor RFMSolver::forward_nonlinear_terminal_y(
@@ -1911,7 +2098,7 @@ torch::Tensor RFMSolver::forward_nonlinear_terminal_y(
 
     const int64_t S = config_.solver_config.sample_size;
     const int64_t T = config_.eqn_config.num_time_intervals;
-    const float dt = equation_->delta_t();
+    const double dt = equation_->delta_t();
 
     auto y = y0.reshape({1, 1, 1, 1}).expand({S, 1, 1, 1});
     const auto z_all = compute_z(t_, x_, beta);
@@ -2061,9 +2248,36 @@ std::vector<int64_t> RFMSolver::nonlinear_consistency_indices(
 {
     const auto& options = config_.solver_config.nonlinear;
     if (options.step_solver == "constant" ||
-        options.consistency_points == 0 ||
-        options.consistency_weight == 0.0f ||
+        options.consistency_weight == 0.0 ||
         time_count <= 1)
+    {
+        return {};
+    }
+
+    if (!options.consistency_time_fractions.empty())
+    {
+        std::vector<int64_t> indices;
+        indices.reserve(options.consistency_time_fractions.size());
+        for (const double fraction :
+             options.consistency_time_fractions)
+        {
+            indices.push_back(std::clamp(
+                static_cast<int64_t>(std::llround(
+                    fraction * static_cast<double>(time_count)
+                )),
+                int64_t{1},
+                time_count - 1
+            ));
+        }
+        std::sort(indices.begin(), indices.end());
+        indices.erase(
+            std::unique(indices.begin(), indices.end()),
+            indices.end()
+        );
+        return indices;
+    }
+
+    if (options.consistency_points == 0)
     {
         return {};
     }
@@ -2093,7 +2307,7 @@ torch::Tensor RFMSolver::nonlinear_residual_scale() const
 {
     const auto& options = config_.solver_config.nonlinear;
     const auto tensor_options =
-        torch::TensorOptions().dtype(torch::kFloat32).device(device_);
+        torch::TensorOptions().dtype(equation_->dtype()).device(device_);
     if (options.step_solver == "constant" || !options.normalize_residuals)
     {
         return torch::ones({}, tensor_options);
@@ -2138,13 +2352,13 @@ torch::Tensor RFMSolver::nonlinear_residual_scale() const
 
     TORCH_CHECK(terminal_count > 0, "terminal residual scale has no samples");
     const auto terminal_mean =
-        terminal_sum / static_cast<float>(terminal_count);
+        terminal_sum / static_cast<double>(terminal_count);
     const auto terminal_variance = (
-        terminal_square_sum / static_cast<float>(terminal_count) -
+        terminal_square_sum / static_cast<double>(terminal_count) -
         terminal_mean.square()
-    ).clamp_min(0.0f);
+    ).clamp_min(0.0);
     nonlinear_residual_scale_ =
-        terminal_variance.sqrt().clamp_min(1.0e-6f).contiguous();
+        terminal_variance.sqrt().clamp_min(1.0e-6).contiguous();
     return nonlinear_residual_scale_;
 }
 
@@ -2233,7 +2447,8 @@ void RFMSolver::compute_time_grid()
     const int64_t T = config_.eqn_config.num_time_intervals;
     const int64_t S = config_.solver_config.sample_size;
 
-    const auto opts = torch::TensorOptions().dtype(torch::kFloat32).device(device_);
+    const auto opts =
+        torch::TensorOptions().dtype(equation_->dtype()).device(device_);
     const auto t_full = torch::linspace(0, total_time, T + 1, opts);
 
     const auto t_base = t_full.slice(0, 0, T).reshape({1, T, 1, 1});
@@ -2251,9 +2466,13 @@ void RFMSolver::compute_txw()
 
     const auto [fst, snd] = equation_->sample(S);
 
-    dw_ = fst.to(device_).contiguous();
+    const auto tensor_options =
+        torch::TensorOptions().dtype(equation_->dtype()).device(device_);
+    dw_ = fst.to(tensor_options).contiguous();
 
-    const auto x_all = snd.to(device_).permute({0, 2, 1}).contiguous(); // (S, T+1, D)
+    const auto x_all = snd.to(tensor_options)
+        .permute({0, 2, 1})
+        .contiguous(); // (S, T+1, D)
     x_ = x_all.index({
         at::indexing::Slice(),
         at::indexing::Slice(0, -1),
@@ -2382,8 +2601,8 @@ void RFMSolver::check_tx_shape(
         );
 
     TORCH_CHECK(
-        t.dtype() == torch::kFloat32,
-        "t must be float32, but got ", t.dtype()
+        t.dtype() == equation_->dtype(),
+        "t must have dtype ", equation_->dtype(), ", but got ", t.dtype()
         );
 
     TORCH_CHECK(
@@ -2404,8 +2623,8 @@ void RFMSolver::check_tx_shape(
     );
 
     TORCH_CHECK(
-        x.dtype() == torch::kFloat32,
-        "x must be float32, but got", x.dtype()
+        x.dtype() == equation_->dtype(),
+        "x must have dtype ", equation_->dtype(), ", but got ", x.dtype()
         );
 
     TORCH_CHECK(

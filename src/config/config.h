@@ -5,12 +5,19 @@
 #include <string>
 #include <vector>
 
+enum class NumericDType
+{
+    Float32,
+    Float64
+};
+
 struct EqnConfig
 {
     std::string comment;
     std::string equation_name;
     bool is_linear;
-    float total_time;
+    NumericDType dtype;
+    double total_time;
     int64_t dimension;
     int64_t num_time_intervals;
     nlohmann::json params;
@@ -18,21 +25,22 @@ struct EqnConfig
 
 struct NonlinearSolveOptions
 {
-    float min_lambda;
-    float max_lambda;
-    float lambda_decrease;
-    float lambda_increase;
-    float error_tol;
-    float step_tol;
+    double min_lambda;
+    double max_lambda;
+    double lambda_decrease;
+    double lambda_increase;
+    double error_tol;
+    double step_tol;
     int64_t max_retries;
     std::string step_solver;
     int64_t batch_size;
     bool hard_terminal_lift;
     int64_t consistency_points;
-    float consistency_weight;
+    std::vector<double> consistency_time_fractions;
+    double consistency_weight;
     bool normalize_residuals;
     bool scale_jacobian_columns;
-    float column_scale_epsilon;
+    double column_scale_epsilon;
 };
 
 struct LinearSolveOptions
@@ -44,18 +52,18 @@ struct LinearSolveOptions
 
 struct RandomFeatureScaleBand
 {
-    float scale_min;
-    float scale_max;
-    float weight;
+    double scale_min;
+    double scale_max;
+    double weight;
 };
 
 struct RandomFeatureOptions
 {
-    float scale_min;
-    float scale_max;
-    float space_scale;
-    float time_scale;
-    float bias_scale;
+    double scale_min;
+    double scale_max;
+    double space_scale;
+    double time_scale;
+    double bias_scale;
     std::vector<RandomFeatureScaleBand> scale_bands;
 };
 
@@ -64,19 +72,20 @@ struct ReferenceEvaluationOptions
     bool enabled;
     int64_t sample_size;
     int64_t batch_size;
-    std::vector<float> time_fractions;
+    std::vector<double> time_fractions;
 };
 
 struct SolverConfig
 {
     bool use_linear_solver;
+    NumericDType dtype;
     int64_t num_iterations;
     int64_t sample_size;
     int64_t test_sample_size;
     int64_t test_batch_size;
     int64_t hidden_dim;
-    float initial_lambda;
-    float beta_init_scale;
+    double initial_lambda;
+    double beta_init_scale;
     RandomFeatureOptions random_feature;
     LinearSolveOptions linear;
     NonlinearSolveOptions nonlinear;

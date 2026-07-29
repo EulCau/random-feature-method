@@ -8,7 +8,7 @@ struct LinearSolveResult
 {
     torch::Tensor y0;
     torch::Tensor beta;
-    float rmse{};
+    double rmse{};
 };
 
 [[nodiscard]] LinearSolveResult solve_linear_least_squares(

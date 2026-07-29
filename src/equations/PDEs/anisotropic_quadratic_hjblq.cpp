@@ -9,16 +9,19 @@ class AnisotropicQuadraticHJBLQ final : public Equation
 public:
     explicit AnisotropicQuadraticHJBLQ(const EqnConfig& eqn_config)
         : Equation(eqn_config),
-          x_init_(torch::full({dim_}, eqn_config.params.value("x_init", 0.0f))),
-          sigma_(eqn_config.params.value("sigma", static_cast<float>(std::sqrt(2.0)))),
-          lambda_(eqn_config.params.value("lambda", 1.0f)),
-          eigenvalue_min_(eqn_config.params.value("eigenvalue_min", 0.05f)),
-          eigenvalue_max_(eqn_config.params.value("eigenvalue_max", 0.25f)),
+          x_init_(torch::full(
+              {dim_},
+              eqn_config.params.value("x_init", 0.0),
+              torch::TensorOptions().dtype(dtype_))),
+          sigma_(eqn_config.params.value("sigma", std::sqrt(2.0))),
+          lambda_(eqn_config.params.value("lambda", 1.0)),
+          eigenvalue_min_(eqn_config.params.value("eigenvalue_min", 0.05)),
+          eigenvalue_max_(eqn_config.params.value("eigenvalue_max", 0.25)),
           direction_count_(eqn_config.params.value("direction_count", int64_t{10}))
     {
-        TORCH_CHECK(sigma_ > 0.0f, "sigma must be positive");
-        TORCH_CHECK(lambda_ > 0.0f, "lambda must be positive");
-        TORCH_CHECK(eigenvalue_min_ > 0.0f, "eigenvalue_min must be positive");
+        TORCH_CHECK(sigma_ > 0.0, "sigma must be positive");
+        TORCH_CHECK(lambda_ > 0.0, "lambda must be positive");
+        TORCH_CHECK(eigenvalue_min_ > 0.0, "eigenvalue_min must be positive");
         TORCH_CHECK(
             eigenvalue_max_ >= eigenvalue_min_,
             "eigenvalue_max must be at least eigenvalue_min"
@@ -28,18 +31,18 @@ public:
             "direction_count must satisfy 0 < direction_count < dimension"
         );
 
-        const auto opts = torch::TensorOptions().dtype(torch::kFloat32);
+        const auto opts = torch::TensorOptions().dtype(dtype_);
         const auto coordinate = torch::arange(0, dim_, opts).reshape({1, dim_});
         const auto mode = torch::arange(
             1,
             direction_count_ + 1,
             opts
         ).reshape({direction_count_, 1});
-        const float pi = static_cast<float>(std::acos(-1.0));
-        directions_ = std::sqrt(2.0f / static_cast<float>(dim_)) *
+        const double pi = std::acos(-1.0);
+        directions_ = std::sqrt(2.0 / static_cast<double>(dim_)) *
             torch::cos(
-                pi * (coordinate + 0.5f) * mode /
-                static_cast<float>(dim_)
+                pi * (coordinate + 0.5) * mode /
+                static_cast<double>(dim_)
             );
         eigenvalues_ = torch::linspace(
             eigenvalue_min_,
@@ -54,11 +57,11 @@ public:
     {
         auto dw = torch::randn(
             {num_sample, dim_, num_time_interval_},
-            torch::kFloat
+            torch::TensorOptions().dtype(dtype_)
         ) * sqrt_delta_t_;
         auto x = torch::zeros(
             {num_sample, dim_, num_time_interval_ + 1},
-            torch::kFloat
+            torch::TensorOptions().dtype(dtype_)
         );
         x.index_put_(
             {torch::indexing::Slice(), torch::indexing::Slice(), 0},
@@ -90,7 +93,7 @@ public:
         const torch::Tensor& y,
         const torch::Tensor& z) const override
     {
-        return -0.5f * lambda_ * torch::sum(z * z, -1, true);
+        return -0.5 * lambda_ * torch::sum(z * z, -1, true);
     }
 
     [[nodiscard]] torch::Tensor g(
@@ -134,22 +137,22 @@ public:
             .squeeze(-1)
             .unsqueeze(-1);
         const auto denominator =
-            1.0f +
-            2.0f * lambda_ * sigma_ * sigma_ *
+            1.0 +
+            2.0 * lambda_ * sigma_ * sigma_ *
                 remaining_time * eigenvalues;
         const auto value = (
             eigenvalues * projected.square() / denominator +
-            0.5f * torch::log(denominator) / lambda_
+            0.5 * torch::log(denominator) / lambda_
         ).sum(-1, true);
         return value.unsqueeze(2).contiguous();
     }
 
 private:
     torch::Tensor x_init_;
-    float sigma_;
-    float lambda_;
-    float eigenvalue_min_;
-    float eigenvalue_max_;
+    double sigma_;
+    double lambda_;
+    double eigenvalue_min_;
+    double eigenvalue_max_;
     int64_t direction_count_;
     torch::Tensor directions_;
     torch::Tensor eigenvalues_;

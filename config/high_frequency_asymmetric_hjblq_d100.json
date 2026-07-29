@@ -18,6 +18,7 @@
   },
   "solver_config": {
     "use_linear_solver": false,
+    "dtype": "float32",
     "num_iterations": 50,
     "sample_size": 8008,
     "test_sample_size": 65536,

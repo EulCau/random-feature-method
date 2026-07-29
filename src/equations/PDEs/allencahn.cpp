@@ -6,11 +6,14 @@ class AllenCahn final : public Equation
 public:
 	explicit AllenCahn(const EqnConfig& eqn_config)
 		: Equation(eqn_config),
-		  x_init_(torch::full({dim_}, eqn_config.params.value("x_init", 0.0f))),
-		  sigma_(eqn_config.params.value("sigma", static_cast<float>(std::sqrt(2.0)))),
-		  lambda_(eqn_config.params.value("lambda", 1.0f)),
-		  terminal_offset_(eqn_config.params.value("terminal_offset", 2.0f)),
-		  terminal_scale_(eqn_config.params.value("terminal_scale", 0.4f))
+		  x_init_(torch::full(
+			  {dim_},
+			  eqn_config.params.value("x_init", 0.0),
+			  torch::TensorOptions().dtype(dtype_))),
+		  sigma_(eqn_config.params.value("sigma", std::sqrt(2.0))),
+		  lambda_(eqn_config.params.value("lambda", 1.0)),
+		  terminal_offset_(eqn_config.params.value("terminal_offset", 2.0)),
+		  terminal_scale_(eqn_config.params.value("terminal_scale", 0.4))
 	{
 	}
 
@@ -20,11 +23,13 @@ public:
 	{
 		// dW ~ N(0, delta_t)
 		torch::Tensor dw = torch::randn(
-			{num_sample, dim_, num_time_interval_}, torch::kFloat) * sqrt_delta_t_;
+			{num_sample, dim_, num_time_interval_},
+			torch::TensorOptions().dtype(dtype_)) * sqrt_delta_t_;
 
 		// Init X: x_0 = x_init
 		torch::Tensor x = torch::zeros(
-			{num_sample, dim_, num_time_interval_ + 1}, torch::kFloat);
+			{num_sample, dim_, num_time_interval_ + 1},
+			torch::TensorOptions().dtype(dtype_));
 		x.index_put_(
 			{torch::indexing::Slice(), torch::indexing::Slice(), 0},
 			x_init_.expand({num_sample, dim_}));
@@ -54,7 +59,7 @@ public:
 	[[nodiscard("Return Need to be Used")]]
 	torch::Tensor g(const torch::Tensor& t, const torch::Tensor& x) const override
 	{
-		return 1.0f / (
+		return 1.0 / (
 			terminal_offset_ + terminal_scale_ * torch::sum(x * x, /*dim=*/-1, /*keepdim=*/true)
 		);
 	}
@@ -69,10 +74,10 @@ public:
 
 private:
 	torch::Tensor x_init_;
-	float sigma_;
-	float lambda_;
-	float terminal_offset_;
-	float terminal_scale_;
+	double sigma_;
+	double lambda_;
+	double terminal_offset_;
+	double terminal_scale_;
 };
 
 REGISTER_EQUATION_CLASS(AllenCahn)

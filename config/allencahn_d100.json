@@ -16,6 +16,7 @@
   },
   "solver_config": {
     "use_linear_solver": false,
+    "dtype": "float32",
     "num_iterations": 200,
     "sample_size": 16384,
     "hidden_dim": 50,

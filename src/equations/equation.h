@@ -20,9 +20,14 @@ public:
 	explicit Equation(const EqnConfig& eqn_config)
 		: dim_(eqn_config.dimension),
 		  linear_(eqn_config.is_linear),
+		  dtype_(eqn_config.dtype == NumericDType::Float64
+			  ? torch::kFloat64
+			  : torch::kFloat32),
 		  total_time_(eqn_config.total_time),
 		  num_time_interval_(eqn_config.num_time_intervals),
-		  delta_t_(eqn_config.total_time / static_cast<float>(eqn_config.num_time_intervals)),
+		  delta_t_(
+			  eqn_config.total_time /
+			  static_cast<double>(eqn_config.num_time_intervals)),
 		  sqrt_delta_t_(std::sqrt(delta_t_)) {}
 
 	virtual ~Equation() = default;
@@ -89,10 +94,11 @@ public:
 	}
 
 	[[nodiscard]] int64_t dim() const { return dim_; }
-	[[nodiscard]] float total_time() const { return total_time_; }
+	[[nodiscard]] double total_time() const { return total_time_; }
 	[[nodiscard]] int64_t num_time_interval() const { return num_time_interval_; }
-	[[nodiscard]] float delta_t() const { return delta_t_; }
-	[[nodiscard]] float sqrt_delta_t() const { return sqrt_delta_t_; }
+	[[nodiscard]] double delta_t() const { return delta_t_; }
+	[[nodiscard]] double sqrt_delta_t() const { return sqrt_delta_t_; }
+	[[nodiscard]] torch::ScalarType dtype() const { return dtype_; }
     [[nodiscard]] bool is_linear() const { return linear_; }
     [[nodiscard]] bool has_coefficient() const { return coefficient_ != nullptr; }
     [[nodiscard]] const Coefficient& coef() const
@@ -104,9 +110,10 @@ public:
 protected:
 	int64_t dim_;
     bool linear_;
-	float total_time_;
+	torch::ScalarType dtype_;
+	double total_time_;
 	int64_t num_time_interval_;
-	float delta_t_;
-	float sqrt_delta_t_;
+	double delta_t_;
+	double sqrt_delta_t_;
 	std::shared_ptr<Coefficient> coefficient_;
 };

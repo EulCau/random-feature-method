@@ -17,11 +17,11 @@ torch::Tensor pack_nonlinear_parameters(
 
 torch::Tensor jacobian_column_scales(
     const torch::Tensor& jacobian,
-    const float epsilon)
+    const double epsilon)
 {
     TORCH_CHECK(jacobian.dim() == 2, "jacobian must be 2D");
     TORCH_CHECK(jacobian.size(0) > 0, "jacobian must have at least one row");
-    TORCH_CHECK(epsilon > 0.0f, "column scale epsilon must be positive");
+    TORCH_CHECK(epsilon > 0.0, "column scale epsilon must be positive");
     return jacobian.square()
         .mean(0)
         .sqrt()
@@ -32,9 +32,9 @@ torch::Tensor jacobian_column_scales(
 torch::Tensor solve_lm_step(
     const torch::Tensor& jacobian,
     const torch::Tensor& residual,
-    const float lambda)
+    const double lambda)
 {
-    TORCH_CHECK(lambda > 0.0f, "lambda must be positive");
+    TORCH_CHECK(lambda > 0.0, "lambda must be positive");
 
     const auto j_t = jacobian.transpose(0, 1).contiguous();
     const auto system = torch::matmul(j_t, jacobian);
@@ -50,9 +50,9 @@ torch::Tensor solve_lm_step(
 torch::Tensor solve_lm_step_qr(
     const torch::Tensor& jacobian,
     const torch::Tensor& residual,
-    const float lambda)
+    const double lambda)
 {
-    TORCH_CHECK(lambda > 0.0f, "lambda must be positive");
+    TORCH_CHECK(lambda > 0.0, "lambda must be positive");
 
     const int64_t num_param = jacobian.size(1);
     const auto opts = torch::TensorOptions().dtype(jacobian.dtype()).device(jacobian.device());

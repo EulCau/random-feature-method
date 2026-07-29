@@ -36,11 +36,13 @@ class Heat final : public Equation
 public:
     explicit Heat(const EqnConfig& eqn_config)
         : Equation(eqn_config),
-          x_init_(eqn_config.params.value("x_init", 0.0f)),
+          x_init_(eqn_config.params.value("x_init", 0.0)),
           terminal_scale_(
-              eqn_config.params.value("terminal_scale", static_cast<float>(dim_)))
+              eqn_config.params.value(
+                  "terminal_scale",
+                  static_cast<double>(dim_)))
     {
-        TORCH_CHECK(terminal_scale_ > 0.0f, "terminal_scale must be positive");
+        TORCH_CHECK(terminal_scale_ > 0.0, "terminal_scale must be positive");
 
         if (linear_)
         {
@@ -53,7 +55,8 @@ public:
     std::pair<torch::Tensor, torch::Tensor> sample(int64_t num_sample) const override
     {
         const auto device = torch::cuda::is_available() ? torch::kCUDA : torch::kCPU;
-        const auto opts = torch::TensorOptions().dtype(torch::kFloat32).device(device);
+        const auto opts =
+            torch::TensorOptions().dtype(dtype_).device(device);
 
         const auto dw = torch::randn(
             {num_sample, dim_, num_time_interval_}, opts
@@ -118,10 +121,10 @@ public:
             "t and x leading dimensions must match"
         );
         const auto remaining_time = total_time_ - t;
-        const auto denominator = terminal_scale_ + 2.0f * remaining_time;
+        const auto denominator = terminal_scale_ + 2.0 * remaining_time;
         const auto prefactor = torch::pow(
             terminal_scale_ / denominator,
-            0.5f * static_cast<float>(dim_)
+            0.5 * static_cast<double>(dim_)
         );
         const auto norm_square = torch::sum(x * x, -1, true);
         return (
@@ -131,8 +134,8 @@ public:
     }
 
 private:
-    float x_init_;
-    float terminal_scale_;
+    double x_init_;
+    double terminal_scale_;
 };
 
 REGISTER_EQUATION_CLASS(Heat)

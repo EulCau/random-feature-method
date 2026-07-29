@@ -11,16 +11,16 @@ namespace solver_utils
 
 [[nodiscard]] torch::Tensor jacobian_column_scales(
     const torch::Tensor& jacobian,
-    float epsilon);
+    double epsilon);
 
 [[nodiscard]] torch::Tensor solve_lm_step(
     const torch::Tensor& jacobian,
     const torch::Tensor& residual,
-    float lambda);
+    double lambda);
 
 [[nodiscard]] torch::Tensor solve_lm_step_qr(
     const torch::Tensor& jacobian,
     const torch::Tensor& residual,
-    float lambda);
+    double lambda);
 
 } // namespace solver_utils

@@ -6,9 +6,12 @@ class HJBLQ final : public Equation
 public:
 	explicit HJBLQ(const EqnConfig& eqn_config)
 		: Equation(eqn_config),
-		  x_init_(torch::full({dim_}, eqn_config.params.value("x_init", 0.0f))),
-		  sigma_(eqn_config.params.value("sigma", static_cast<float>(std::sqrt(2.0)))),
-		  lambda_(eqn_config.params.value("lambda", 1.0f))
+		  x_init_(torch::full(
+			  {dim_},
+			  eqn_config.params.value("x_init", 0.0),
+			  torch::TensorOptions().dtype(dtype_))),
+		  sigma_(eqn_config.params.value("sigma", std::sqrt(2.0))),
+		  lambda_(eqn_config.params.value("lambda", 1.0))
 	{
 	}
 
@@ -18,11 +21,13 @@ public:
 	{
 		// dW ~ N(0, delta_t)
 		torch::Tensor dw = torch::randn(
-			{num_sample, dim_, num_time_interval_}, torch::kFloat) * sqrt_delta_t_;
+			{num_sample, dim_, num_time_interval_},
+			torch::TensorOptions().dtype(dtype_)) * sqrt_delta_t_;
 
 		// Init X: x_0 = x_init
 		torch::Tensor x = torch::zeros(
-			{num_sample, dim_, num_time_interval_ + 1}, torch::kFloat);
+			{num_sample, dim_, num_time_interval_ + 1},
+			torch::TensorOptions().dtype(dtype_));
 		x.index_put_(
 			{torch::indexing::Slice(), torch::indexing::Slice(), 0},
 			x_init_.expand({num_sample, dim_}));
@@ -65,8 +70,8 @@ public:
 
 private:
 	torch::Tensor x_init_;
-	float sigma_;
-	float lambda_;
+	double sigma_;
+	double lambda_;
 };
 
 REGISTER_EQUATION_CLASS(HJBLQ)

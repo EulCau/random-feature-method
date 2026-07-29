@@ -3,8 +3,8 @@
 
 struct BSMCoefficient final : Coefficient
 {
-    explicit BSMCoefficient(const float r) : r_{r} {}
-    float r_;
+    explicit BSMCoefficient(const double r) : r_{r} {}
+    double r_;
     [[nodiscard]] torch::Tensor L(const torch::Tensor& t,
                     const torch::Tensor& x) const override
     {
@@ -42,10 +42,13 @@ class BSM final : public Equation
 public:
     explicit BSM(const EqnConfig& eqn_config)
         : Equation(eqn_config),
-          x_init_(torch::full({dim_}, eqn_config.params.value("x_init", 1.0f))),
-          sigma_(eqn_config.params.value("sigma", 0.2f)),
-          r_(eqn_config.params.value("rate", 0.05f)),
-          K_(eqn_config.params.value("strike", 1.0f))
+          x_init_(torch::full(
+              {dim_},
+              eqn_config.params.value("x_init", 1.0),
+              torch::TensorOptions().dtype(dtype_))),
+          sigma_(eqn_config.params.value("sigma", 0.2)),
+          r_(eqn_config.params.value("rate", 0.05)),
+          K_(eqn_config.params.value("strike", 1.0))
     {
         if (linear_)
         {
@@ -58,7 +61,8 @@ public:
     std::pair<torch::Tensor, torch::Tensor> sample(int64_t num_sample) const override
     {
         const auto device = torch::cuda::is_available()?torch::kCUDA:torch::kCPU;
-        const auto opts = torch::TensorOptions().dtype(torch::kFloat32).device(device);
+        const auto opts =
+            torch::TensorOptions().dtype(dtype_).device(device);
 
         // dW ~ N(0, delta_t)
         torch::Tensor dw = torch::randn(
@@ -119,9 +123,9 @@ public:
 
 private:
     torch::Tensor x_init_;
-    float sigma_;
-    float r_;
-    float K_;
+    double sigma_;
+    double r_;
+    double K_;
 };
 
 REGISTER_EQUATION_CLASS(BSM)

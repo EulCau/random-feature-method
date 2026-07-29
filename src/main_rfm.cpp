@@ -7,6 +7,7 @@
 #include <iostream>
 #include <chrono>
 #include <cstdlib>
+#include <iomanip>
 #include <limits>
 #include <optional>
 #include <stdexcept>
@@ -81,16 +82,16 @@ std::vector<int64_t> resolve_reference_time_indices(
 
     std::vector<int64_t> indices;
     indices.reserve(options.time_fractions.size());
-    for (const float fraction : options.time_fractions)
+    for (const double fraction : options.time_fractions)
     {
         TORCH_CHECK(
-            std::isfinite(fraction) && 0.0f < fraction && fraction < 1.0f,
+            std::isfinite(fraction) && 0.0 < fraction && fraction < 1.0,
             "reference time fraction must satisfy 0 < fraction < 1, got ",
             fraction
         );
         indices.push_back(std::clamp(
             static_cast<int64_t>(std::llround(
-                fraction * static_cast<float>(time_interval_count)
+                fraction * static_cast<double>(time_interval_count)
             )),
             int64_t{1},
             time_interval_count - 1
@@ -219,8 +220,8 @@ void evaluate_reference_solution(
 
     for (int64_t i = 0; i < point_count; ++i)
     {
-        const float time = equation.delta_t() *
-            static_cast<float>(time_indices[static_cast<size_t>(i)]);
+        const double time = equation.delta_t() *
+            static_cast<double>(time_indices[static_cast<size_t>(i)]);
         std::cout
             << "reference eval t=" << time
             << " samples=" << evaluated_count
@@ -386,7 +387,7 @@ int main(const int argc, char* argv[])
     if (torch::cuda::is_available()) torch::cuda::synchronize();
 
     const auto [y0, beta, rmse] = rfm_solver.solve(true);
-    const float test_mse = rfm_solver.test(y0, beta);
+    const double test_mse = rfm_solver.test(y0, beta);
     const auto& diagnostics = rfm_solver.diagnostics();
     auto reference_options = cfg.solver_config.reference_evaluation;
     reference_options.enabled =
@@ -416,10 +417,11 @@ int main(const int argc, char* argv[])
     if (torch::cuda::is_available()) torch::cuda::synchronize();
 
     const auto t_end = std::chrono::high_resolution_clock::now();
-    const float elapsed =
-        std::chrono::duration<float, std::milli>(t_end - t_start).count();
+    const double elapsed =
+        std::chrono::duration<double, std::milli>(t_end - t_start).count();
 
-    std::cout << "y0 = " << y0.item<float>() << std::endl;
+    std::cout << std::setprecision(std::numeric_limits<double>::max_digits10);
+    std::cout << "y0 = " << y0.item<double>() << std::endl;
     std::cout << "rmse = " << rmse << std::endl;
     std::cout << "test rmse = " << test_mse << std::endl;
     std::cout << "test terminal std = "

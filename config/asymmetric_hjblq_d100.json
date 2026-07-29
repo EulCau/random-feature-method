@@ -17,6 +17,7 @@
   },
   "solver_config": {
     "use_linear_solver": false,
+    "dtype": "float32",
     "num_iterations": 50,
     "sample_size": 8008,
     "test_sample_size": 65536,
@@ -63,6 +64,7 @@
       "batch_size": 0,
       "hard_terminal_lift": true,
       "consistency_points": 3,
+      "consistency_time_fractions": [0.1, 0.25, 0.5],
       "consistency_weight": 1.0,
       "normalize_residuals": true,
       "scale_jacobian_columns": true,

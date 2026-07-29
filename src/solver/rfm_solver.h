@@ -9,13 +9,13 @@
 
 struct RFMSolverDiagnostics
 {
-    float objective_rmse{std::numeric_limits<float>::quiet_NaN()};
-    float test_terminal_std{std::numeric_limits<float>::quiet_NaN()};
-    float normalized_test_rmse{std::numeric_limits<float>::quiet_NaN()};
-    float explained_terminal_variance{std::numeric_limits<float>::quiet_NaN()};
-    float beta_norm{std::numeric_limits<float>::quiet_NaN()};
-    float final_gradient_inf_norm{std::numeric_limits<float>::quiet_NaN()};
-    float final_damping{std::numeric_limits<float>::quiet_NaN()};
+    double objective_rmse{std::numeric_limits<double>::quiet_NaN()};
+    double test_terminal_std{std::numeric_limits<double>::quiet_NaN()};
+    double normalized_test_rmse{std::numeric_limits<double>::quiet_NaN()};
+    double explained_terminal_variance{std::numeric_limits<double>::quiet_NaN()};
+    double beta_norm{std::numeric_limits<double>::quiet_NaN()};
+    double final_gradient_inf_norm{std::numeric_limits<double>::quiet_NaN()};
+    double final_damping{std::numeric_limits<double>::quiet_NaN()};
     int64_t accepted_lm_iterations{0};
 };
 
@@ -43,13 +43,13 @@ public:
     RFMSolver& options(
         const std::optional<torch::Tensor>& y0,
         const std::optional<torch::Tensor>& beta,
-        std::optional<float> lambda
+        std::optional<double> lambda
     );
 
     RFMSolver& linear_options(const LinearSolverOptions& options);
 
-    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve(bool output_log = false) const;
-    [[nodiscard]] float test(const torch::Tensor& y0, const torch::Tensor& beta) const;
+    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, double> solve(bool output_log = false) const;
+    [[nodiscard]] double test(const torch::Tensor& y0, const torch::Tensor& beta) const;
     [[nodiscard]] InternalPathEvaluation evaluate_internal_paths(
         const torch::Tensor& y0,
         const torch::Tensor& beta,
@@ -72,14 +72,14 @@ public:
 
     [[nodiscard]] const torch::Tensor& y0() const { return y0_; }
     [[nodiscard]] const torch::Tensor& beta() const { return beta_; }
-    [[nodiscard]] float lambda() const { return lambda_; }
+    [[nodiscard]] double lambda() const { return lambda_; }
     [[nodiscard]] const LinearSolverOptions& linear_solver_options() const { return linear_solver_options_; }
     [[nodiscard]] const RFMSolverDiagnostics& diagnostics() const { return diagnostics_; }
 
 protected:
-    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_linear() const;
+    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, double> solve_linear() const;
 
-    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_nonlinear(bool output_log) const;
+    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, double> solve_nonlinear(bool output_log) const;
 
     [[nodiscard]] std::pair<const torch::Tensor, const torch::Tensor> compute_linear_coef() const;
 
@@ -87,21 +87,21 @@ protected:
         int64_t row_begin,
         int64_t row_end) const;
 
-    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_linear_batched_qr(
+    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, double> solve_linear_batched_qr(
         const LinearSolverOptions& options) const;
 
-    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_linear_constant_baseline(
+    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, double> solve_linear_constant_baseline(
         const LinearSolverOptions& options) const;
 
-    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_nonlinear_levenberg_marquardt(
+    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, double> solve_nonlinear_levenberg_marquardt(
         const torch::Tensor& y0,
         const torch::Tensor& beta,
-        float lambda,
+        double lambda,
         bool output_log) const;
 
-    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, float> solve_nonlinear_constant_baseline(
+    [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, double> solve_nonlinear_constant_baseline(
         const torch::Tensor& y0,
-        float lambda,
+        double lambda,
         bool output_log) const;
 
     [[nodiscard]] torch::Tensor compute_nonlinear_objective_residual(
@@ -120,20 +120,21 @@ protected:
         int64_t row_begin,
         int64_t row_end) const;
 
-    [[nodiscard]] std::tuple<torch::Tensor, float, float> solve_nonlinear_lm_step_batched_qr(
+    [[nodiscard]] std::tuple<torch::Tensor, double, double> solve_nonlinear_lm_step_batched_qr(
         const torch::Tensor& theta,
-        float lambda,
-        int64_t batch_size) const;
+        double lambda,
+        int64_t batch_size,
+        bool output_spectrum) const;
 
-    [[nodiscard]] std::pair<float, float> compute_nonlinear_loss_error_batched(
-        const torch::Tensor& theta,
-        int64_t batch_size) const;
-
-    [[nodiscard]] float compute_nonlinear_terminal_error_batched(
+    [[nodiscard]] std::pair<double, double> compute_nonlinear_loss_error_batched(
         const torch::Tensor& theta,
         int64_t batch_size) const;
 
-    [[nodiscard]] float compute_nonlinear_gradient_inf_norm(
+    [[nodiscard]] double compute_nonlinear_terminal_error_batched(
+        const torch::Tensor& theta,
+        int64_t batch_size) const;
+
+    [[nodiscard]] double compute_nonlinear_gradient_inf_norm(
         const torch::Tensor& theta,
         int64_t batch_size) const;
 
@@ -221,7 +222,7 @@ protected:
     torch::Tensor t_;
     torch::Tensor y0_;
     torch::Tensor beta_;
-    float lambda_{};
+    double lambda_{};
     LinearSolverOptions linear_solver_options_;
     mutable RFMSolverDiagnostics diagnostics_;
     mutable torch::Tensor nonlinear_residual_scale_;
