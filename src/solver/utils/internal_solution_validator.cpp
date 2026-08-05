@@ -91,6 +91,12 @@ std::vector<InternalSolutionError> validate_internal_solution(
         torch::zeros({point_count}, accumulator_options);
     auto consistency_square_sum =
         torch::zeros({point_count}, accumulator_options);
+    const auto time_index_tensor = torch::tensor(
+        time_indices,
+        torch::TensorOptions()
+            .dtype(torch::kInt64)
+            .device(solver.device())
+    );
 
     torch::manual_seed(splitmix64(seed ^ 0xA0761D6478BD642FULL));
     int64_t evaluated_count = 0;
@@ -99,13 +105,22 @@ std::vector<InternalSolutionError> validate_internal_solution(
         const int64_t current_batch =
             std::min(batch_size, options.sample_size - begin);
         const auto [dw, x] = equation.sample(current_batch);
-        const auto evaluation = solver.evaluate_internal_paths(
+        const auto path_evaluation = solver.evaluate_path_values(
             y0,
             beta,
             dw,
-            x,
-            time_indices
+            x
         );
+        const PathValueEvaluation evaluation{
+            path_evaluation.t.index_select(1, time_index_tensor).contiguous(),
+            path_evaluation.x.index_select(1, time_index_tensor).contiguous(),
+            path_evaluation.direct_value
+                .index_select(1, time_index_tensor)
+                .contiguous(),
+            path_evaluation.propagated_value
+                .index_select(1, time_index_tensor)
+                .contiguous()
+        };
         const auto reference = equation.reference_solution(
             evaluation.t,
             evaluation.x

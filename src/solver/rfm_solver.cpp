@@ -402,12 +402,11 @@ double RFMSolver::test(const torch::Tensor& y0, const torch::Tensor& beta) const
     return test_rmse;
 }
 
-InternalPathEvaluation RFMSolver::evaluate_internal_paths(
+PathValueEvaluation RFMSolver::evaluate_path_values(
     const torch::Tensor& y0,
     const torch::Tensor& beta,
     const torch::Tensor& dw_sample,
-    const torch::Tensor& x_sample,
-    const std::vector<int64_t>& time_indices
+    const torch::Tensor& x_sample
 ) const
 {
     using namespace torch::indexing;
@@ -416,7 +415,6 @@ InternalPathEvaluation RFMSolver::evaluate_internal_paths(
     const int64_t time_count = config_.eqn_config.num_time_intervals;
     const int64_t dimension = equation_->dim();
     const int64_t hidden_dim = rff_.hidden_dim();
-    TORCH_CHECK(!time_indices.empty(), "time_indices must not be empty");
     TORCH_CHECK(
         dw_sample.dim() == 3 &&
         dw_sample.size(1) == dimension &&
@@ -432,18 +430,6 @@ InternalPathEvaluation RFMSolver::evaluate_internal_paths(
         "x_sample must have shape (B, ", dimension, ", ", time_count + 1,
         "), but got ", x_sample.sizes()
     );
-    for (size_t i = 0; i < time_indices.size(); ++i)
-    {
-        TORCH_CHECK(
-            0 < time_indices[i] && time_indices[i] < time_count,
-            "internal time index must satisfy 0 < index < ", time_count,
-            ", got ", time_indices[i]
-        );
-        TORCH_CHECK(
-            i == 0 || time_indices[i - 1] < time_indices[i],
-            "time_indices must be strictly increasing"
-        );
-    }
     TORCH_CHECK(
         y0.numel() == 1,
         "y0 must have one element, got ", y0.numel()
@@ -457,12 +443,14 @@ InternalPathEvaluation RFMSolver::evaluate_internal_paths(
     const auto evaluation_options =
         torch::TensorOptions().dtype(equation_->dtype()).device(device_);
     const auto dw = dw_sample.to(evaluation_options).contiguous();
-    const auto x_all = x_sample.to(evaluation_options)
+    const auto x_nodes = x_sample.to(evaluation_options)
         .permute({0, 2, 1})
-        .contiguous(); // (B, T + 1, D)
-    const auto x = x_all.index({Slice(), Slice(0, time_count), Slice()})
         .unsqueeze(2)
-        .contiguous(); // (B, T, 1, D)
+        .contiguous(); // (B, N + 1, 1, D)
+    const auto x = x_nodes.index({
+        Slice(), Slice(0, time_count), Slice(), Slice()
+    })
+        .contiguous(); // (B, N, 1, D)
     const auto x_initial = x.index({
         Slice(),
         Slice(0, 1),
@@ -470,16 +458,17 @@ InternalPathEvaluation RFMSolver::evaluate_internal_paths(
         Slice()
     }).contiguous();
     const auto tensor_options = evaluation_options;
-    const auto t_full = torch::linspace(
+    const auto t_nodes = torch::linspace(
         0.0,
         config_.eqn_config.total_time,
         time_count + 1,
         tensor_options
-    );
-    const auto t = t_full.slice(0, 0, time_count)
-        .reshape({1, time_count, 1, 1})
-        .expand({batch_size, time_count, 1, 1})
+    ).reshape({1, time_count + 1, 1, 1})
+        .expand({batch_size, time_count + 1, 1, 1})
         .contiguous();
+    const auto t = t_nodes.index({
+        Slice(), Slice(0, time_count), Slice(), Slice()
+    }).contiguous();
     const auto beta_eval = beta.to(evaluation_options)
         .reshape({hidden_dim})
         .contiguous();
@@ -492,13 +481,9 @@ InternalPathEvaluation RFMSolver::evaluate_internal_paths(
         .unsqueeze(2)
         .contiguous();
 
-    std::vector<torch::Tensor> time_blocks;
-    std::vector<torch::Tensor> state_blocks;
     std::vector<torch::Tensor> propagated_blocks;
-    time_blocks.reserve(time_indices.size());
-    state_blocks.reserve(time_indices.size());
-    propagated_blocks.reserve(time_indices.size());
-    size_t index_cursor = 0;
+    propagated_blocks.reserve(static_cast<size_t>(time_count + 1));
+    propagated_blocks.push_back(y);
 
     for (int64_t k = 0; k < time_count; ++k)
     {
@@ -519,42 +504,14 @@ InternalPathEvaluation RFMSolver::evaluate_internal_paths(
         y = y - equation_->delta_t() * f_k +
             torch::sum(dw_k * z_k, -1, true);
 
-        const int64_t next_index = k + 1;
-        if (index_cursor < time_indices.size() &&
-            time_indices[index_cursor] == next_index)
-        {
-            time_blocks.push_back(
-                t.index({
-                    Slice(),
-                    Slice(next_index, next_index + 1),
-                    Slice(),
-                    Slice()
-                })
-            );
-            state_blocks.push_back(
-                x.index({
-                    Slice(),
-                    Slice(next_index, next_index + 1),
-                    Slice(),
-                    Slice()
-                })
-            );
-            propagated_blocks.push_back(y);
-            ++index_cursor;
-        }
+        propagated_blocks.push_back(y);
     }
-    TORCH_CHECK(
-        index_cursor == time_indices.size(),
-        "not all requested internal time indices were evaluated"
-    );
 
-    const auto evaluation_t = torch::cat(time_blocks, 1).contiguous();
-    const auto evaluation_x = torch::cat(state_blocks, 1).contiguous();
     const auto propagated_value =
         torch::cat(propagated_blocks, 1).contiguous();
     const auto direct_value = compute_direct_nonlinear_value(
-        evaluation_t,
-        evaluation_x,
+        t_nodes,
+        x_nodes,
         x_initial,
         y0.to(evaluation_options).reshape({1}),
         beta_eval
@@ -566,8 +523,8 @@ InternalPathEvaluation RFMSolver::evaluate_internal_paths(
     );
 
     return {
-        evaluation_t.detach(),
-        evaluation_x.detach(),
+        t_nodes.detach(),
+        x_nodes.detach(),
         direct_value.detach(),
         propagated_value.detach()
     };

@@ -19,7 +19,7 @@ struct RFMSolverDiagnostics
     int64_t accepted_lm_iterations{0};
 };
 
-struct InternalPathEvaluation
+struct PathValueEvaluation
 {
     torch::Tensor t;
     torch::Tensor x;
@@ -50,12 +50,14 @@ public:
 
     [[nodiscard]] std::tuple<torch::Tensor, torch::Tensor, double> solve(bool output_log = false) const;
     [[nodiscard]] double test(const torch::Tensor& y0, const torch::Tensor& beta) const;
-    [[nodiscard]] InternalPathEvaluation evaluate_internal_paths(
+    // Evaluate both u_theta(t_k, X_k) and the BSDE-forward value on every
+    // node of a path generated consistently with equation_. Inputs have
+    // shapes dw=(B, D, N) and x=(B, D, N + 1); outputs use (B, N + 1, ...).
+    [[nodiscard]] PathValueEvaluation evaluate_path_values(
         const torch::Tensor& y0,
         const torch::Tensor& beta,
         const torch::Tensor& dw_sample,
-        const torch::Tensor& x_sample,
-        const std::vector<int64_t>& time_indices) const;
+        const torch::Tensor& x_sample) const;
 
     [[nodiscard]] uint64_t seed() const { return seed_; }
     [[nodiscard]] bool is_linear() const { return is_linear_; }
