@@ -2,6 +2,7 @@ add_library(
     equations
     STATIC
     allencahn.cpp
+    anisotropic_lipschitz.cpp
     anisotropic_quadratic_hjblq.cpp
     asymmetric_allencahn.cpp
     asymmetric_heat.cpp

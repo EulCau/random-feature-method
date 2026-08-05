@@ -1,0 +1,90 @@
+{
+  "eqn_config": {
+    "_comment": "Manufactured anisotropic semilinear PDE with a globally Lipschitz nonlinear driver and an exact internal solution",
+    "equation_name": "AnisotropicLipschitz",
+    "is_linear": false,
+    "total_time": 1.0,
+    "dimension": 100,
+    "num_time_intervals": 20,
+    "params": {
+      "x_init": 0.0,
+      "sigma_min": 0.6,
+      "sigma_max": 1.4,
+      "direction_count": 10,
+      "frequency_min": 0.7,
+      "frequency_max": 1.8,
+      "phase_min": 0.2,
+      "phase_max": 1.1,
+      "time_weight_min": 0.5,
+      "time_weight_max": 1.5,
+      "baseline": 0.25,
+      "time_shift": 1.0,
+      "spatial_scale": 0.5,
+      "time_modulation": 0.5,
+      "reaction_strength": 0.5,
+      "control_strength": 0.25
+    }
+  },
+  "solver_config": {
+    "use_linear_solver": false,
+    "dtype": "float32",
+    "num_iterations": 50,
+    "sample_size": 6464,
+    "test_sample_size": 16384,
+    "test_batch_size": 4096,
+    "hidden_dim": 100,
+    "initial_lambda": 0.01,
+    "beta_init_scale": 0.001,
+    "random_feature": {
+      "space_scale": 1.0,
+      "time_scale": 1.0,
+      "bias_scale": 1.0,
+      "scale_bands": [
+        {
+          "min": 0.03125,
+          "max": 0.25,
+          "weight": 0.6
+        },
+        {
+          "min": 0.25,
+          "max": 1.0,
+          "weight": 0.25
+        },
+        {
+          "min": 1.0,
+          "max": 4.0,
+          "weight": 0.15
+        }
+      ]
+    },
+    "reference_evaluation": {
+      "enabled": true,
+      "sample_size": 8192,
+      "batch_size": 2048,
+      "time_fractions": [0.25, 0.5, 0.75]
+    },
+    "linear": {
+      "solver": "ridge_dual",
+      "batch_size": 0,
+      "ridge_lambda": 0.01
+    },
+    "nonlinear": {
+      "min_lambda": 1e-8,
+      "max_lambda": 1e6,
+      "lambda_decrease": 0.5,
+      "lambda_increase": 3.0,
+      "error_tol": 1e-4,
+      "step_tol": 1e-4,
+      "max_retries": 5,
+      "step_solver": "batched_qr",
+      "batch_size": 2048,
+      "hard_terminal_lift": true,
+      "consistency_points": 3,
+      "consistency_time_fractions": [0.1, 0.25, 0.5],
+      "consistency_weight": 1.0,
+      "normalize_residuals": true,
+      "scale_jacobian_columns": true,
+      "column_scale_epsilon": 1e-6
+    }
+  }
+}

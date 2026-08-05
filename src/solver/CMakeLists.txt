@@ -6,6 +6,8 @@ add_library(
     STATIC
     rfm_solver.cpp)
 
+add_subdirectory(utils)
+
 target_include_directories(
     solver
     PUBLIC
